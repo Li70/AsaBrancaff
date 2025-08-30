@@ -22,7 +22,7 @@
       Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
       Parse.serverURL="https://parseapi.back4app.com";
       Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){}
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
   </script>
 
 </head>
@@ -366,260 +366,38 @@
 
 
 
-<!-- KITCHEN_BRIDGE_V4 -->
+<!-- APPLY_WRAP_V1 (Kitchen): stabilize confirmed list and prevent immediate removals -->
 <script>
 (function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+  if (typeof window.__kApply !== 'function') return;
+  const __origApply = window.__kApply;
+  const stable = new Map();
+  const miss = new Map();
+  const hold = new Map();
 
-  // Enable "Som ativo" by default and prime audio on mobile
-  (function(){
-    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
-    function prime(){ const el=document.getElementById('cashSound'); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }
-    document.addEventListener('DOMContentLoaded', prime, {once:true});
-    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
-  })();
-
-  function toLocal(o){
-    return {
-      id: String(o.get('orderId')||o.id),
-      table: String(o.get('table')||''),
-      items: o.get('items')||[],
-      notes: String(o.get('notes')||''),
-      confirmed: !!o.get('confirmed'),
-      confirmedAt: o.get('confirmedAt') ? (new Date(o.get('confirmedAt')).getTime()) : null,
-      isReady: !!o.get('isReady'),
-      createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-      totalCVE: Number(o.get('totalCVE')||0),
-      servedAt: o.get('servedAt') ? (new Date(o.get('servedAt')).getTime()) : null,
-      rejectedAt: o.get('rejectedAt') ? (new Date(o.get('rejectedAt')).getTime()) : null,
-    };
-  }
-  function readLocal(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY)||'[]')||[]; }catch(e){ return []; } }
-  function writeLocal(arr, withAlerts){
+  window.__kApply = function(incoming, withAlerts){
     try{
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(arr));
-      localStorage.setItem(VERSION_KEY, String(Date.now()));
-      try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-      try{ if (typeof render==='function') render({withAlerts: !!withAlerts}); }catch(e){}
-    }catch(e){}
-  }
+      const now = Date.now();
+      const inMap = new Map();
+      (incoming||[]).forEach(o=>{ inMap.set(String(o.id), o); });
 
-  async function initialSync(){
-    try{
-      const q=new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      q.limit(1000);
-      const res = await q.find();
-      writeLocal(res.map(toLocal), false);
-      __prevIds = new Set(res.map(o=>String(o.get('orderId')||o.id)));
-    }catch(e){}
-  }
-
-  let __prevIds = new Set((readLocal()||[]).map(o=>String(o.id)));
-  async function onUpsert(o){
-    const id = String(o.get('orderId')||o.id);
-    const cur = readLocal().filter(x=>!x.servedAt && !x.rejectedAt);
-    const i = cur.findIndex(x=>String(x.id)===id);
-    const beforeHas = __prevIds.has(id);
-    if (!o.get('confirmed') || o.get('servedAt') || o.get('rejectedAt')){
-      writeLocal(cur.filter(x=>String(x.id)!==id), false);
-      __prevIds.delete(id);
-      return;
-    }
-    const p = toLocal(o);
-    let isNew=false;
-    if (i>=0) cur[i]=p; else { cur.push(p); isNew = !beforeHas; }
-    writeLocal(cur, isNew);
-    __prevIds = new Set(cur.map(x=>String(x.id)));
-  }
-
-  async function subscribe(){
-    try{
-      const q=new Parse.Query(Order);
-      const sub=await q.subscribe();
-      sub.on('create', o=>{ if (o.get('confirmed') && !o.get('servedAt') && !o.get('rejectedAt')) onUpsert(o); });
-      sub.on('update', o=> onUpsert(o));
-      sub.on('delete', o=>{
-        const id = String(o.get('orderId')||o.id);
-        const cur = readLocal().filter(x=>String(x.id)!==id);
-        writeLocal(cur, false);
-        __prevIds.delete(id);
+      stable.forEach((v,k)=>{ miss.set(k, (miss.get(k)||0)+1); });
+      inMap.forEach((v,k)=>{
+        if (!stable.has(k)){ hold.set(k, now+12000); }
+        stable.set(k, v);
+        miss.set(k, 0);
       });
-    }catch(e){}
-  }
-  function poll(){
-    setInterval(async ()=>{
-      try{
-        const q=new Parse.Query(Order);
-        q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-        q.limit(500);
-        const res=await q.find();
-        const incomingIds = new Set(res.map(o=>String(o.get('orderId')||o.id)));
-        const before = new Set(__prevIds);
-        const arr = res.map(toLocal);
-        writeLocal(arr, false);
-        let hasNew=false; incomingIds.forEach(id=>{ if(!before.has(id)) hasNew=true; });
-        if (hasNew){ try{ if (typeof render==='function') render({withAlerts:true}); }catch(e){} }
-        __prevIds = incomingIds;
-      }catch(e){}
-    }, 5000);
-  }
+      Array.from(miss.entries()).forEach(([k,c])=>{
+        const until = hold.get(k)||0;
+        if (c>=3 && now>until){ miss.delete(k); hold.delete(k); stable.delete(k); }
+      });
 
-  // Pronto -> cloud (isReady)
-  (function(){
-    const orig = window.saveServed;
-    if (!orig) return;
-    window.saveServed = function(map){
-      (async ()=>{
-        try{
-          for (const id in (map||{})){
-            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-            const ready = !!map[id];
-            const q=new Parse.Query(Order); q.equalTo('orderId', String(id));
-            const obj=await q.first();
-            if (obj && (!!obj.get('isReady') !== ready)){
-              obj.set('isReady', ready); await obj.save();
-            }
-          }
-        }catch(e){}
-      })();
-      return orig.apply(this, arguments);
-    };
-  })();
-
-  initialSync(); subscribe(); poll();
-})();
-</script>
-
-
-<!-- KITCHEN_CLOUD_ONLY_V1 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  // Enable "Som ativo" by default + prime for mobile
-  (function(){
-    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
-    function prime(){ const el=document.getElementById('cashSound'); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }
-    document.addEventListener('DOMContentLoaded', prime, {once:true});
-    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
-  })();
-
-  // Virtualize localStorage for ORDERS_KEY/VERSION_KEY (cloud-only)
-  (function(){
-    const _get = localStorage.getItem.bind(localStorage);
-    const _set = localStorage.setItem.bind(localStorage);
-    window.__kCloudList = [];
-    window.__kCloudVer = Date.now();
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList);
-      if (k===VERSION_KEY) return String(window.__kCloudVer);
-      return _get(k);
-    };
-    localStorage.setItem = function(k,v){
-      if (k===ORDERS_KEY || k===VERSION_KEY) { return; }
-      return _set(k,v);
-    };
-    window.__kApply = function(list, withAlerts){
-      window.__kCloudList = list;
-      window.__kCloudVer = Date.now();
-      try{ if (typeof render==='function') render({withAlerts: !!withAlerts}); }catch(e){}
-      try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-    };
-  })();
-
-  function toPlain(o){
-    return {
-      id: String(o.get('orderId')||o.id),
-      table: String(o.get('table')||''),
-      items: o.get('items')||[],
-      notes: String(o.get('notes')||''),
-      confirmed: !!o.get('confirmed'),
-      confirmedAt: o.get('confirmedAt') ? (new Date(o.get('confirmedAt')).getTime()) : null,
-      isReady: !!o.get('isReady'),
-      createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-      totalCVE: Number(o.get('totalCVE')||0),
-      servedAt: o.get('servedAt') ? (new Date(o.get('servedAt')).getTime()) : null,
-      rejectedAt: o.get('rejectedAt') ? (new Date(o.get('rejectedAt')).getTime()) : null,
-    };
-  }
-
-  async function initial(){
-    try{
-      const q=new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-      const res=await q.find();
-      __prev = new Set(res.map(o=>String(o.get('orderId')||o.id)));
-      window.__kApply(res.map(toPlain), false);
-    }catch(e){}
-  }
-
-  let __prev = new Set();
-  async function onUpsert(o){
-    const id = String(o.get('orderId')||o.id);
-    try{
-      const q=new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-      const res=await q.find();
-      const ids=new Set(res.map(x=>String(x.get('orderId')||x.id)));
-      const hasNew = !__prev.has(id) && ids.has(id);
-      window.__kApply(res.map(toPlain), hasNew);
-      __prev = ids;
-    }catch(e){}
-  }
-
-  async function live(){
-    try{
-      const q=new Parse.Query(Order);
-      const sub=await q.subscribe();
-      sub.on('create', o=>{ if (o.get('confirmed') && !o.get('servedAt') && !o.get('rejectedAt')) onUpsert(o); });
-      sub.on('update', o=> onUpsert(o));
-      sub.on('delete', o=> onUpsert(o));
-    }catch(e){}
-  }
-  function poll(){
-    setInterval(async ()=>{
-      try{
-        const q=new Parse.Query(Order);
-        q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500);
-        const res=await q.find();
-        const ids=new Set(res.map(x=>String(x.get('orderId')||x.id)));
-        let hasNew=false; ids.forEach(id=>{ if(!__prev.has(id)) hasNew=true; });
-        window.__kApply(res.map(toPlain), hasNew);
-        __prev = ids;
-      }catch(e){}
-    }, 5000);
-  }
-
-  // Pronto -> cloud
-  (function(){
-    const orig = window.saveServed;
-    if (!orig) return;
-    window.saveServed = function(map){
-      (async ()=>{
-        try{
-          for (const id in (map||{})){
-            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-            const ready = !!map[id];
-            const q=new Parse.Query(Order); q.equalTo('orderId', String(id));
-            const obj=await q.first();
-            if (obj && (!!obj.get('isReady') !== ready)){
-              obj.set('isReady', ready); await obj.save();
-            }
-          }
-        }catch(e){}
-      })();
-      return orig.apply(this, arguments);
-    };
-  })();
-
-  initial(); live(); poll();
+      const list = Array.from(stable.values());
+      return __origApply(list, withAlerts);
+    }catch(e){
+      return __origApply(incoming||[], withAlerts);
+    }
+  };
 })();
 </script>
 

@@ -75,7 +75,7 @@
       Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
       Parse.serverURL="https://parseapi.back4app.com";
       Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){}
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
   </script>
 
 </head>
@@ -428,101 +428,113 @@
 
 
 
-<!-- STAFF_CLOUD_REJECT_DELETE_V1 -->
+<!-- STAFF_READY_SOUND_STOP_V1 -->
 <script>
 (function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+  try{
+    if (!(window.Parse && Parse.applicationId)) return;
+    const Order = Parse.Object.extend('Order');
+    // Ensure sounds can play on mobile
+    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
+    function prime(){ ['alertSound','doneSound'].forEach(id=>{ const el=document.getElementById(id); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }); }
+    document.addEventListener('DOMContentLoaded', prime, {once:true});
+    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
 
-  function readLocal(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY)||'[]')||[]; }catch(e){ return []; } }
-  function writeLocal(arr){
-    try{
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(arr));
-      localStorage.setItem(VERSION_KEY, String(Date.now()));
-      try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-      try{ if (typeof render==='function') render(); }catch(e){}
-    }catch(e){}
-  }
-
-  async function findObj(id){
-    // by orderId
-    try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); const o=await q.first(); if(o) return o; }catch(e){}
-    // by createdAtMs (from local)
-    try{
-      const list = readLocal();
-      const it = list.find(x=>String(x.id)===String(id));
-      if (it && it.createdAt){
-        const q2 = new Parse.Query(Order); q2.equalTo('createdAtMs', Number(it.createdAt));
-        const o2 = await q2.first(); if (o2) return o2;
-      }
-    }catch(e){}
-    return null;
-  }
-
-  // Wrap rejectOrder: mark rejectedAt + try to destroy object; always remove locally
-  (function(){
-    const orig = window.rejectOrder;
-    window.rejectOrder = function(id){
-      (async ()=>{
+    let prevReady = new Set();
+    async function recomputeAndControl(){
+      try{
+        const q = new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+        const res = await q.find();
+        const list = res.map(o => ({
+          id: String(o.get('orderId')||o.id),
+          confirmed: !!o.get('confirmed'),
+          isReady: !!o.get('isReady'),
+          servedAt: o.get('servedAt'),
+        }));
+        const pending = list.filter(o=>!o.confirmed && !o.servedAt);
+        const ready = list.filter(o=>o.isReady && !o.servedAt);
+        // STOP sounds when empty
         try{
-          const obj = await findObj(id);
-          if (obj){
-            try{ obj.set('rejectedAt', new Date()); await obj.save(); }catch(e){}
-            try{ await obj.destroy(); }catch(e){ /* fallback: keep rejectedAt so it stays filtered */ }
-          }
+          if (pending.length===0){ const a=document.getElementById('alertSound'); if(a){ a.pause(); a.currentTime=0; } }
+          if (ready.length===0){ const d=document.getElementById('doneSound');  if(d){ d.pause(); d.currentTime=0; } }
         }catch(e){}
-        // remove locally
-        try{
-          const arr = readLocal().filter(x=>String(x.id)!==String(id));
-          writeLocal(arr);
-        }catch(e){}
-      })();
-      try{ if (typeof orig==='function') return orig.apply(this, arguments); }catch(e){}
-    };
-  })();
+        // Visual flash on new ready
+        const nowReady = new Set(ready.map(o=>o.id));
+        let hasNew=false; nowReady.forEach(id=>{ if(!prevReady.has(id)) hasNew=true; });
+        if (hasNew){
+          try{
+            const oldTitle=document.title; document.title = 'PRONTO ✔ ' + oldTitle;
+            setTimeout(()=>{ try{ document.title = oldTitle; }catch(e){} }, 2500);
+          }catch(e){}
+        }
+        prevReady = nowReady;
+      }catch(e){}
+    }
 
-  // Limpar tudo: reject all active on cloud, then clear local
-  (function(){
-    async function rejectAllCloud(){
+    // LiveQuery to react quickly
+    (async function(){
       try{
         const q = new Parse.Query(Order);
-        q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-        q.limit(1000);
-        const res = await q.find();
-        for (const o of res){
-          try{ o.set('rejectedAt', new Date()); await o.save(); }catch(e){}
-        }
-        // best-effort delete after marking
-        for (const o of res){
-          try{ await o.destroy(); }catch(e){}
-        }
+        const sub = await q.subscribe();
+        const handler = ()=>recomputeAndControl();
+        sub.on('create', handler); sub.on('update', handler); sub.on('delete', handler);
       }catch(e){}
-    }
+    })();
 
-    function attach(){
-      const btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__limparHook) return;
-      btn.__limparHook = true;
-      btn.addEventListener('click', function(){
-        (async ()=>{
-          try{ btn.disabled = true; }catch(e){}
-          await rejectAllCloud();
-          writeLocal([]);
-          try{ btn.disabled = false; }catch(e){}
-        })();
+    // fallback poll
+    setInterval(recomputeAndControl, 5000);
+    // initial run
+    recomputeAndControl();
+  }catch(e){}
+})();
+</script>
+
+
+<!-- APPLY_WRAP_V1 (Staff): stabilize incoming cloud list and prevent immediate removals -->
+<script>
+(function(){
+  if (typeof window.__applyCloudList !== 'function') return;
+  const __origApply = window.__applyCloudList;
+  const stable = new Map();
+  const miss = new Map();
+  const hold = new Map(); // id -> ts until which we refuse to drop
+
+  window.__applyCloudList = function(incoming){
+    try{
+      const now = Date.now();
+      const inMap = new Map();
+      (incoming||[]).forEach(o=>{ inMap.set(String(o.id), o); });
+
+      // mark existing as missing
+      stable.forEach((v,k)=>{ miss.set(k, (miss.get(k)||0)+1); });
+
+      // merge incoming; reset miss; set hold for new ones
+      inMap.forEach((v,k)=>{
+        if (!stable.has(k)){ hold.set(k, now+12000); }
+        stable.set(k, v);
+        miss.set(k, 0);
       });
-    }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
-    else attach();
-  })();
 
+      // drop only after 3 misses and after hold expires
+      Array.from(miss.entries()).forEach(([k,c])=>{
+        const until = hold.get(k)||0;
+        if (c>=3 && now>until){
+          miss.delete(k); hold.delete(k); stable.delete(k);
+        }
+      });
+
+      // build list
+      const list = Array.from(stable.values());
+      return __origApply(list);
+    }catch(e){
+      return __origApply(incoming||[]);
+    }
+  };
 })();
 </script>
 
 
-<!-- STAFF_BRIDGE_V4 -->
+<!-- STAFF_CLOUD_ONLY_V2 -->
 <script>
 (function(){
   if (!(window.Parse && Parse.applicationId)) return;
@@ -530,127 +542,15 @@
   const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
   const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
 
-  // enable sound by default + mobile priming
+  // Sounds: enable by default & prime
   (function(){
     try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
     function prime(){ ['alertSound','doneSound'].forEach(id=>{ const el=document.getElementById(id); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }); }
     document.addEventListener('DOMContentLoaded', prime, {once:true});
-    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
+    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, prime, {once:true, passive:true, capture:true}); });
   })();
 
-  const cache = new Map();
-  let writing=false, lastSer='';
-  let __miss = new Map(); // stability guard
-
-  function toPlain(o){
-    return {
-      id: String(o.get('orderId')||o.id),
-      table: String(o.get('table')||''),
-      items: o.get('items')||[],
-      notes: String(o.get('notes')||''),
-      confirmed: !!o.get('confirmed'),
-      confirmedAt: o.get('confirmedAt') ? (new Date(o.get('confirmedAt')).getTime()) : null,
-      isReady: !!o.get('isReady'),
-      createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-      totalCVE: Number(o.get('totalCVE')||0),
-      servedAt: o.get('servedAt') ? (new Date(o.get('servedAt')).getTime()) : null,
-      rejectedAt: o.get('rejectedAt') ? (new Date(o.get('rejectedAt')).getTime()) : null,
-    };
-  }
-  function flush(){
-    if (writing) return;
-    writing = true;
-    setTimeout(()=>{
-      try{
-        const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt);
-        const ser = JSON.stringify(list.map(o=>o.id).sort());
-        if (ser !== lastSer){
-          localStorage.setItem(ORDERS_KEY, JSON.stringify(list));
-          localStorage.setItem(VERSION_KEY, String(Date.now()));
-          lastSer = ser;
-          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch{}
-          try{ if (typeof render==='function') render(); }catch{}
-        }
-      } finally { writing = false; }
-    }, 120);
-  }
-
-  async function initial(){
-    try{
-      const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-      const res = await q.find();
-      res.forEach(o=>{ const p=toPlain(o); cache.set(p.id,p); __miss.set(p.id,0); });
-      flush();
-    }catch(e){}
-  }
-  async function live(){
-    try{
-      const q=new Parse.Query(Order);
-      const sub=await q.subscribe();
-      sub.on('create', o=>{ const p=toPlain(o); cache.set(p.id,p); __miss.set(p.id,0); flush(); });
-      sub.on('update', o=>{ const id=String(o.get('orderId')||o.id); if(o.get('servedAt')||o.get('rejectedAt')){ cache.delete(id); __miss.delete(id);} else { cache.set(id,toPlain(o)); __miss.set(id,0);} flush(); });
-      sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); __miss.delete(id); flush(); });
-    }catch(e){}
-  }
-  function poll(){
-    setInterval(async ()=>{
-      try{
-        const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500);
-        const res=await q.find();
-        const map=new Map(); res.forEach(o=>{ const p=toPlain(o); map.set(p.id,p); });
-        // stability guard: mark missing, merge, drop after 3 misses
-        cache.forEach((v,k)=>{ __miss.set(k, (__miss.get(k)||0)+1); });
-        map.forEach((v,k)=>{ cache.set(k,v); __miss.set(k,0); });
-        Array.from(__miss.entries()).forEach(([k,c])=>{ if(c>=3){ __miss.delete(k); cache.delete(k); } });
-        flush();
-      }catch(e){}
-    }, 5000);
-  }
-
-  // Action wrappers to write back to cloud
-  (function(){
-    async function findObj(id){
-      const q1=new Parse.Query(Order); q1.equalTo('orderId', String(id));
-      let obj=await q1.first(); if (obj) return obj;
-      try{
-        const list=JSON.parse(localStorage.getItem(ORDERS_KEY)||'[]')||[];
-        const it=list.find(x=>String(x.id)===String(id)); if (it && it.createdAt){
-          const q2=new Parse.Query(Order); q2.equalTo('createdAtMs', Number(it.createdAt)); q2.doesNotExist('servedAt');
-          obj=await q2.first(); if (obj) return obj;
-        }
-      }catch(e){}
-      return null;
-    }
-    const oc = window.confirmOrder;
-    window.confirmOrder = function(id){ (async()=>{ try{ let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){} } o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save(); }catch(e){} })(); try{ if(typeof oc==='function') return oc.apply(this, arguments); }catch{} };
-    const orj = window.rejectOrder;
-    window.rejectOrder = function(id){ (async()=>{ try{ let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} } }catch(e){} })(); try{ if(typeof orj==='function') return orj.apply(this, arguments); }catch{} };
-    const os = window.markServedAndClear;
-    window.markServedAndClear = function(id){ (async()=>{ try{ let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} } }catch(e){} })(); try{ if(typeof os==='function') return os.apply(this, arguments); }catch{} };
-  })();
-
-  initial(); live(); poll();
-})();
-</script>
-
-
-<!-- STAFF_CLOUD_ONLY_V1 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  // Audio: enable by default + prime for mobile
-  (function(){
-    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
-    function prime(){ ['alertSound','doneSound'].forEach(id=>{ const el=document.getElementById(id); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }); }
-    document.addEventListener('DOMContentLoaded', prime, {once:true});
-    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
-  })();
-
-  // --- Virtualize localStorage for ORDERS_KEY/VERSION_KEY (cloud-only) ---
+  // Cloud-only virtualization
   (function(){
     const _get = localStorage.getItem.bind(localStorage);
     const _set = localStorage.setItem.bind(localStorage);
@@ -662,7 +562,7 @@
       return _get(k);
     };
     localStorage.setItem = function(k,v){
-      if (k===ORDERS_KEY || k===VERSION_KEY) { /* ignore in cloud-only mode */ return; }
+      if (k===ORDERS_KEY || k===VERSION_KEY) return;
       return _set(k,v);
     };
     window.__applyCloudList = function(list){
@@ -673,10 +573,27 @@
     };
   })();
 
-  // --- Cloud cache & sounds ---
+  // Choose best object per orderId (confirmed > ready > newest)
+  function pickBetter(a,b){
+    try{
+      const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
+      const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
+      const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b;
+      const am=Number(a.get('createdAtMs')||0), bm=Number(b.get('createdAtMs')||0); if (am!==bm) return am>bm? a:b;
+    }catch(e){}
+    return a;
+  }
+  function coalesceById(list){
+    const m=new Map();
+    (list||[]).forEach(o=>{
+      const id=String(o.get('orderId')||o.id);
+      const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o);
+    });
+    return Array.from(m.values());
+  }
+
   const cache = new Map();
-  let pendSnap = new Set();
-  let readySnap = new Set();
+  const confirmedLatch = new Map();   // once confirmed, keep confirmed in UI until served/rejected
 
   function toPlain(o){
     return {
@@ -695,17 +612,25 @@
   }
 
   function flush(){
-    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt);
-    // Sounds
+    const list = Array.from(cache.values())
+      .filter(o=>!o.servedAt && !o.rejectedAt)
+      .map(o=>{ const c = Object.assign({}, o); if (confirmedLatch.get(String(o.id))) c.confirmed = true; return c; });
+    // sounds
     try{
       const pend = new Set(list.filter(o=>!o.confirmed).map(o=>String(o.id)));
       const ready = new Set(list.filter(o=>o.isReady && !o.servedAt).map(o=>String(o.id)));
+      // fire sounds once per new set change
+      if (!window.__pendSnap) window.__pendSnap = new Set();
+      if (!window.__readySnap) window.__readySnap = new Set();
       let newPend=false, newReady=false;
-      pend.forEach(id=>{ if(!pendSnap.has(id)) newPend=true; });
-      ready.forEach(id=>{ if(!readySnap.has(id)) newReady=true; });
+      pend.forEach(id=>{ if(!window.__pendSnap.has(id)) newPend=true; });
+      ready.forEach(id=>{ if(!window.__readySnap.has(id)) newReady=true; });
       if (newPend){ const a=document.getElementById('alertSound'); if(a){ a.currentTime=0; a.play(); } }
       if (newReady){ const d=document.getElementById('doneSound'); if(d){ d.currentTime=0; d.play(); } }
-      pendSnap = pend; readySnap = ready;
+      // stop when empty
+      if (pend.size===0){ const a=document.getElementById('alertSound'); if(a){ a.pause(); a.currentTime=0; } }
+      if (ready.size===0){ const d=document.getElementById('doneSound'); if(d){ d.pause(); d.currentTime=0; } }
+      window.__pendSnap = pend; window.__readySnap = ready;
     }catch(e){}
     window.__applyCloudList(list);
   }
@@ -714,38 +639,50 @@
     try{
       const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
       const res=await q.find();
-      res.forEach(o=>{ cache.set(String(o.get('orderId')||o.id), toPlain(o)); });
+      const best=coalesceById(res);
+      best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id), p); if (p.confirmed) confirmedLatch.set(String(p.id), true); });
       flush();
     }catch(e){}
   }
+
+  async function refreshFamily(orderId){
+    try{
+      const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10);
+      const fam=await q.find(); const best=coalesceById(fam); const w=best.length? best[0]: null;
+      if (w){ const p=toPlain(w); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id), p); if (p.confirmed) confirmedLatch.set(String(p.id), true);} }
+      flush();
+    }catch(e){}
+  }
+
   async function live(){
     try{
       const q=new Parse.Query(Order);
       const sub=await q.subscribe();
-      sub.on('create', o=>{ const p=toPlain(o); cache.set(p.id, p); flush(); });
-      sub.on('update', o=>{ const id=String(o.get('orderId')||o.id); const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(id);} else { cache.set(id,p);} flush(); });
-      sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); flush(); });
+      sub.on('create', o=> refreshFamily(o.get('orderId')||o.id));
+      sub.on('update', o=> refreshFamily(o.get('orderId')||o.id));
+      sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); });
     }catch(e){}
   }
+
   function poll(){
     setInterval(async ()=>{
       try{
         const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500);
         const res=await q.find();
-        const map=new Map(); res.forEach(o=>{ const p=toPlain(o); map.set(p.id,p); });
-        // merge: replace cache with latest map
-        cache.clear(); map.forEach((v,k)=>cache.set(k,v));
+        const best=coalesceById(res);
+        const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id), true); });
+        cache.clear(); next.forEach((v,k)=>cache.set(k,v));
         flush();
       }catch(e){}
     }, 5000);
   }
 
-  // Actions write to cloud
+  // Actions -> cloud
   (function(){
     async function findObj(id){
-      const q1=new Parse.Query(Order); q1.equalTo('orderId', String(id));
-      let obj=await q1.first(); if (obj) return obj;
-      return null;
+      const q1=new Parse.Query(Order); q1.equalTo('orderId', String(id)); q1.limit(10);
+      const fam=await q1.find(); const best=coalesceById(fam);
+      return best.length? best[0]: null;
     }
     const oc = window.confirmOrder;
     window.confirmOrder = function(id){ (async()=>{ try{ let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){} } o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save(); }catch(e){} })(); try{ if(typeof oc==='function') return oc.apply(this, arguments); }catch{} };
