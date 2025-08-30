@@ -84,8 +84,7 @@
       Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
       Parse.serverURL="https://parseapi.back4app.com";
       Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-      console.log('[FLOOR] Parse init OK');
-    }catch(e){ console && console.warn && console.warn('[FLOOR] Parse init failed', e); }
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
   </script>
 
 </head>
@@ -565,25 +564,6 @@
 
 
 
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
-    authDomain: "asabrancaff-aa13d.firebaseapp.com",
-    projectId: "asabrancaff-aa13d",
-    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
-    messagingSenderId: "1031914620871",
-    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
 
 
 
@@ -598,13 +578,8 @@
   const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
   const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
   const MIRROR_KEY = 'orders_mirrored_ids_v4';
-  const INFLIGHT = new Set();
 
-  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
-  function readLocal(){
-    try{ const s = lsGet(ORDERS_KEY) || '[]'; const arr = JSON.parse(s) || []; return Array.isArray(arr)? arr: []; }
-    catch(e){ return []; }
-  }
+  function readLocal(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY)||'[]')||[]; }catch(e){ return []; } }
   function readMirrored(){ try{ return new Set(JSON.parse(localStorage.getItem(MIRROR_KEY)||'[]')); }catch(e){ return new Set(); } }
   function writeMirrored(s){ try{ localStorage.setItem(MIRROR_KEY, JSON.stringify(Array.from(s))); }catch(e){} }
   const mirrored = readMirrored();
@@ -624,9 +599,6 @@
 
   async function upsertOne(o){
     const n = norm(o);
-    if (!n.id) return;
-    if (INFLIGHT.has(n.id)) return;
-    INFLIGHT.add(n.id);
     try{
       const q=new Parse.Query(Order); q.equalTo('orderId', n.id); q.limit(10);
       const res=await q.find();
@@ -644,17 +616,11 @@
       await obj.save();
       if (res && res.length>1){ for (let i=1;i<res.length;i++){ try{ await res[i].destroy(); }catch(e){} } }
       mirrored.add(n.id); writeMirrored(mirrored);
-      console.log('[FLOOR] upserted', n.id);
-    }catch(e){ console && console.warn && console.warn('[FLOOR] upsert error', e); }
-    finally{ INFLIGHT.delete(n.id); }
+    }catch(e){ console && console.warn && console.warn('floor upsert error', e); }
   }
 
   function publishAll(){
-    try{
-      const arr = readLocal();
-      if (!arr || !arr.length) return;
-      arr.forEach(o=>{ if (!o || o.id==null) return; const id=String(o.id); if(!mirrored.has(id)) upsertOne(o); });
-    }catch(e){}
+    try{ (readLocal()||[]).forEach(o=>{ if (!o || o.id==null) return; const id=String(o.id); if(!mirrored.has(id)) upsertOne(o); }); }catch(e){}
   }
 
   ['setOrdersCompat','setOrders'].forEach(fn=>{
@@ -664,9 +630,7 @@
     }
   });
   window.addEventListener('storage', function(ev){ try{ if (!ev || !ev.key) return; if (ev.key===ORDERS_KEY || ev.key===VERSION_KEY) publishAll(); }catch(e){} });
-  setInterval(publishAll, 2000);
-  setTimeout(publishAll, 400);
-  console.log('[FLOOR] publisher installed');
+  setInterval(publishAll, 1500); setTimeout(publishAll, 300);
 })();
 </script>
 

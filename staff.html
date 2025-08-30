@@ -527,108 +527,35 @@
 })();
 </script>
 
-
-<!-- REMOVE_FILTERTABLE_V3 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- STAFF_LIMPAR_MESA_HOOK_V1 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-
-  function findTableFromContext(btn){
-    try{
-      var n = btn;
-      for (var i=0;i<5 && n; i++){ 
-        if (n.dataset && n.dataset.table) return String(n.dataset.table).trim();
-        n = n.parentElement;
-      }
-      n = btn.closest && btn.closest('[data-order-id], .order, .card, tr, li, div');
-      if (n){
-        var txt = (n.textContent||'').toLowerCase();
-        var m = txt.match(/mesa\s*(\d+)/i);
-        if (m) return m[1];
-      }
-    }catch(e){}
-    return null;
-  }
-
-  async function clearTable(tableNum){
-    try{
-      const q=new Parse.Query(Order);
-      q.equalTo('table', String(tableNum));
-      q.doesNotExist('servedAt');
-      q.doesNotExist('rejectedAt');
-      q.limit(100);
-      const res=await q.find();
-      for (const o of (res||[])){
-        try{ o.set('rejectedAt', new Date()); await o.save(); }catch(e){};
-      }
-    }catch(e){ console.warn('[STAFF] clearTable error', e); }
-  }
-
-  function playOnce(){
-    try{
-      var el = document.getElementById('doneSound') || document.getElementById('alertSound') || document.getElementById('readySound');
-      if (el && window.soundEnabled !== false){
-        var p = el.play(); if (p && p.catch) p.catch(function(){});
-      }
-    }catch(e){}
-  }
-
-  function attach(){
-    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button')).filter(function(n){
-      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-      return t === 'limpar mesa';
-    });
-    nodes.forEach(function(n){
-      if (n.__wiredMesaClear) return;
-      n.__wiredMesaClear = true;
-      n.addEventListener('click', function(ev){
-        try{
-          var tableNum = findTableFromContext(n);
-          if (!tableNum){
-            tableNum = prompt('Qual mesa deseja limpar? (número)');
-            if (!tableNum){ ev.preventDefault(); ev.stopPropagation(); return false; }
-          }
-          var ok = confirm('Tem a certeza que quer limpar a mesa ' + tableNum + '?');
-          if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
-          (async function(){
-            await clearTable(tableNum);
-            playOnce();
-            try{ if (typeof window.refresh==='function') window.refresh(); }catch(e){}
-          })();
-        }catch(e){}
-      }, true);
-    });
-  }
-
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach);
-  else attach();
-  setInterval(attach, 2000);
-})();
-</script>
-
 </body>
 </html>
 
 
 
+
+
+
+<!-- STAFF_DOM_TWEAKS_V2 -->
+<script>
+(function(){
+  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+  function removeLimparMesa(){
+    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
+  }
+  function removeMesaField(){
+    try{
+      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
+        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
+        if (ph==='mesa'){ el.remove(); return; }
+        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
+        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
+      });
+    }catch(e){}
+  }
+  function run(){ removeLimparMesa(); removeMesaField(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
+</script>
 
 
 
@@ -665,7 +592,7 @@
       }
     });
   }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  
 })();
 </script>
 
