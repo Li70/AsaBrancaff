@@ -2,6 +2,50 @@
 <html lang="pt">
 <head>
 
+<!-- HEAD_CLOUD_ONLY_GUARD_V1 -->
+<script>
+(function(){
+  try{
+    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    var SERVED_KEY = 'orders_served';
+    var SERVED_VERSION = 'orders_served_version';
+    var _get = localStorage.getItem.bind(localStorage);
+    var _set = localStorage.setItem.bind(localStorage);
+    window.__cloudList = window.__cloudList || [];
+    window.__cloudVer = window.__cloudVer || Date.now();
+    window.__servedMapSnap = window.__servedMapSnap || {};
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList || []);
+      if (k===VERSION_KEY) return String(window.__cloudVer || Date.now());
+      if (k===SERVED_KEY) return JSON.stringify(window.__servedMapSnap || {});
+      if (k===SERVED_VERSION) return String(Date.now());
+      return _get(k);
+    };
+    localStorage.setItem = function(k, v){
+      if (k===ORDERS_KEY || k===VERSION_KEY || k===SERVED_KEY || k===SERVED_VERSION){
+        return;
+      }
+      return _set(k, v);
+    };
+    console.log("[CLOUD] virtualization active");
+  }catch(e){}
+})();
+</script>
+
+
+<!-- PARSE_INIT_V2 -->
+<script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+<script>
+  try{
+    Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+    Parse.serverURL="https://parseapi.back4app.com";
+    Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    console.log("[PARSE] Init OK");
+  }catch(e){ console && console.warn && console.warn("[PARSE] Init failed", e); }
+</script>
+
+
 <!-- PARSE_INIT_STAFF_V1 -->
 <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
 <script>
@@ -767,6 +811,100 @@
       })();
       if (typeof os==='function') return os.apply(this, arguments);
     };
+  })();
+
+  initial(); live(); poll();
+})();
+</script>
+
+
+<!-- STAFF_CLOUD_CORE_V5 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    window.__cloudList = window.__cloudList || [];
+    window.__cloudVer = window.__cloudVer || Date.now();
+    window.__applyCloudList = function(list){
+      window.__cloudList = list || [];
+      window.__cloudVer = Date.now();
+      try{ if (typeof render==='function') render(); }catch(e){}
+    };
+  })();
+
+  function better(a,b){
+    try{ if (!!a.get('confirmed') !== !!b.get('confirmed')) return a.get('confirmed')? a:b;
+         if (!!a.get('isReady') !== !!b.get('isReady')) return a.get('isReady')? a:b;
+         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
+    return a;
+  }
+  function coalesce(list){
+    const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? better(cur,o):o); });
+    return Array.from(m.values());
+  }
+  function toPlain(o){
+    return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
+      confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+      createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+      servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null };
+  }
+  const cache=new Map(); const confirmLatch=new Map();
+
+  function flush(){
+    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmLatch.get(String(o.id))) c.confirmed=true; return c; });
+    window.__cloudList = list; window.__cloudVer = Date.now();
+    try{ if (typeof render==='function') render(); }catch(e){}
+  }
+
+  async function initial(){
+    try{
+      const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+      const res=await q.find(); const best=coalesce(res);
+      best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmLatch.set(String(p.id), true); });
+      flush(); console.log("[STAFF] initial", best.length);
+    }catch(e){ console.warn("[STAFF] initial error", e); }
+  }
+
+  async function refreshFamily(orderId){
+    try{
+      const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(50);
+      const fam=await q.find(); const best=coalesce(fam); const o=best.length?best[0]:null;
+      if (o){ const p=toPlain(o); if (p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmLatch.set(String(p.id), true); } }
+      flush();
+    }catch(e){ console.warn("[STAFF] refreshFamily error", e); }
+  }
+
+  async function live(){
+    try{ const q=new Parse.Query(Order); const sub=await q.subscribe();
+      const ref=(o)=>refreshFamily(o.get('orderId')||o.id);
+      sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);
+      console.log("[STAFF] live ON");
+    }catch(e){ console.warn("[STAFF] live error", e); }
+  }
+  function poll(){
+    setInterval(async ()=>{
+      try{
+        const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+        const res=await q.find(); const best=coalesce(res);
+        const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(String(p.id),p); if (p.confirmed) confirmLatch.set(String(p.id), true); });
+        cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush();
+      }catch(e){}
+    }, 5000);
+  }
+
+  (function(){
+    async function family(orderId){ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(100); return q.find(); }
+    const oc=window.confirmOrder;
+    window.confirmOrder=function(id){ (async()=>{ try{ const fam=await family(id); for (const o of fam){ o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save(); } }catch(e){} })(); if (typeof oc==='function') return oc.apply(this, arguments); };
+    const orj=window.rejectOrder;
+    window.rejectOrder=function(id){ (async()=>{ try{ const fam=await family(id); for (const o of fam){ o.set('rejectedAt', new Date()); await o.save(); } }catch(e){} })(); if (typeof orj==='function') return orj.apply(this, arguments); };
+    const os=window.markServedAndClear;
+    window.markServedAndClear=function(id){ (async()=>{ try{ const fam=await family(id); for (const o of fam){ o.set('servedAt', new Date()); await o.save(); } }catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments); };
   })();
 
   initial(); live(); poll();

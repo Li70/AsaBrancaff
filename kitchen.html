@@ -2,6 +2,50 @@
 <html lang="pt">
 <head>
 
+<!-- HEAD_CLOUD_ONLY_GUARD_V1 -->
+<script>
+(function(){
+  try{
+    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    var SERVED_KEY = 'orders_served';
+    var SERVED_VERSION = 'orders_served_version';
+    var _get = localStorage.getItem.bind(localStorage);
+    var _set = localStorage.setItem.bind(localStorage);
+    window.__cloudList = window.__cloudList || [];
+    window.__cloudVer = window.__cloudVer || Date.now();
+    window.__servedMapSnap = window.__servedMapSnap || {};
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList || []);
+      if (k===VERSION_KEY) return String(window.__cloudVer || Date.now());
+      if (k===SERVED_KEY) return JSON.stringify(window.__servedMapSnap || {});
+      if (k===SERVED_VERSION) return String(Date.now());
+      return _get(k);
+    };
+    localStorage.setItem = function(k, v){
+      if (k===ORDERS_KEY || k===VERSION_KEY || k===SERVED_KEY || k===SERVED_VERSION){
+        return;
+      }
+      return _set(k, v);
+    };
+    console.log("[CLOUD] virtualization active");
+  }catch(e){}
+})();
+</script>
+
+
+<!-- PARSE_INIT_V2 -->
+<script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+<script>
+  try{
+    Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+    Parse.serverURL="https://parseapi.back4app.com";
+    Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    console.log("[PARSE] Init OK");
+  }catch(e){ console && console.warn && console.warn("[PARSE] Init failed", e); }
+</script>
+
+
 <!-- HEAD_NOFLASH_V1 -->
 <script>
 (function(){
@@ -433,6 +477,60 @@
       return orig.apply(this, arguments);
     };
   }
+})();
+</script>
+
+
+<!-- KITCHEN_CLOUD_CORE_V5 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+
+  (function(){
+    const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    window.__kCloudList = window.__kCloudList || [];
+    window.__kCloudVer = window.__kCloudVer || Date.now();
+    localStorage.getItem = (function(orig){ return function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList||[]); if (k===VERSION_KEY) return String(window.__kCloudVer||Date.now()); return orig.call(localStorage, k); }; })(localStorage.getItem.bind(localStorage));
+    window.__kApply = function(list,withAlerts){ window.__kCloudList=list||[]; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
+  })();
+
+  function better(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
+  function coalesce(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? better(cur,o): o); }); return Array.from(m.values()); }
+
+  async function refreshAll(playAlerts){
+    try{ const q=new Parse.Query(Order); q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000); const res=await q.find(); const best=coalesce(res); window.__kApply(best, !!playAlerts); }catch(e){ console.warn("[KITCHEN] refreshAll error", e); }
+  }
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref); console.log("[KITCHEN] live ON"); }catch(e){ console.warn("[KITCHEN] live error", e); } }
+  function poll(){ setInterval(()=>refreshAll(false), 5000); }
+
+  (function(){
+    const orig = window.saveServed;
+    if (!orig || orig.__cloudWrappedV5) return;
+    window.saveServed = function(map){
+      try{
+        var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList.slice() : [];
+        var changed=false;
+        arr.forEach(function(o){ var k=String(o.id); if (Object.prototype.hasOwnProperty.call(map,k)){ var v=!!map[k]; if (!!o.isReady !== v){ o.isReady=v; changed=true; } } });
+        if (changed) window.__kApply(arr, false);
+      }catch(e){}
+      (async ()=>{
+        try{
+          for (const id in (map||{})){
+            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+            const ready=!!map[id];
+            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(50);
+            const fam=await q.find();
+            for (const o of fam){ if (!!o.get('isReady')!==ready){ o.set('isReady', ready); await o.save(); } }
+          }
+        }catch(e){}
+      })();
+    };
+    window.saveServed.__cloudWrappedV5 = true;
+  })();
+
+  refreshAll(false); live(); poll();
 })();
 </script>
 
