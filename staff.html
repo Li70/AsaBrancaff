@@ -451,11 +451,25 @@
 })();
 </script>
 
-</body>
-</html>
+
+<!-- REMOVE_FILTERTABLE_V2 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
 
 
-<!-- STAFF_CLOUD_ONLY_V3 -->
+<!-- STAFF_CLOUD_ONLY_V3B -->
 <script>
 (function(){
   if (!(window.Parse && Parse.applicationId)) return;
@@ -488,10 +502,32 @@
     createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
     servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
 
+  function controlAlarm(list){
+    try{
+      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+      var prev = window.__prevHasUnconf || false;
+      window.__prevHasUnconf = hasUnconfirmed;
+      var el = document.getElementById('alertSound') || document.getElementById('readySound');
+      if (!el) return;
+      if (hasUnconfirmed && !prev){
+        try{
+          el.loop = true;
+          if (window.soundEnabled !== false){
+            var p = el.play();
+            if (p && typeof p.catch==='function'){ p.catch(function(){}); }
+          }
+        }catch(e){}
+      } else if (!hasUnconfirmed && prev){
+        try{ el.pause(); el.currentTime = 0; }catch(e){}
+      }
+    }catch(e){}
+  }
+
   function flush(){
     const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
-    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){}
+    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){};
     window.__applyCloudList(list);
+    controlAlarm(list);
   }
 
   async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
@@ -514,6 +550,12 @@
   initial(); live(); poll();
 })();
 </script>
+
+</body>
+</html>
+
+
+
 
 
 
