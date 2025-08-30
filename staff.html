@@ -565,6 +565,96 @@ window.rejectOrder=function(id){
 })();
 </script>
 
+
+<!-- REMOVE_FILTERTABLE_V3 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- STAFF_ALARM_STRICT_ALL_CONFIRMED_V1 -->
+<script>
+(function(){
+  function getList(){
+    try{
+      var s = localStorage.getItem(typeof window.ORDERS_KEY!=='undefined'? window.ORDERS_KEY : 'orders_simple_v4') || '[]';
+      return JSON.parse(s) || [];
+    }catch(e){ return []; }
+  }
+  function start(el){
+    try{
+      el.loop = true;
+      if (window.soundEnabled !== false){
+        var p = el.play(); if (p && typeof p.catch==='function') p.catch(function(){});
+      }
+    }catch(e){}
+  }
+  function stop(el){
+    try{ el.pause(); el.currentTime = 0; }catch(e){}
+  }
+  function control(){
+    try{
+      var list = getList();
+      var hasUnconfirmed = list.some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+      var prev = window.__alarmPrev || false; window.__alarmPrev = hasUnconfirmed;
+      var ready = document.getElementById('readySound');
+      var alertE = document.getElementById('alertSound');
+      if (hasUnconfirmed && !prev){
+        if (ready) start(ready); else if (alertE) start(alertE);
+      }else if (!hasUnconfirmed && prev){
+        if (ready) stop(ready);
+        if (alertE) stop(alertE);
+      }
+    }catch(e){}
+  }
+  // Run after each render tick if available
+  try{
+    var orig = window.__applyCloudList;
+    if (typeof orig === 'function'){
+      window.__applyCloudList = function(list){ try{ orig(list); }finally{ control(); } };
+    } else {
+      document.addEventListener('DOMContentLoaded', control);
+    }
+  }catch(e){ document.addEventListener('DOMContentLoaded', control); }
+  setInterval(control, 1500);
+})();
+</script>
+
+
+<!-- SOUND_UI_ON_DEFAULT_V3 -->
+<script>
+(function(){
+  function on(){
+    try{
+      window.soundEnabled = true;
+      var btn = document.getElementById('soundBtn');
+      if (btn){
+        btn.setAttribute('aria-pressed', 'true');
+        btn.dataset.on = '1';
+        try{ btn.classList.add('ring-2','ring-emerald-400','shadow-inner'); }catch(e){}
+      }
+      if (typeof enableSound === 'function'){
+        // call once after load to arm audio; mobile will still need a first gesture to actually play
+        try{ enableSound(); }catch(e){}
+      }
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', on, {once:true});
+  else on();
+})();
+</script>
+
 </body>
 </html>
 

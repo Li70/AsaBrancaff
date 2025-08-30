@@ -500,5 +500,137 @@
 })();
 </script>
 
+
+<!-- REMOVE_FILTERTABLE_V3 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- KITCHEN_PRONTO_SYNC_ENFORCER_V2 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+
+  async function cloudSetReady(map){
+    try{
+      for (const id in (map||{})){
+        if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+        const ready = !!map[id];
+        const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(20);
+        const res=await q.find();
+        if (res && res.length){
+          for (const obj of res){
+            if (!!obj.get('isReady') !== ready){
+              obj.set('isReady', ready);
+              await obj.save();
+            }
+          }
+        }
+      }
+    }catch(e){}
+  }
+
+  function updateLocal(map){
+    try{
+      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
+      var chg = false;
+      arr.forEach(function(o){
+        var k = String(o.id);
+        if (Object.prototype.hasOwnProperty.call(map, k)){
+          var v = !!map[k];
+          if (!!o.isReady !== v){ o.isReady = v; chg = true; }
+        }
+      });
+      if (chg){
+        window.__kCloudVer = Date.now();
+        try{ if (typeof render==='function') render({withAlerts:false}); }catch(e){}
+      }
+      // also refresh servedMap if the page uses it
+      try{
+        var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
+        if (typeof window.servedMap !== 'undefined') window.servedMap = m;
+      }catch(e){}
+    }catch(e){}
+  }
+
+  function wrapSetter(){
+    // If a future script assigns to window.saveServed, intercept and wrap it
+    try{
+      if (window.__saveServedWrapped) return;
+      window.__saveServedWrapped = true;
+      var current = window.saveServed;
+      Object.defineProperty(window, 'saveServed', {
+        configurable: true,
+        get: function(){ return current; },
+        set: function(fn){
+          // Replace with cloud-backed handler; do NOT call original local writer
+          current = function(map){
+            (async ()=>{ try{ await cloudSetReady(map); updateLocal(map); }catch(e){} })();
+          };
+        }
+      });
+      // If saveServed already exists, trigger setter once to wrap
+      if (typeof current === 'function'){
+        // replace with our wrapper immediately
+        window.saveServed = current;
+      }
+    }catch(e){}
+  }
+
+  // Also, on DOM ready, if saveServed already defined, patch it once
+  function patchNow(){
+    try{
+      if (typeof window.saveServed === 'function' && !window.saveServed.__cloudWrapped){
+        var orig = window.saveServed;
+        window.saveServed = function(map){
+          (async ()=>{ try{ await cloudSetReady(map); updateLocal(map); }catch(e){} })();
+        };
+        window.saveServed.__cloudWrapped = true;
+      }
+    }catch(e){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ wrapSetter(); patchNow(); });
+  else { wrapSetter(); patchNow(); }
+})();
+</script>
+
+
+<!-- SOUND_UI_ON_DEFAULT_V3 -->
+<script>
+(function(){
+  function on(){
+    try{
+      window.soundEnabled = true;
+      var btn = document.getElementById('soundBtn');
+      if (btn){
+        btn.setAttribute('aria-pressed', 'true');
+        btn.dataset.on = '1';
+        try{ btn.classList.add('ring-2','ring-emerald-400','shadow-inner'); }catch(e){}
+      }
+      if (typeof enableSound === 'function'){
+        // call once after load to arm audio; mobile will still need a first gesture to actually play
+        try{ enableSound(); }catch(e){}
+      }
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', on, {once:true});
+  else on();
+})();
+</script>
+
 </body>
 </html>
