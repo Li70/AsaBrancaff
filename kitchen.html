@@ -1,6 +1,32 @@
 <!doctype html>
 <html lang="pt">
 <head>
+
+<!-- HEAD_NOFLASH_V1 -->
+<script>
+(function(){
+  try{
+    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    var SERVED_KEY = 'orders_served';
+    var SERVED_VERSION = 'orders_served_version';
+    var _get = localStorage.getItem.bind(localStorage);
+    window.__cloudList = window.__cloudList || [];
+    window.__cloudVer = window.__cloudVer || Date.now();
+    window.__servedMapSnap = window.__servedMapSnap || {};
+    localStorage.getItem = function(k){
+      try{
+        if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList || []);
+        if (k===VERSION_KEY) return String(window.__cloudVer || Date.now());
+        if (k===SERVED_KEY) return JSON.stringify(window.__servedMapSnap || {});
+        if (k===SERVED_VERSION) return String(Date.now());
+      }catch(e){}
+      try{ return _get(k); }catch(e){ return null; }
+    };
+  }catch(e){}
+})();
+</script>
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Cozinha – Pedidos (Só Visualização)</title>
@@ -15,16 +41,6 @@
     .items li { list-style: disc; margin-left: 1.25rem; }
     details summary { cursor: pointer; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-
-  <script>
-    try{
-      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
-      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
-  </script>
-
 </head>
 <body class="p-4">
   <div class="max-w-5xl mx-auto">
@@ -365,160 +381,64 @@
 
 
 
+</body>
+</html>
 
-<!-- KITCHEN_SERVED_VIRTUAL_RO_V1 -->
 <script>
 (function(){
-  var SERVED_KEY = 'orders_served';
-  var SERVED_VERSION = 'orders_served_version';
-  var _get = null;
-  try{ _get = localStorage.getItem.bind(localStorage); }catch(e){}
-  function servedMapFromCloud(){
+  window.__kApply = function(list,withAlerts){
     try{
-      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
-      var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
-      return m;
-    }catch(e){ return {}; }
-  }
-  localStorage.getItem = function(k){
-    try{
-      if (k===SERVED_KEY){ return JSON.stringify(servedMapFromCloud()); }
-      if (k===SERVED_VERSION){ return String(Date.now()); }
+      window.__cloudList = list||[]; window.__cloudVer = Date.now();
+      window.__servedMapSnap = {};
+      (window.__cloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
     }catch(e){}
-    return _get ? _get(k) : null;
+    try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){};
   };
 })();
 </script>
 
-
-
-
-
-<!-- REMOVE_FILTERTABLE_V2 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- KITCHEN_CLOUD_ONLY_V3B -->
+<!-- KITCHEN_REFRESH_FAMILY_V1 -->
 <script>
 (function(){
   if (!(window.Parse && Parse.applicationId)) return;
   const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  (function(){
-    const _get = localStorage.getItem.bind(localStorage);
-    window.__kCloudList = []; window.__kCloudVer = Date.now();
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList);
-      if (k===VERSION_KEY) return String(window.__kCloudVer);
-      return _get(k);
-    };
-    window.__kApply = function(list,withAlerts){ window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function')  try{ if (typeof __syncServedFromCloud==='function') __syncServedFromCloud(); }catch(e){} try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} }catch(e){} };
-  })();
-
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-      createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-  function pickBetter(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
-  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
-
-  async function refreshAll(playAlerts){
+  window.__kRefreshFamily = async function(orderId){
     try{
-      const q=new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      q.limit(1000);
-      const res=await q.find();
-      const best = coalesceById(res);
-      window.__kApply(best, !!playAlerts);
-    }catch(e){}
-  }
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
-  function poll(){ setInterval(()=>refreshAll(false), 5000); }
-
-  function updateLocalReadyFromMap(map){
-    try{
-      const arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
-      arr.forEach(function(o){ if (Object.prototype.hasOwnProperty.call(map, String(o.id))) o.isReady = !!map[String(o.id)]; });
-      window.__kApply(arr, false);
-    }catch(e){}
-  }
-
-  (function(){
-    const orig = window.saveServed;
-    if (!orig) return;
-    window.saveServed = function(map){
-      (async ()=>{
-        try{
-          for (const id in (map||{})){
-            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-            const ready = !!map[id];
-            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
-            const res=await q.find();
-            if (res && res.length){
-              for (const obj of res){
-                if (!!obj.get('isReady') !== ready){
-                  obj.set('isReady', ready);
-                  await obj.save();
-                }
-              }
-            }
-          }
-          updateLocalReadyFromMap(map); // instant checkbox sync locally
-        }catch(e){}
-      })();
-       /* skip original localStorage writer */ };
-  })();
-
-  refreshAll(false); live(); poll();
-})();
-</script>
-
-
-<!-- KITCHEN_SYNC_SERVED_FROM_CLOUD_V1 -->
-<script>
-(function(){
-  window.__syncServedFromCloud = function(){
-    try{
-      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
-      var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
-      if (typeof servedMap !== 'undefined'){ servedMap = m; }
+      const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(20);
+      const res = await q.find();
+      var arr = Array.isArray(window.__cloudList) ? window.__cloudList.slice() : [];
+      var best = null;
+      if (res && res.length){
+        best = res.reduce(function(a,b){
+          try{
+            if (!!a.get('confirmed') !== !!b.get('confirmed')) return a.get('confirmed')? a:b;
+            if (!!a.get('isReady') !== !!b.get('isReady')) return a.get('isReady')? a:b;
+            var au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b;
+          }catch(e){}
+          return a;
+        });
+        var o = {
+          id: String(best.get('orderId')||best.id),
+          table: String(best.get('table')||''),
+          items: best.get('items')||[],
+          notes: String(best.get('notes')||''),
+          confirmed: !!best.get('confirmed'),
+          isReady: !!best.get('isReady'),
+          createdAt: best.get('createdAtMs') || (best.createdAt? best.createdAt.getTime(): Date.now()),
+          servedAt: best.get('servedAt')? (new Date(best.get('servedAt')).getTime()) : null,
+          rejectedAt: best.get('rejectedAt')? (new Date(best.get('rejectedAt')).getTime()) : null
+        };
+        var idx = arr.findIndex(function(x){ return String(x.id)===String(o.id); });
+        if (o.servedAt || o.rejectedAt){ if (idx>=0) arr.splice(idx,1); }
+        else { if (idx>=0) arr[idx]=o; else arr.push(o); }
+        window.__kApply(arr, false);
+      }
     }catch(e){}
   };
 })();
 </script>
 
-
-<!-- REMOVE_FILTERTABLE_V3 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- KITCHEN_PRONTO_SYNC_ENFORCER_V2 -->
+<!-- KITCHEN_PRONTO_WRAPPER_V3 -->
 <script>
 (function(){
   if (!(window.Parse && Parse.applicationId)) return;
@@ -533,104 +453,65 @@
         const res=await q.find();
         if (res && res.length){
           for (const obj of res){
-            if (!!obj.get('isReady') !== ready){
-              obj.set('isReady', ready);
-              await obj.save();
-            }
+            var changed = false;
+            if (!!obj.get('isReady') !== ready){ obj.set('isReady', ready); changed = true; }
+            if (ready && !obj.get('readyAt')){ try{ obj.set('readyAt', new Date()); changed = true; }catch(e){} }
+            if (changed) await obj.save();
           }
         }
+        try{ if (typeof window.__kRefreshFamily==='function') await window.__kRefreshFamily(id); }catch(e){};
       }
     }catch(e){}
   }
 
-  function updateLocal(map){
-    try{
-      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
-      var chg = false;
-      arr.forEach(function(o){
-        var k = String(o.id);
-        if (Object.prototype.hasOwnProperty.call(map, k)){
-          var v = !!map[k];
-          if (!!o.isReady !== v){ o.isReady = v; chg = true; }
-        }
-      });
-      if (chg){
-        window.__kCloudVer = Date.now();
-        try{ if (typeof render==='function') render({withAlerts:false}); }catch(e){}
+  function protectLocalWrites(fn){
+    return function(){
+      var origSet = null;
+      try{ origSet = localStorage.setItem.bind(localStorage); }catch(e){}
+      function patchedSet(k,v){
+        try{
+          if (k==='orders_served' || k==='orders_served_version' || k==='orders_simple_v4' || k==='orders_simple_v4_ver'){ return; }
+        }catch(e){}
+        try{ return origSet && origSet(k,v); }catch(e){}
       }
-      // also refresh servedMap if the page uses it
+      var replaced = false;
       try{
-        var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
-        if (typeof window.servedMap !== 'undefined') window.servedMap = m;
-      }catch(e){}
-    }catch(e){}
-  }
-
-  function wrapSetter(){
-    // If a future script assigns to window.saveServed, intercept and wrap it
-    try{
-      if (window.__saveServedWrapped) return;
-      window.__saveServedWrapped = true;
-      var current = window.saveServed;
-      Object.defineProperty(window, 'saveServed', {
-        configurable: true,
-        get: function(){ return current; },
-        set: function(fn){
-          // Replace with cloud-backed handler; do NOT call original local writer
-          current = function(map){
-            (async ()=>{ try{ await cloudSetReady(map); updateLocal(map); }catch(e){} })();
-          };
+        if (origSet){
+          localStorage.setItem = patchedSet;
+          replaced = true;
         }
-      });
-      // If saveServed already exists, trigger setter once to wrap
-      if (typeof current === 'function'){
-        // replace with our wrapper immediately
-        window.saveServed = current;
+      }catch(e){}
+      try{ return fn && fn.apply(this, arguments); }
+      finally{
+        try{ if (replaced && origSet) localStorage.setItem = origSet; }catch(e){}
       }
-    }catch(e){}
+    };
   }
 
-  // Also, on DOM ready, if saveServed already defined, patch it once
-  function patchNow(){
+  function patch(){
     try{
-      if (typeof window.saveServed === 'function' && !window.saveServed.__cloudWrapped){
-        var orig = window.saveServed;
-        window.saveServed = function(map){
-          (async ()=>{ try{ await cloudSetReady(map); updateLocal(map); }catch(e){} })();
-        };
-        window.saveServed.__cloudWrapped = true;
-      }
+      var orig = window.saveServed;
+      if (!orig || orig.__cloudWrappedV3) return;
+      window.saveServed = function(map){
+        try{
+          var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList.slice() : [];
+          var chg=false;
+          arr.forEach(function(o){
+            var k = String(o.id);
+            if (Object.prototype.hasOwnProperty.call(map,k)){
+              var v = !!map[k];
+              if (!!o.isReady !== v){ o.isReady = v; chg=true; }
+            }
+          });
+          if (chg) window.__kApply(arr, false);
+        }catch(e){}
+        try{ protectLocalWrites(orig).call(this, map); }catch(e){}
+        (async ()=>{ try{ await cloudSetReady(map); }catch(e){} })();
+      };
+      window.saveServed.__cloudWrappedV3 = true;
     }catch(e){}
   }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ wrapSetter(); patchNow(); });
-  else { wrapSetter(); patchNow(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', patch);
+  else patch();
 })();
 </script>
-
-
-<!-- SOUND_UI_ON_DEFAULT_V3 -->
-<script>
-(function(){
-  function on(){
-    try{
-      window.soundEnabled = true;
-      var btn = document.getElementById('soundBtn');
-      if (btn){
-        btn.setAttribute('aria-pressed', 'true');
-        btn.dataset.on = '1';
-        try{ btn.classList.add('ring-2','ring-emerald-400','shadow-inner'); }catch(e){}
-      }
-      if (typeof enableSound === 'function'){
-        // call once after load to arm audio; mobile will still need a first gesture to actually play
-        try{ enableSound(); }catch(e){}
-      }
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', on, {once:true});
-  else on();
-})();
-</script>
-
-</body>
-</html>
