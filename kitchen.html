@@ -622,6 +622,58 @@
 })();
 </script>
 
+
+<!-- KITCHEN_PLAINIFY_V1 -->
+<script>
+(function(){
+  function toPlainFromParse(o){
+    try{
+      return {
+        id: String(o.get('orderId')||o.id),
+        table: String(o.get('table')||''),
+        items: o.get('items')||[],
+        notes: String(o.get('notes')||''),
+        confirmed: !!o.get('confirmed'),
+        confirmedAt: o.get('confirmedAt') ? new Date(o.get('confirmedAt')).getTime() : null,
+        isReady: !!o.get('isReady'),
+        createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+        servedAt: o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null,
+        rejectedAt: o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null
+      };
+    }catch(e){ return null; }
+  }
+  function plainify(list){
+    var out = [];
+    (list||[]).forEach(function(x){
+      if (!x) return;
+      if (typeof Parse!=='undefined' && x instanceof Parse.Object){
+        var p = toPlainFromParse(x);
+        if (p) out.push(p);
+      } else if (typeof x==='object'){
+        out.push(x);
+      }
+    });
+    return out;
+  }
+  var origApply = window.__kApply;
+  window.__kApply = function(list, withAlerts){
+    try{
+      var plain = plainify(list);
+      window.__kCloudList = plain;
+      window.__kCloudVer = Date.now();
+      window.__servedMapSnap = {};
+      plain.forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
+    }catch(e){}
+    try{ if (typeof origApply === 'function') origApply(plain, withAlerts); }catch(e){}
+    try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){}
+  };
+  if (Array.isArray(window.__kCloudList)){
+    try{ window.__kApply(window.__kCloudList, false); }catch(e){}
+  }
+  console.log("[KITCHEN] plainify active");
+})();
+</script>
+
 </body>
 </html>
 
