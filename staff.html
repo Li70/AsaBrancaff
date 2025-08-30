@@ -552,6 +552,71 @@
 })();
 </script>
 
+
+<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
+<script>
+(function(){
+  function attach(){
+    try{
+      var btn = document.getElementById('clearAllBtn');
+      if (!btn || btn.__wiredClearAllV2) return;
+      btn.__wiredClearAllV2 = true;
+      btn.addEventListener('click', function(ev){
+        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+        var ok = true;
+        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
+        if (!ok) return false;
+        (async function(){
+          // Optional: Cloud reject so they don't come back after refresh
+          if (window.Parse && Parse.applicationId) {
+            try{
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
+          }
+          // Local UI clear (always)
+          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
+          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
+          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
+          try{ if (typeof render==='function') render(); }catch(e){}
+        })();
+      }, true);
+    }catch(e){}
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- STAFF_ATUALIZAR_RELOAD_V1 -->
+<script>
+(function(){
+  function attach(){
+    try{
+      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+      nodes.forEach(function(n){
+        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+        if (t==='atualizar' || t==='actualizar' || n.id==='refreshBtn') {
+          if (n.__wiredRefreshV1) return;
+          n.__wiredRefreshV1 = true;
+          n.addEventListener('click', function(ev){
+            try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+            try{ location.reload(); }catch(e){}
+          }, true);
+        }
+      });
+    }catch(e){}
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
+
 </body>
 </html>
 
