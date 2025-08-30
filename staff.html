@@ -332,9 +332,6 @@
       if (!stillPending) stopAlarm();
     }catch(e){}
     render();
-  });
-    stopAlarm();
-    render();
   }
   function rejectOrder(id){
     var ok = true;
@@ -344,7 +341,6 @@
     setOrders(keep);
     bcPost({type:'orders_updated'});
     render();
-  }); render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
