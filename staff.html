@@ -527,6 +527,31 @@
 })();
 </script>
 
+
+<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
+<script>
+(function() {
+  function attach() {
+    try {
+      var btn = document.getElementById('clearAllBtn');
+      if (!btn || btn.__wiredClearAllRemoveV1) return;
+      btn.__wiredClearAllRemoveV1 = true;
+      btn.addEventListener('click', function(ev) {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
+        try { 
+          if (typeof setOrders === 'function') setOrders([]);
+          if (typeof setServedMap === 'function') setServedMap({});
+          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
+          if (typeof render === 'function') render();
+        } catch(e){}
+      }, true);
+    } catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
+
 </body>
 </html>
 
