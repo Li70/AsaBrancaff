@@ -1,23 +1,6 @@
 <!doctype html>
 <html lang="pt">
-\1
-
-<!-- EARLY_PURGE_V1: clear stale localStorage before any render to prevent 1s flash -->
-<script>
-(function(){
-  try{
-    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-    var SERVED_KEY  = 'orders_served';
-    var SERVED_VERSION = 'orders_served_version';
-    localStorage.setItem(ORDERS_KEY, '[]');
-    localStorage.setItem(VERSION_KEY, String(Date.now()));
-    localStorage.setItem(SERVED_KEY, '{}');
-    localStorage.setItem(SERVED_VERSION, String(Date.now()));
-  }catch(e){}
-})();
-</script>
-
+<head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Staff – Pedidos em Tempo Real</title>
@@ -85,18 +68,32 @@
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-
-  <script>
-    try{
-      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
-      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
-  </script>
-
 </head>
 <body class="p-4">
+
+<!-- EARLY_STRAY_FIX_V2 -->
+<script>
+(function(){
+  try{
+    function killStrays(root){
+      try{
+        var walker = document.createTreeWalker(root||document.body, NodeFilter.SHOW_TEXT, null);
+        var toRemove = [];
+        while (walker.nextNode()) {
+          var n = walker.currentNode;
+          if (!n) continue;
+          var t = (n.nodeValue||'').trim();
+          if (t === "\" || t === "\u0001" || t === "\x01" || t === "\\x01") toRemove.push(n);
+        }
+        toRemove.forEach(function(n){ try{ n.parentNode && n.parentNode.removeChild(n); }catch(e){} });
+      }catch(e){}
+    }
+    if (document.body){ killStrays(document.body); }
+    document.addEventListener('DOMContentLoaded', function(){ killStrays(document.body); }, {once:true});
+  }catch(e){}
+})();
+</script>
+
   <!-- sound controls -->
   <div class="bar">
     <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
@@ -445,325 +442,131 @@
 
 
 
-<!-- STAFF_READY_SOUND_STOP_V1 -->
+<!-- CLEAN_STRAY_BACKREF_V1 -->
+<script>
+(function(){
+  function removeStray() {
+    try{
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+      const toRemove = [];
+      while (walker.nextNode()) {
+        const n = walker.currentNode;
+        if (!n) continue;
+        const t = (n.nodeValue||'').trim();
+        if (t === "\" || t === "\x01" || t === "\u0001") toRemove.push(n);
+      }
+      toRemove.forEach(n=>{ try{ n.parentNode && n.parentNode.removeChild(n); }catch(e){} });
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', removeStray);
+  else removeStray();
+})();
+</script>
+
+
+<!-- STAFF_SERVED_VIRTUAL_V1 -->
 <script>
 (function(){
   try{
-    if (!(window.Parse && Parse.applicationId)) return;
-    const Order = Parse.Object.extend('Order');
-    // Ensure sounds can play on mobile
-    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
-    function prime(){ ['alertSound','doneSound'].forEach(id=>{ const el=document.getElementById(id); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }); }
-    document.addEventListener('DOMContentLoaded', prime, {once:true});
-    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
+    var SERVED_KEY = 'orders_served';
+    var SERVED_VERSION = 'orders_served_version';
+    var mem = { map: {}, ver: Date.now() };
+    var _get = localStorage.getItem.bind(localStorage);
+    var _set = localStorage.setItem.bind(localStorage);
 
-    let prevReady = new Set();
-    async function recomputeAndControl(){
-      try{
-        const q = new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-        const res = await q.find();
-        const list = res.map(o => ({
-          id: String(o.get('orderId')||o.id),
-          confirmed: !!o.get('confirmed'),
-          isReady: !!o.get('isReady'),
-          servedAt: o.get('servedAt'),
-        }));
-        const pending = list.filter(o=>!o.confirmed && !o.servedAt);
-        const ready = list.filter(o=>o.isReady && !o.servedAt);
-        // STOP sounds when empty
+    // Intercept LS for served map
+    localStorage.getItem = function(k){
+      if (k===SERVED_KEY) return JSON.stringify(mem.map);
+      if (k===SERVED_VERSION) return String(mem.ver);
+      return _get(k);
+    };
+    localStorage.setItem = function(k,v){
+      if (k===SERVED_KEY){ try{ mem.map = JSON.parse(v||'{}')||{}; mem.ver = Date.now(); }catch(e){} return; }
+      if (k===SERVED_VERSION){ mem.ver = Date.now(); return; }
+      return _set(k,v);
+    };
+
+    // When cloud list applies, rebuild served map from isReady
+    const prevApply = window.__applyCloudList;
+    if (typeof prevApply === 'function'){
+      window.__applyCloudList = function(list){
         try{
-          if (pending.length===0){ const a=document.getElementById('alertSound'); if(a){ a.pause(); a.currentTime=0; } }
-          if (ready.length===0){ const d=document.getElementById('doneSound');  if(d){ d.pause(); d.currentTime=0; } }
+          const m = {}; (list||[]).forEach(o=>{ m[String(o.id)] = !!o.isReady; });
+          mem.map = m; mem.ver = Date.now();
         }catch(e){}
-        // Visual flash on new ready
-        const nowReady = new Set(ready.map(o=>o.id));
-        let hasNew=false; nowReady.forEach(id=>{ if(!prevReady.has(id)) hasNew=true; });
-        if (hasNew){
-          try{
-            const oldTitle=document.title; document.title = 'PRONTO ✔ ' + oldTitle;
-            setTimeout(()=>{ try{ document.title = oldTitle; }catch(e){} }, 2500);
-          }catch(e){}
-        }
-        prevReady = nowReady;
-      }catch(e){}
+        return prevApply.apply(this, arguments);
+      };
     }
-
-    // LiveQuery to react quickly
-    (async function(){
-      try{
-        const q = new Parse.Query(Order);
-        const sub = await q.subscribe();
-        const handler = ()=>recomputeAndControl();
-        sub.on('create', handler); sub.on('update', handler); sub.on('delete', handler);
-      }catch(e){}
-    })();
-
-    // fallback poll
-    setInterval(recomputeAndControl, 5000);
-    // initial run
-    recomputeAndControl();
+    window.__sServedMem = mem;
   }catch(e){}
 })();
 </script>
 
 
-<!-- APPLY_WRAP_V1 (Staff): stabilize incoming cloud list and prevent immediate removals -->
+<!-- STAFF_SERVED_VIRTUAL_V2 -->
 <script>
 (function(){
-  if (typeof window.__applyCloudList !== 'function') return;
-  const __origApply = window.__applyCloudList;
-  const stable = new Map();
-  const miss = new Map();
-  const hold = new Map(); // id -> ts until which we refuse to drop
-
-  window.__applyCloudList = function(incoming){
-    try{
-      const now = Date.now();
-      const inMap = new Map();
-      (incoming||[]).forEach(o=>{ inMap.set(String(o.id), o); });
-
-      // mark existing as missing
-      stable.forEach((v,k)=>{ miss.set(k, (miss.get(k)||0)+1); });
-
-      // merge incoming; reset miss; set hold for new ones
-      inMap.forEach((v,k)=>{
-        if (!stable.has(k)){ hold.set(k, now+12000); }
-        stable.set(k, v);
-        miss.set(k, 0);
-      });
-
-      // drop only after 3 misses and after hold expires
-      Array.from(miss.entries()).forEach(([k,c])=>{
-        const until = hold.get(k)||0;
-        if (c>=3 && now>until){
-          miss.delete(k); hold.delete(k); stable.delete(k);
-        }
-      });
-
-      // build list
-      const list = Array.from(stable.values());
-      return __origApply(list);
-    }catch(e){
-      return __origApply(incoming||[]);
-    }
-  };
-})();
-</script>
-
-
-<!-- STAFF_CLOUD_ONLY_V2 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  // Sounds: enable by default & prime
-  (function(){
-    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
-    function prime(){ ['alertSound','doneSound'].forEach(id=>{ const el=document.getElementById(id); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }); }
-    document.addEventListener('DOMContentLoaded', prime, {once:true});
-    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, prime, {once:true, passive:true, capture:true}); });
-  })();
-
-  // Cloud-only virtualization
-  (function(){
-    const _get = localStorage.getItem.bind(localStorage);
-    const _set = localStorage.setItem.bind(localStorage);
-    window.__cloudList = [];
-    window.__cloudVer = Date.now();
+  var SERVED_KEY = 'orders_served';
+  var SERVED_VERSION = 'orders_served_version';
+  var servedMem = { map: {}, ver: Date.now() };
+  try{
+    var _get = localStorage.getItem.bind(localStorage);
+    var _set = localStorage.setItem.bind(localStorage);
     localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
-      if (k===VERSION_KEY) return String(window.__cloudVer);
+      if (k===SERVED_KEY) return JSON.stringify(servedMem.map);
+      if (k===SERVED_VERSION) return String(servedMem.ver);
       return _get(k);
     };
     localStorage.setItem = function(k,v){
-      if (k===ORDERS_KEY || k===VERSION_KEY) return;
+      if (k===SERVED_KEY){ try{ servedMem.map = JSON.parse(v||'{}')||{}; servedMem.ver = Date.now(); }catch(e){} return; }
+      if (k===SERVED_VERSION){ servedMem.ver = Date.now(); return; }
       return _set(k,v);
     };
-    window.__applyCloudList = function(list){
-      window.__cloudList = list;
-      window.__cloudVer = Date.now();
-      try{ if (typeof render==='function') render(); }catch(e){}
-      try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-    };
-  })();
-
-  // Choose best object per orderId (confirmed > ready > newest)
-  function pickBetter(a,b){
-    try{
-      const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
-      const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
-      const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b;
-      const am=Number(a.get('createdAtMs')||0), bm=Number(b.get('createdAtMs')||0); if (am!==bm) return am>bm? a:b;
-    }catch(e){}
-    return a;
-  }
-  function coalesceById(list){
-    const m=new Map();
-    (list||[]).forEach(o=>{
-      const id=String(o.get('orderId')||o.id);
-      const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o);
-    });
-    return Array.from(m.values());
-  }
-
-  const cache = new Map();
-  const confirmedLatch = new Map();   // once confirmed, keep confirmed in UI until served/rejected
-
-  function toPlain(o){
-    return {
-      id: String(o.get('orderId')||o.id),
-      table: String(o.get('table')||''),
-      items: o.get('items')||[],
-      notes: String(o.get('notes')||''),
-      confirmed: !!o.get('confirmed'),
-      confirmedAt: o.get('confirmedAt') ? (new Date(o.get('confirmedAt')).getTime()) : null,
-      isReady: !!o.get('isReady'),
-      createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-      totalCVE: Number(o.get('totalCVE')||0),
-      servedAt: o.get('servedAt') ? (new Date(o.get('servedAt')).getTime()) : null,
-      rejectedAt: o.get('rejectedAt') ? (new Date(o.get('rejectedAt')).getTime()) : null,
-    };
-  }
-
-  function flush(){
-    const list = Array.from(cache.values())
-      .filter(o=>!o.servedAt && !o.rejectedAt)
-      .map(o=>{ const c = Object.assign({}, o); if (confirmedLatch.get(String(o.id))) c.confirmed = true; return c; });
-    // sounds
-    try{
-      const pend = new Set(list.filter(o=>!o.confirmed).map(o=>String(o.id)));
-      const ready = new Set(list.filter(o=>o.isReady && !o.servedAt).map(o=>String(o.id)));
-      // fire sounds once per new set change
-      if (!window.__pendSnap) window.__pendSnap = new Set();
-      if (!window.__readySnap) window.__readySnap = new Set();
-      let newPend=false, newReady=false;
-      pend.forEach(id=>{ if(!window.__pendSnap.has(id)) newPend=true; });
-      ready.forEach(id=>{ if(!window.__readySnap.has(id)) newReady=true; });
-      if (newPend){ const a=document.getElementById('alertSound'); if(a){ a.currentTime=0; a.play(); } }
-      if (newReady){ const d=document.getElementById('doneSound'); if(d){ d.currentTime=0; d.play(); } }
-      // stop when empty
-      if (pend.size===0){ const a=document.getElementById('alertSound'); if(a){ a.pause(); a.currentTime=0; } }
-      if (ready.size===0){ const d=document.getElementById('doneSound'); if(d){ d.pause(); d.currentTime=0; } }
-      window.__pendSnap = pend; window.__readySnap = ready;
-    }catch(e){}
-    window.__applyCloudList(list);
-  }
-
-  async function initial(){
-    try{
-      const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-      const res=await q.find();
-      const best=coalesceById(res);
-      best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id), p); if (p.confirmed) confirmedLatch.set(String(p.id), true); });
-      flush();
-    }catch(e){}
-  }
-
-  async function refreshFamily(orderId){
-    try{
-      const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10);
-      const fam=await q.find(); const best=coalesceById(fam); const w=best.length? best[0]: null;
-      if (w){ const p=toPlain(w); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id), p); if (p.confirmed) confirmedLatch.set(String(p.id), true);} }
-      flush();
-    }catch(e){}
-  }
-
-  async function live(){
-    try{
-      const q=new Parse.Query(Order);
-      const sub=await q.subscribe();
-      sub.on('create', o=> refreshFamily(o.get('orderId')||o.id));
-      sub.on('update', o=> refreshFamily(o.get('orderId')||o.id));
-      sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); });
-    }catch(e){}
-  }
-
-  function poll(){
-    setInterval(async ()=>{
-      try{
-        const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500);
-        const res=await q.find();
-        const best=coalesceById(res);
-        const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id), true); });
-        cache.clear(); next.forEach((v,k)=>cache.set(k,v));
-        flush();
-      }catch(e){}
-    }, 5000);
-  }
-
-  // Actions -> cloud
+  }catch(e){}
   (function(){
-    async function findObj(id){
-      const q1=new Parse.Query(Order); q1.equalTo('orderId', String(id)); q1.limit(10);
-      const fam=await q1.find(); const best=coalesceById(fam);
-      return best.length? best[0]: null;
-    }
-    const oc = window.confirmOrder;
-    window.confirmOrder = function(id){ (async()=>{ try{ let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){} } o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save(); }catch(e){} })(); try{ if(typeof oc==='function') return oc.apply(this, arguments); }catch{} };
-    const orj = window.rejectOrder;
-    window.rejectOrder = function(id){ (async()=>{ try{ let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} } }catch(e){} })(); try{ if(typeof orj==='function') return orj.apply(this, arguments); }catch{} };
-    const os = window.markServedAndClear;
-    window.markServedAndClear = function(id){ (async()=>{ try{ let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} } }catch(e){} })(); try{ if(typeof os==='function') return os.apply(this, arguments); }catch{} };
-  })();
-
-  initial(); live(); poll();
-})();
-</script>
-
-
-<!-- STAFF_CLEARALL_CONFIRM_V1 -->
-<script>
-(function(){
-  function attach(){
-    const btn = document.getElementById('clearAllBtn');
-    if (!btn || btn.__confirmHook) return;
-    btn.__confirmHook = true;
-    btn.addEventListener('click', function(ev){
+    var orig = window.__applyCloudList;
+    if (typeof orig !== 'function') return;
+    window.__applyCloudList = function(list){
       try{
-        const ok = window.confirm('Tem a certeza que quer remover todas as encomendas?');
-        if (!ok){ ev && ev.preventDefault && ev.stopPropagation && ev.stopPropagation(); return false; }
+        var m = {}; (list||[]).forEach(function(o){ m[String(o.id)] = !!o.isReady; });
+        servedMem.map = m; servedMem.ver = Date.now();
       }catch(e){}
-    }, true);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
-  else attach();
+      return orig.apply(this, arguments);
+    };
+  })();
+  window.__staffServedMem = servedMem;
 })();
 </script>
 
 
-<!-- STAFF_CLEARALL_EXEC_V2 -->
+<!-- STAFF_CLEARALL_UNIFIED_V3 -->
 <script>
 (function(){
   if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-
-  async function deleteAllActive(){
-    try{
-      const q = new Parse.Query(Order);
-      q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      q.limit(1000);
-      const res = await q.find();
-      for (const o of res){
-        try{ o.set('rejectedAt', new Date()); await o.save(); }catch(e){}
-      }
-      for (const o of res){
-        try{ await o.destroy(); }catch(e){}
-      }
-    }catch(e){}
-    try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
-  }
-
+  var hooked = false;
   function attach(){
-    const btn = document.getElementById('clearAllBtn');
-    if (!btn || btn.__execHook) return;
-    btn.__execHook = true;
+    if (hooked) return;
+    var btn = document.getElementById('clearAllBtn');
+    if (!btn) return;
+    hooked = true;
     btn.addEventListener('click', function(ev){
-      // confirmation prompt is handled in another hook; here we just proceed
-      setTimeout(deleteAllActive, 0);
-    }, false);
+      try{
+        var ok = window.confirm('Tem a certeza que quer remover todas as encomendas?');
+        if (!ok){ ev && ev.preventDefault && ev.preventDefault(); ev && ev.stopPropagation && ev.stopPropagation(); return false; }
+      }catch(e){}
+      (async function(){
+        try{
+          var Order = Parse.Object.extend('Order');
+          var q = new Parse.Query(Order);
+          q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+          q.limit(1000);
+          var res = await q.find();
+          for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+          for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
+          try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){} 
+        }catch(e){}
+      })();
+    }, true);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
   else attach();
