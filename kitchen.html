@@ -412,7 +412,8 @@
       if (k===VERSION_KEY) return String(window.__kCloudVer);
       return _get(k);
     };
-    window.__kApply = function(list,withAlerts){ window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
+    window.__kApply = function(list,withAlerts){ try{ list = (list||[]).map(function(x){ return (x && x.id && x.items) ? x : toPlain(x); }); }catch(e){}
+      window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
   })();
 
   function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
@@ -426,9 +427,9 @@
       q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
       q.limit(1000);
       const res=await q.find();
-      const best = coalesceById(res);
+      const best = coalesceById(res).map(toPlain);
       window.__kApply(best, !!playAlerts);
-    }catch(e){}
+}catch(e){}
   }
   async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
   function poll(){ setInterval(()=>refreshAll(false), 5000); }
