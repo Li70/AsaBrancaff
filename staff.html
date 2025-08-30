@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="pt">
-<head>
+\1
+
+<!-- EARLY_PURGE_V1: clear stale localStorage before any render to prevent 1s flash -->
+<script>
+(function(){
+  try{
+    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    var SERVED_KEY  = 'orders_served';
+    var SERVED_VERSION = 'orders_served_version';
+    localStorage.setItem(ORDERS_KEY, '[]');
+    localStorage.setItem(VERSION_KEY, String(Date.now()));
+    localStorage.setItem(SERVED_KEY, '{}');
+    localStorage.setItem(SERVED_VERSION, String(Date.now()));
+  }catch(e){}
+})();
+</script>
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Staff – Pedidos em Tempo Real</title>
@@ -710,6 +727,43 @@
         if (!ok){ ev && ev.preventDefault && ev.stopPropagation && ev.stopPropagation(); return false; }
       }catch(e){}
     }, true);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+  else attach();
+})();
+</script>
+
+
+<!-- STAFF_CLEARALL_EXEC_V2 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+
+  async function deleteAllActive(){
+    try{
+      const q = new Parse.Query(Order);
+      q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+      q.limit(1000);
+      const res = await q.find();
+      for (const o of res){
+        try{ o.set('rejectedAt', new Date()); await o.save(); }catch(e){}
+      }
+      for (const o of res){
+        try{ await o.destroy(); }catch(e){}
+      }
+    }catch(e){}
+    try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
+  }
+
+  function attach(){
+    const btn = document.getElementById('clearAllBtn');
+    if (!btn || btn.__execHook) return;
+    btn.__execHook = true;
+    btn.addEventListener('click', function(ev){
+      // confirmation prompt is handled in another hook; here we just proceed
+      setTimeout(deleteAllActive, 0);
+    }, false);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
   else attach();
