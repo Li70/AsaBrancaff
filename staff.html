@@ -956,6 +956,38 @@ window.confirmOrder=function(id){
 })();
 </script>
 
+
+<!-- STAFF_READY_ALARM_ENFORCER_V2 -->
+<script>
+(function(){
+  function play(el){ try{ if (!el) return; el.loop = true; if (window.soundEnabled !== false){ var p = el.play(); if (p && p.catch) p.catch(function(){}); } }catch(e){} }
+  function stop(el){ try{ if (!el) return; el.pause(); el.currentTime = 0; }catch(e){} }
+  function hasUnconfirmed(list){
+    try{ return (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; }); }catch(e){ return false; }
+  }
+  function control(){
+    try{
+      var list = Array.isArray(window.__cloudList) ? window.__cloudList : [];
+      var need = hasUnconfirmed(list);
+      var prev = window.__readyAlarmPrev || false;
+      window.__readyAlarmPrev = need;
+      var ready = document.getElementById('readySound');
+      var alertE = document.getElementById('alertSound');
+      if (need && !prev){ play(ready||alertE); }
+      else if (!need && prev){ stop(ready); stop(alertE); }
+    }catch(e){}
+  }
+  try{
+    var orig = window.__applyCloudList;
+    if (typeof orig === 'function'){
+      window.__applyCloudList = function(list){ try{ orig(list); } finally { control(); } };
+    }
+  }catch(e){}
+  setInterval(control, 1200);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', control); else control();
+})();
+</script>
+
 </body>
 </html>
 

@@ -469,7 +469,7 @@
 (function(){
   var orig = window.__kApply;
   if (typeof orig === 'function'){
-    window.__kApply = function(list, withAlerts){
+    window.__kApply = function(list, withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
       try{
         window.__cloudList = list||[]; window.__cloudVer = Date.now();
         window.__servedMapSnap = {}; (window.__cloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
@@ -493,14 +493,16 @@
     window.__kCloudList = window.__kCloudList || [];
     window.__kCloudVer = window.__kCloudVer || Date.now();
     localStorage.getItem = (function(orig){ return function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList||[]); if (k===VERSION_KEY) return String(window.__kCloudVer||Date.now()); return orig.call(localStorage, k); }; })(localStorage.getItem.bind(localStorage));
-    window.__kApply = function(list,withAlerts){ window.__kCloudList=list||[]; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
+    window.__kApply = function(list,withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){} window.__kCloudList=list||[]; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
   })();
 
   function better(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
   function coalesce(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? better(cur,o): o); }); return Array.from(m.values()); }
 
   async function refreshAll(playAlerts){
-    try{ const q=new Parse.Query(Order); q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000); const res=await q.find(); const best=coalesce(res); window.__kApply(best, !!playAlerts); }catch(e){ console.warn("[KITCHEN] refreshAll error", e); }
+    try{ const q=new Parse.Query(Order); q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000); const res=await q.find(); const best=coalesce(res);
+      const plain=(typeof window.__kEnsurePlain==='function')? window.__kEnsurePlain(best) : best;
+      window.__kApply(plain, !!playAlerts); }catch(e){ console.warn("[KITCHEN] refreshAll error", e); }
   }
   async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref); console.log("[KITCHEN] live ON"); }catch(e){ console.warn("[KITCHEN] live error", e); } }
   function poll(){ setInterval(()=>refreshAll(false), 5000); }
@@ -539,7 +541,7 @@
 <script>
 (function(){
   var orig = window.__kApply;
-  window.__kApply = function(list, withAlerts){
+  window.__kApply = function(list, withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
     try{
       window.__kCloudList = Array.isArray(list) ? list : [];
       window.__kCloudVer = Date.now();
@@ -656,7 +658,7 @@
     return out;
   }
   var origApply = window.__kApply;
-  window.__kApply = function(list, withAlerts){
+  window.__kApply = function(list, withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
     try{
       var plain = plainify(list);
       window.__kCloudList = plain;
@@ -674,12 +676,45 @@
 })();
 </script>
 
+
+<!-- KITCHEN_PLAINIFY_HELPER_V1 -->
+<script>
+(function(){
+  window.__kToPlain = function(o){
+    try{
+      return {
+        id: String((o.get? (o.get('orderId')||o.id) : (o.orderId||o.id)) || ''),
+        table: String((o.get? o.get('table') : o.table) || ''),
+        items: (o.get? o.get('items') : o.items) || [],
+        notes: String((o.get? o.get('notes') : o.notes) || ''),
+        confirmed: !!(o.get? o.get('confirmed') : o.confirmed),
+        confirmedAt: (o.get? (o.get('confirmedAt')||null) : (o.confirmedAt||null)),
+        isReady: !!(o.get? o.get('isReady') : o.isReady),
+        createdAt: (o.get? (o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now())) : (o.createdAt||Date.now())),
+        servedAt: (function(){ var v = (o.get? o.get('servedAt') : o.servedAt); if (!v) return null; try{ return (new Date(v)).getTime(); }catch(e){ return null; } })(),
+        rejectedAt: (function(){ var v = (o.get? o.get('rejectedAt') : o.rejectedAt); if (!v) return null; try{ return (new Date(v)).getTime(); }catch(e){ return null; } })()
+      };
+    }catch(e){ return null; }
+  };
+  window.__kEnsurePlain = function(list){
+    try{
+      if (!Array.isArray(list)) return [];
+      if (!list.length) return [];
+      if (list[0] && typeof list[0].get === 'function'){
+        return list.map(window.__kToPlain).filter(Boolean);
+      }
+      return list;
+    }catch(e){ return []; }
+  };
+})();
+</script>
+
 </body>
 </html>
 
 <script>
 (function(){
-  window.__kApply = function(list,withAlerts){
+  window.__kApply = function(list,withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
     try{
       window.__cloudList = list||[]; window.__cloudVer = Date.now();
       window.__servedMapSnap = {};
