@@ -68,6 +68,16 @@
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL="https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
+
 </head>
 <body class="p-4">
 
@@ -570,6 +580,116 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
   else attach();
+})();
+</script>
+
+
+<!-- STAFF_CLOUD_ONLY_V2 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  (function(){ try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){} })();
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    const _set = localStorage.setItem.bind(localStorage);
+    window.__cloudList = []; window.__cloudVer = Date.now();
+    localStorage.getItem = function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList); if (k===VERSION_KEY) return String(window.__cloudVer); return _get(k); };
+    localStorage.setItem = function(k,v){ if (k===ORDERS_KEY || k===VERSION_KEY) return; return _set(k,v); };
+    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
+  })();
+
+  function pickBetter(a,b){
+    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
+         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
+         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
+    return a;
+  }
+  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+
+  const cache=new Map(); const confirmedLatch=new Map();
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
+
+  function flush(){
+    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
+    try{ const m={}; list.forEach(o=>{ m[String(o.id)]=!!o.isReady; }); localStorage.setItem('orders_served', JSON.stringify(m)); localStorage.setItem('orders_served_version', String(Date.now())); }catch(e){}
+    window.__applyCloudList(list);
+  }
+
+  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
+
+  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
+    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
+
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
+  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
+      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
+
+  (function(){
+    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
+    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
+    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
+    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
+  })();
+
+  initial(); live(); poll();
+})();
+</script>
+
+
+<!-- STAFF_DOM_TWEAKS_V1 -->
+<script>
+(function(){
+  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+  function removeByText(tag, text){
+    try{ Array.from(document.querySelectorAll(tag)).forEach(n=>{ if (norm(n.textContent).includes(norm(text))) { n.remove(); } }); }catch(e){}
+  }
+  function removeMesaField(){
+    try{
+      const inputs = Array.from(document.querySelectorAll('input,textarea,select'));
+      inputs.forEach(el=>{
+        const ph = norm(el.getAttribute('placeholder')||''); if (ph==='mesa') { el.remove(); return; }
+        const label = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
+        if (label && norm(label.textContent)==='mesa'){ label.remove(); el.remove(); }
+      });
+      removeByText('span','mesa'); removeByText('div','mesa');
+    }catch(e){}
+  }
+  function wireAtualizar(){
+    try{ Array.from(document.querySelectorAll('button,a')).forEach(b=>{ if (norm(b.textContent)==='atualizar'){ b.addEventListener('click', e=>{ e.preventDefault(); location.reload(); }); } }); }catch(e){}
+  }
+  function confirmAndClearAll(){
+    try{
+      Array.from(document.querySelectorAll('button,a,.btn,.button')).forEach(b=>{
+        const t = norm(b.textContent);
+        if (t==='limpar tudo'){
+          if (b.__wiredClearAll) return; b.__wiredClearAll = true;
+          b.addEventListener('click', function(ev){
+            try{ const ok = window.confirm('Tem a certeza que quer remover todas as encomendas?'); if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; } }catch(e){}
+            (async function(){
+              try{
+                if (!(window.Parse && Parse.applicationId)) return;
+                const Order = Parse.Object.extend('Order');
+                const q = new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+                const res = await q.find();
+                for (let i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+                for (let j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
+                try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
+              }catch(e){}
+            })();
+          }, true);
+        }
+      });
+    }catch(e){}
+  }
+  function run(){ removeByText('button','limpar mesa'); removeByText('a','limpar mesa'); removeMesaField(); wireAtualizar(); confirmAndClearAll(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
 })();
 </script>
 
