@@ -1,23 +1,6 @@
 <!doctype html>
 <html lang="pt">
 <head>
-
-<!-- EARLY_PURGE_V2 -->
-<script>
-(function(){
-  try{
-    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-    var SERVED_KEY  = 'orders_served';
-    var SERVED_VERSION = 'orders_served_version';
-    localStorage.setItem(ORDERS_KEY, '[]');
-    localStorage.setItem(VERSION_KEY, String(Date.now()));
-    localStorage.setItem(SERVED_KEY, '{}');
-    localStorage.setItem(SERVED_VERSION, String(Date.now()));
-  }catch(e){}
-})();
-</script>
-
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Staff – Pedidos em Tempo Real</title>
@@ -85,42 +68,8 @@
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-
-  <script>
-    try{
-      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
-      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
-  </script>
-
 </head>
 <body class="p-4">
-
-<!-- EARLY_STRAY_FIX_V2 -->
-<script>
-(function(){
-  try{
-    function killStrays(root){
-      try{
-        var walker = document.createTreeWalker(root||document.body, NodeFilter.SHOW_TEXT, null);
-        var toRemove = [];
-        while (walker.nextNode()) {
-          var n = walker.currentNode;
-          if (!n) continue;
-          var t = (n.nodeValue||'').trim();
-          if (t === "\" || t === "\u0001" || t === "\x01" || t === "\\x01") toRemove.push(n);
-        }
-        toRemove.forEach(function(n){ try{ n.parentNode && n.parentNode.removeChild(n); }catch(e){} });
-      }catch(e){}
-    }
-    if (document.body){ killStrays(document.body); }
-    document.addEventListener('DOMContentLoaded', function(){ killStrays(document.body); }, {once:true});
-  }catch(e){}
-})();
-</script>
-
   <!-- sound controls -->
   <div class="bar">
     <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
@@ -469,320 +418,26 @@
 
 
 
-<!-- CLEAN_STRAY_BACKREF_V1 -->
-<script>
-(function(){
-  function removeStray() {
-    try{
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
-      const toRemove = [];
-      while (walker.nextNode()) {
-        const n = walker.currentNode;
-        if (!n) continue;
-        const t = (n.nodeValue||'').trim();
-        if (t === "\" || t === "\x01" || t === "\u0001") toRemove.push(n);
-      }
-      toRemove.forEach(n=>{ try{ n.parentNode && n.parentNode.removeChild(n); }catch(e){} });
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', removeStray);
-  else removeStray();
-})();
-</script>
-
-
-<!-- STAFF_SERVED_VIRTUAL_V1 -->
-<script>
-(function(){
-  try{
-    var SERVED_KEY = 'orders_served';
-    var SERVED_VERSION = 'orders_served_version';
-    var mem = { map: {}, ver: Date.now() };
-    var _get = localStorage.getItem.bind(localStorage);
-    var _set = localStorage.setItem.bind(localStorage);
-
-    // Intercept LS for served map
-    localStorage.getItem = function(k){
-      if (k===SERVED_KEY) return JSON.stringify(mem.map);
-      if (k===SERVED_VERSION) return String(mem.ver);
-      return _get(k);
-    };
-    localStorage.setItem = function(k,v){
-      if (k===SERVED_KEY){ try{ mem.map = JSON.parse(v||'{}')||{}; mem.ver = Date.now(); }catch(e){} return; }
-      if (k===SERVED_VERSION){ mem.ver = Date.now(); return; }
-      return _set(k,v);
-    };
-
-    // When cloud list applies, rebuild served map from isReady
-    const prevApply = window.__applyCloudList;
-    if (typeof prevApply === 'function'){
-      window.__applyCloudList = function(list){
-        try{
-          const m = {}; (list||[]).forEach(o=>{ m[String(o.id)] = !!o.isReady; });
-          mem.map = m; mem.ver = Date.now();
-        }catch(e){}
-        return prevApply.apply(this, arguments);
-      };
-    }
-    window.__sServedMem = mem;
-  }catch(e){}
-})();
-</script>
-
-
 <!-- STAFF_SERVED_VIRTUAL_V2 -->
 <script>
 (function(){
   var SERVED_KEY = 'orders_served';
   var SERVED_VERSION = 'orders_served_version';
-  var servedMem = { map: {}, ver: Date.now() };
-  try{
-    var _get = localStorage.getItem.bind(localStorage);
-    var _set = localStorage.setItem.bind(localStorage);
-    localStorage.getItem = function(k){
-      if (k===SERVED_KEY) return JSON.stringify(servedMem.map);
-      if (k===SERVED_VERSION) return String(servedMem.ver);
-      return _get(k);
-    };
-    localStorage.setItem = function(k,v){
-      if (k===SERVED_KEY){ try{ servedMem.map = JSON.parse(v||'{}')||{}; servedMem.ver = Date.now(); }catch(e){} return; }
-      if (k===SERVED_VERSION){ servedMem.ver = Date.now(); return; }
-      return _set(k,v);
-    };
-  }catch(e){}
-  (function(){
-    var orig = window.__applyCloudList;
-    if (typeof orig !== 'function') return;
-    window.__applyCloudList = function(list){
-      try{
-        var m = {}; (list||[]).forEach(function(o){ m[String(o.id)] = !!o.isReady; });
-        servedMem.map = m; servedMem.ver = Date.now();
-      }catch(e){}
-      return orig.apply(this, arguments);
-    };
-  })();
-  window.__staffServedMem = servedMem;
-})();
-</script>
-
-
-<!-- STAFF_CLEARALL_UNIFIED_V3 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  var hooked = false;
-  function attach(){
-    if (hooked) return;
-    var btn = document.getElementById('clearAllBtn');
-    if (!btn) return;
-    hooked = true;
-    btn.addEventListener('click', function(ev){
-      try{
-        var ok = window.confirm('Tem a certeza que quer remover todas as encomendas?');
-        if (!ok){ ev && ev.preventDefault && ev.preventDefault(); ev && ev.stopPropagation && ev.stopPropagation(); return false; }
-      }catch(e){}
-      (async function(){
-        try{
-          var Order = Parse.Object.extend('Order');
-          var q = new Parse.Query(Order);
-          q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-          q.limit(1000);
-          var res = await q.find();
-          for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-          for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
-          try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){} 
-        }catch(e){}
-      })();
-    }, true);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
-  else attach();
-})();
-</script>
-
-
-<!-- STAFF_CLOUD_ONLY_V2 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  (function(){ try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){} })();
-
-  (function(){
-    const _get = localStorage.getItem.bind(localStorage);
-    const _set = localStorage.setItem.bind(localStorage);
-    window.__cloudList = []; window.__cloudVer = Date.now();
-    localStorage.getItem = function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList); if (k===VERSION_KEY) return String(window.__cloudVer); return _get(k); };
-    localStorage.setItem = function(k,v){ if (k===ORDERS_KEY || k===VERSION_KEY) return; return _set(k,v); };
-    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
-  })();
-
-  function pickBetter(a,b){
-    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
-         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
-         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
-    return a;
-  }
-  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
-
-  const cache=new Map(); const confirmedLatch=new Map();
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-
-  function flush(){
-    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
-    try{ const m={}; list.forEach(o=>{ m[String(o.id)]=!!o.isReady; }); localStorage.setItem('orders_served', JSON.stringify(m)); localStorage.setItem('orders_served_version', String(Date.now())); }catch(e){}
-    window.__applyCloudList(list);
-  }
-
-  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
-
-  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
-    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
-
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
-  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
-      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
-
-  (function(){
-    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
-    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
-    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
-    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
-  })();
-
-  initial(); live(); poll();
-})();
-</script>
-
-
-
-<!-- STAFF_DOM_TWEAKS_V2 -->
-<script>
-(function(){
-  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
-  function removeLimparMesa(){
+  var _get = null;
+  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
+  localStorage.getItem = function(k){
     try{
-      var nodes = Array.from(document.querySelectorAll('button, a'));
-      nodes.forEach(function(n){
-        if (norm(n.textContent) === 'limpar mesa'){ try{ n.remove(); }catch(e){} }
-      });
+      if (k===SERVED_KEY){
+        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
+        return JSON.stringify(m);
+      }
+      if (k===SERVED_VERSION){
+        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
+        return String(v);
+      }
     }catch(e){}
-  }
-  function removeMesaField(){
-    try{
-      var inputs = Array.from(document.querySelectorAll('input,textarea,select'));
-      inputs.forEach(function(el){
-        var ph = el.getAttribute('placeholder');
-        if (ph && norm(ph) === 'mesa'){ try{ el.remove(); }catch(e){} return; }
-        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
-        if (lbl && norm(lbl.textContent) === 'mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
-      });
-    }catch(e){}
-  }
-  function wireAtualizar(){
-    try{
-      var nodes = Array.from(document.querySelectorAll('button, a'));
-      nodes.forEach(function(n){
-        if (norm(n.textContent) === 'atualizar'){
-          n.addEventListener('click', function(ev){ try{ ev.preventDefault(); location.reload(); }catch(e){} });
-        }
-      });
-    }catch(e){}
-  }
-  function wireLimparTudo(){
-    try{
-      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-      nodes.forEach(function(n){
-        if (norm(n.textContent) === 'limpar tudo'){
-          if (n.__wiredClearAll) return; n.__wiredClearAll = true;
-          n.addEventListener('click', function(ev){
-            try{
-              var ok = window.confirm('Tem a certeza que quer remover todas as encomendas?');
-              if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
-            }catch(e){}
-            (async function(){
-              try{
-                if (!(window.Parse && Parse.applicationId)) return;
-                var Order = Parse.Object.extend('Order');
-                var q = new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-                var res = await q.find();
-                for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-                for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
-                try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
-              }catch(e){}
-            })();
-          }, true);
-        }
-      });
-    }catch(e){}
-  }
-  function run(){ removeLimparMesa(); removeMesaField(); wireAtualizar(); wireLimparTudo(); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-
-<!-- SOUND_PRIME_STAFF_V1 -->
-<script>
-(function(){
-  try{ window.soundEnabled = true; }catch(_e){}
-  function prime(){
-    try{
-      var ids = ['alertSound','doneSound','cashSound'];
-      ids.forEach(function(id){
-        var el = document.getElementById(id);
-        if (!el) return;
-        try{ el.muted = false; }catch(e){}
-        var p = el.play();
-        if (p && typeof p.then==='function') { p.then(function(){ try{ el.pause(); el.currentTime = 0; }catch(e){} }).catch(function(){}); }
-      });
-    }catch(e){}
-  }
-  document.addEventListener('DOMContentLoaded', prime, {once:true});
-  ['pointerdown','touchstart','keydown'].forEach(function(evt){ window.addEventListener(evt, function(){ try{ prime(); }catch(e){} }, {once:true, passive:true, capture:true}); });
-})();
-</script>
-
-
-<!-- SOUND_UI_ON_STAFF_V1 -->
-<script>
-(function(){
-  function activateSoundBtn(){
-    try{
-      var btn = document.getElementById('soundBtn');
-      if (!btn) return;
-      btn.setAttribute('aria-pressed', 'true');
-      btn.dataset.on = '1';
-      btn.classList.add('ring-2','ring-emerald-400','shadow-inner');
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', activateSoundBtn);
-  else activateSoundBtn();
-  try{ if (typeof enableSound === 'function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
-})();
-</script>
-
-
-<!-- REMOVE_FILTERTABLE_V1 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
+    return _get ? _get(k) : null;
+  };
 })();
 </script>
 
