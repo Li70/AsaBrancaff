@@ -1,76 +1,6 @@
 <!doctype html>
 <html lang="pt">
 <head>
-
-<!-- HEAD_CLOUD_ONLY_GUARD_V1 -->
-<script>
-(function(){
-  try{
-    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-    var SERVED_KEY = 'orders_served';
-    var SERVED_VERSION = 'orders_served_version';
-    var _get = localStorage.getItem.bind(localStorage);
-    var _set = localStorage.setItem.bind(localStorage);
-    window.__cloudList = window.__cloudList || [];
-    window.__cloudVer = window.__cloudVer || Date.now();
-    window.__servedMapSnap = window.__servedMapSnap || {};
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList || []);
-      if (k===VERSION_KEY) return String(window.__cloudVer || Date.now());
-      if (k===SERVED_KEY) return JSON.stringify(window.__servedMapSnap || {});
-      if (k===SERVED_VERSION) return String(Date.now());
-      return _get(k);
-    };
-    localStorage.setItem = function(k, v){
-      if (k===ORDERS_KEY || k===VERSION_KEY || k===SERVED_KEY || k===SERVED_VERSION){
-        return;
-      }
-      return _set(k, v);
-    };
-    console.log("[CLOUD] virtualization active");
-  }catch(e){}
-})();
-</script>
-
-
-<!-- PARSE_INIT_V2 -->
-<script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-<script>
-  try{
-    Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-    Parse.serverURL="https://parseapi.back4app.com";
-    Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    console.log("[PARSE] Init OK");
-  }catch(e){ console && console.warn && console.warn("[PARSE] Init failed", e); }
-</script>
-
-
-<!-- HEAD_NOFLASH_V1 -->
-<script>
-(function(){
-  try{
-    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-    var SERVED_KEY = 'orders_served';
-    var SERVED_VERSION = 'orders_served_version';
-    var _get = localStorage.getItem.bind(localStorage);
-    window.__cloudList = window.__cloudList || [];
-    window.__cloudVer = window.__cloudVer || Date.now();
-    window.__servedMapSnap = window.__servedMapSnap || {};
-    localStorage.getItem = function(k){
-      try{
-        if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList || []);
-        if (k===VERSION_KEY) return String(window.__cloudVer || Date.now());
-        if (k===SERVED_KEY) return JSON.stringify(window.__servedMapSnap || {});
-        if (k===SERVED_VERSION) return String(Date.now());
-      }catch(e){}
-      try{ return _get(k); }catch(e){ return null; }
-    };
-  }catch(e){}
-})();
-</script>
-
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Cozinha – Pedidos (Só Visualização)</title>
@@ -426,420 +356,86 @@
 
 
 
-<!-- REMOVE_FILTERTABLE_V3 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- SOUND_UI_ON_DEFAULT_V3 -->
-<script>
-(function(){
-  function on(){
-    try{
-      window.soundEnabled = true;
-      var btn = document.getElementById('soundBtn');
-      if (btn){
-        btn.setAttribute('aria-pressed', 'true');
-        btn.dataset.on = '1';
-        try{ btn.classList.add('ring-2','ring-emerald-400','shadow-inner'); }catch(e){};
-      }
-      if (typeof enableSound === 'function'){ try{ enableSound(); }catch(e){} }
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', on, {once:true});
-  else on();
-})();
-</script>
-
-
-<!-- KITCHEN_APPLY_SERVEDS_SNAP_V1 -->
-<script>
-(function(){
-  var orig = window.__kApply;
-  if (typeof orig === 'function'){
-    window.__kApply = function(list, withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
-      try{
-        window.__cloudList = list||[]; window.__cloudVer = Date.now();
-        window.__servedMapSnap = {}; (window.__cloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
-      }catch(e){}
-      return orig.apply(this, arguments);
-    };
-  }
-})();
-</script>
-
-
-<!-- KITCHEN_CLOUD_CORE_V5 -->
+<!-- KITCHEN_PRONTO_BROADCAST_V1 -->
 <script>
 (function(){
   if (!(window.Parse && Parse.applicationId)) return;
   const Order = Parse.Object.extend('Order');
 
-  (function(){
-    const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-    const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-    window.__kCloudList = window.__kCloudList || [];
-    window.__kCloudVer = window.__kCloudVer || Date.now();
-    localStorage.getItem = (function(orig){ return function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList||[]); if (k===VERSION_KEY) return String(window.__kCloudVer||Date.now()); return orig.call(localStorage, k); }; })(localStorage.getItem.bind(localStorage));
-    window.__kApply = function(list,withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){} window.__kCloudList=list||[]; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
-  })();
-
-  function better(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
-  function coalesce(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? better(cur,o): o); }); return Array.from(m.values()); }
-
-  async function refreshAll(playAlerts){
-    try{ const q=new Parse.Query(Order); q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000); const res=await q.find(); const best=coalesce(res);
-      const plain=(typeof window.__kEnsurePlain==='function')? window.__kEnsurePlain(best) : best;
-      window.__kApply(plain, !!playAlerts); }catch(e){ console.warn("[KITCHEN] refreshAll error", e); }
-  }
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref); console.log("[KITCHEN] live ON"); }catch(e){ console.warn("[KITCHEN] live error", e); } }
-  function poll(){ setInterval(()=>refreshAll(false), 5000); }
-
-  (function(){
-    const orig = window.saveServed;
-    if (!orig || orig.__cloudWrappedV5) return;
-    window.saveServed = function(map){
-      try{
-        var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList.slice() : [];
-        var changed=false;
-        arr.forEach(function(o){ var k=String(o.id); if (Object.prototype.hasOwnProperty.call(map,k)){ var v=!!map[k]; if (!!o.isReady !== v){ o.isReady=v; changed=true; } } });
-        if (changed) window.__kApply(arr, false);
-      }catch(e){}
-      (async ()=>{
-        try{
-          for (const id in (map||{})){
-            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-            const ready=!!map[id];
-            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(50);
-            const fam=await q.find();
-            for (const o of fam){ if (!!o.get('isReady')!==ready){ o.set('isReady', ready); await o.save(); } }
-          }
-        }catch(e){}
-      })();
-    };
-    window.saveServed.__cloudWrappedV5 = true;
-  })();
-
-  refreshAll(false); live(); poll();
-})();
-</script>
-
-
-<!-- KITCHEN_APPLY_SERVEDSYNC_V2 -->
-<script>
-(function(){
-  var orig = window.__kApply;
-  window.__kApply = function(list, withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
+  async function setReadyForFamily(orderId, ready){
     try{
-      window.__kCloudList = Array.isArray(list) ? list : [];
-      window.__kCloudVer = Date.now();
-      window.__servedMapSnap = {};
-      (window.__kCloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
-    }catch(e){}
-    try{ if (typeof orig === 'function') orig.apply(this, arguments); }catch(e){}
-    try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){}
-  };
-  console.log("[KITCHEN] __kApply served sync installed");
-})();
-</script>
-
-
-<!-- KITCHEN_SAVE_SERVED_HARDEN_V2 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  function toIdMap(arr){ var m={}; (arr||[]).forEach(function(o){ m[String(o.id)] = !!o.isReady; }); return m; }
-
-  async function cloudSetReady(map){
-    try{
-      for (const id in (map||{})){
-        if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-        const ready = !!map[id];
-        const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(50);
-        const fam=await q.find();
-        for (const o of (fam||[])){ if (!!o.get('isReady')!==ready){ o.set('isReady', ready); await o.save(); } }
-      }
-    }catch(e){ console.warn("[KITCHEN] cloudSetReady error", e); }
-  }
-
-  function patch(){
-    var orig = window.saveServed;
-    window.saveServed = function(map){
-      try{
-        var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList.slice() : [];
-        var changed=false;
-        for (var i=0;i<arr.length;i++){
-          var o = arr[i], k = String(o.id);
-          if (Object.prototype.hasOwnProperty.call(map,k)){
-            var v = !!map[k];
-            if (!!o.isReady !== v){ o.isReady = v; changed = true; }
-          }
+      const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(100);
+      const fam=await q.find();
+      let changedAny=false;
+      for (const o of fam){
+        let changed=false;
+        if (!!o.get('isReady') !== !!ready){ o.set('isReady', !!ready); changed=true; }
+        if (ready){
+          if (!o.get('readyAt')){ try{ o.set('readyAt', new Date()); }catch(e){} }
+        }else{
+          try{ o.set('readyClearedAt', new Date()); }catch(e){}
         }
         if (changed){
-          window.__kApply(arr, false);
+          try{ o.set('readySeq', Date.now()); }catch(e){}
+          await o.save();
+          changedAny = true;
         }
-      }catch(e){}
-      (async ()=>{ try{ await cloudSetReady(map); }catch(e){} })();
-    };
-    window.saveServed.__hardenedV2 = true;
-    console.log("[KITCHEN] saveServed hardened V2");
+      }
+      // if no objects existed yet, create one minimal so Staff/Kitchens can see it
+      if ((!fam || fam.length===0)){
+        let o = new Order();
+        o.set('orderId', String(orderId));
+        o.set('isReady', !!ready);
+        if (ready){ o.set('readyAt', new Date()); }
+        try{ o.set('readySeq', Date.now()); }catch(e){}
+        try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){}
+        await o.save();
+        changedAny = true;
+      }
+      // If changed, optionally refresh this family into UI
+      if (changedAny){
+        try{
+          if (typeof window.__kRefreshFamily==='function') await window.__kRefreshFamily(orderId);
+        }catch(e){}
+      }
+    }catch(e){ console.warn("[KITCHEN] setReadyForFamily error", e); }
   }
 
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', patch);
-  else patch();
-})();
-</script>
-
-
-<!-- KITCHEN_REFRESH_PATCH_V1 -->
-<script>
-(function(){
-  var origRefreshAll = window.__kitchenRefreshAll;
-  window.__kitchenRefreshAll = function(list){
+  function patchSaveServed(){
     try{
-      window.__kCloudList = Array.isArray(list)? list : [];
-      window.__kCloudVer = Date.now();
-      window.__servedMapSnap = {};
-      (window.__kCloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
-      if (typeof window.__kApply === 'function'){
-        window.__kApply(window.__kCloudList, false);
-      } else {
-        try{ if (typeof render==='function') render({withAlerts:false}); }catch(e){}
-      }
-    }catch(e){}
-  };
-})();
-</script>
-
-
-<!-- KITCHEN_PLAINIFY_V1 -->
-<script>
-(function(){
-  function toPlainFromParse(o){
-    try{
-      return {
-        id: String(o.get('orderId')||o.id),
-        table: String(o.get('table')||''),
-        items: o.get('items')||[],
-        notes: String(o.get('notes')||''),
-        confirmed: !!o.get('confirmed'),
-        confirmedAt: o.get('confirmedAt') ? new Date(o.get('confirmedAt')).getTime() : null,
-        isReady: !!o.get('isReady'),
-        createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-        servedAt: o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null,
-        rejectedAt: o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null
+      const orig = window.saveServed;
+      if (orig && orig.__prontoBroadcast) return;
+      window.saveServed = function(map){
+        try{
+          // optimistic update to avoid checkbox bounce
+          var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList.slice() : [];
+          var changed=false;
+          arr.forEach(function(o){
+            var k=String(o.id);
+            if (Object.prototype.hasOwnProperty.call(map,k)){
+              var v=!!map[k];
+              if (!!o.isReady !== v){ o.isReady=v; changed=true; }
+            }
+          });
+          if (changed){ try{ window.__kApply(arr, false); }catch(e){} }
+        }catch(e){}
+        // push change to cloud & stamp readySeq
+        (async ()=>{
+          try{
+            for (const id in (map||{})){
+              if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+              await setReadyForFamily(id, !!map[id]);
+            }
+          }catch(e){}
+        })();
       };
-    }catch(e){ return null; }
-  }
-  function plainify(list){
-    var out = [];
-    (list||[]).forEach(function(x){
-      if (!x) return;
-      if (typeof Parse!=='undefined' && x instanceof Parse.Object){
-        var p = toPlainFromParse(x);
-        if (p) out.push(p);
-      } else if (typeof x==='object'){
-        out.push(x);
-      }
-    });
-    return out;
-  }
-  var origApply = window.__kApply;
-  window.__kApply = function(list, withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
-    try{
-      var plain = plainify(list);
-      window.__kCloudList = plain;
-      window.__kCloudVer = Date.now();
-      window.__servedMapSnap = {};
-      plain.forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
+      window.saveServed.__prontoBroadcast = true;
     }catch(e){}
-    try{ if (typeof origApply === 'function') origApply(plain, withAlerts); }catch(e){}
-    try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){}
-  };
-  if (Array.isArray(window.__kCloudList)){
-    try{ window.__kApply(window.__kCloudList, false); }catch(e){}
   }
-  console.log("[KITCHEN] plainify active");
-})();
-</script>
-
-
-<!-- KITCHEN_PLAINIFY_HELPER_V1 -->
-<script>
-(function(){
-  window.__kToPlain = function(o){
-    try{
-      return {
-        id: String((o.get? (o.get('orderId')||o.id) : (o.orderId||o.id)) || ''),
-        table: String((o.get? o.get('table') : o.table) || ''),
-        items: (o.get? o.get('items') : o.items) || [],
-        notes: String((o.get? o.get('notes') : o.notes) || ''),
-        confirmed: !!(o.get? o.get('confirmed') : o.confirmed),
-        confirmedAt: (o.get? (o.get('confirmedAt')||null) : (o.confirmedAt||null)),
-        isReady: !!(o.get? o.get('isReady') : o.isReady),
-        createdAt: (o.get? (o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now())) : (o.createdAt||Date.now())),
-        servedAt: (function(){ var v = (o.get? o.get('servedAt') : o.servedAt); if (!v) return null; try{ return (new Date(v)).getTime(); }catch(e){ return null; } })(),
-        rejectedAt: (function(){ var v = (o.get? o.get('rejectedAt') : o.rejectedAt); if (!v) return null; try{ return (new Date(v)).getTime(); }catch(e){ return null; } })()
-      };
-    }catch(e){ return null; }
-  };
-  window.__kEnsurePlain = function(list){
-    try{
-      if (!Array.isArray(list)) return [];
-      if (!list.length) return [];
-      if (list[0] && typeof list[0].get === 'function'){
-        return list.map(window.__kToPlain).filter(Boolean);
-      }
-      return list;
-    }catch(e){ return []; }
-  };
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', patchSaveServed);
+  else patchSaveServed();
 })();
 </script>
 
 </body>
 </html>
-
-<script>
-(function(){
-  window.__kApply = function(list,withAlerts){ try{ if (typeof window.__kEnsurePlain==='function'){ arguments[0] = window.__kEnsurePlain(arguments[0]); } }catch(e){}
-    try{
-      window.__cloudList = list||[]; window.__cloudVer = Date.now();
-      window.__servedMapSnap = {};
-      (window.__cloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
-    }catch(e){}
-    try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){};
-  };
-})();
-</script>
-
-<!-- KITCHEN_REFRESH_FAMILY_V1 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  window.__kRefreshFamily = async function(orderId){
-    try{
-      const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(20);
-      const res = await q.find();
-      var arr = Array.isArray(window.__cloudList) ? window.__cloudList.slice() : [];
-      var best = null;
-      if (res && res.length){
-        best = res.reduce(function(a,b){
-          try{
-            if (!!a.get('confirmed') !== !!b.get('confirmed')) return a.get('confirmed')? a:b;
-            if (!!a.get('isReady') !== !!b.get('isReady')) return a.get('isReady')? a:b;
-            var au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b;
-          }catch(e){}
-          return a;
-        });
-        var o = {
-          id: String(best.get('orderId')||best.id),
-          table: String(best.get('table')||''),
-          items: best.get('items')||[],
-          notes: String(best.get('notes')||''),
-          confirmed: !!best.get('confirmed'),
-          isReady: !!best.get('isReady'),
-          createdAt: best.get('createdAtMs') || (best.createdAt? best.createdAt.getTime(): Date.now()),
-          servedAt: best.get('servedAt')? (new Date(best.get('servedAt')).getTime()) : null,
-          rejectedAt: best.get('rejectedAt')? (new Date(best.get('rejectedAt')).getTime()) : null
-        };
-        var idx = arr.findIndex(function(x){ return String(x.id)===String(o.id); });
-        if (o.servedAt || o.rejectedAt){ if (idx>=0) arr.splice(idx,1); }
-        else { if (idx>=0) arr[idx]=o; else arr.push(o); }
-        window.__kApply(arr, false);
-      }
-    }catch(e){}
-  };
-})();
-</script>
-
-<!-- KITCHEN_PRONTO_WRAPPER_V3 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-
-  async function cloudSetReady(map){
-    try{
-      for (const id in (map||{})){
-        if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-        const ready = !!map[id];
-        const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(20);
-        const res=await q.find();
-        if (res && res.length){
-          for (const obj of res){
-            var changed = false;
-            if (!!obj.get('isReady') !== ready){ obj.set('isReady', ready); changed = true; }
-            if (ready && !obj.get('readyAt')){ try{ obj.set('readyAt', new Date()); changed = true; }catch(e){} }
-            if (changed) await obj.save();
-          }
-        }
-        try{ if (typeof window.__kRefreshFamily==='function') await window.__kRefreshFamily(id); }catch(e){};
-      }
-    }catch(e){}
-  }
-
-  function protectLocalWrites(fn){
-    return function(){
-      var origSet = null;
-      try{ origSet = localStorage.setItem.bind(localStorage); }catch(e){}
-      function patchedSet(k,v){
-        try{
-          if (k==='orders_served' || k==='orders_served_version' || k==='orders_simple_v4' || k==='orders_simple_v4_ver'){ return; }
-        }catch(e){}
-        try{ return origSet && origSet(k,v); }catch(e){}
-      }
-      var replaced = false;
-      try{
-        if (origSet){
-          localStorage.setItem = patchedSet;
-          replaced = true;
-        }
-      }catch(e){}
-      try{ return fn && fn.apply(this, arguments); }
-      finally{
-        try{ if (replaced && origSet) localStorage.setItem = origSet; }catch(e){}
-      }
-    };
-  }
-
-  function patch(){
-    try{
-      var orig = window.saveServed;
-      if (!orig || orig.__cloudWrappedV3) return;
-      window.saveServed = function(map){
-        try{
-          var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList.slice() : [];
-          var chg=false;
-          arr.forEach(function(o){
-            var k = String(o.id);
-            if (Object.prototype.hasOwnProperty.call(map,k)){
-              var v = !!map[k];
-              if (!!o.isReady !== v){ o.isReady = v; chg=true; }
-            }
-          });
-          if (chg) window.__kApply(arr, false);
-        }catch(e){}
-        try{ protectLocalWrites(orig).call(this, map); }catch(e){}
-        (async ()=>{ try{ await cloudSetReady(map); }catch(e){} })();
-      };
-      window.saveServed.__cloudWrappedV3 = true;
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', patch);
-  else patch();
-})();
-</script>
