@@ -696,5 +696,25 @@
 })();
 </script>
 
+
+<!-- STAFF_CLEARALL_CONFIRM_V1 -->
+<script>
+(function(){
+  function attach(){
+    const btn = document.getElementById('clearAllBtn');
+    if (!btn || btn.__confirmHook) return;
+    btn.__confirmHook = true;
+    btn.addEventListener('click', function(ev){
+      try{
+        const ok = window.confirm('Tem a certeza que quer remover todas as encomendas?');
+        if (!ok){ ev && ev.preventDefault && ev.stopPropagation && ev.stopPropagation(); return false; }
+      }catch(e){}
+    }, true);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+  else attach();
+})();
+</script>
+
 </body>
 </html>

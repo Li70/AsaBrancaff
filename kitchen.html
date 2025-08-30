@@ -401,5 +401,144 @@
 })();
 </script>
 
+
+<!-- KITCHEN_CLOUD_ONLY_V2 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  // Enable sound ("Som ativo") by default + mobile prime
+  (function(){
+    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
+    function prime(){ const el=document.getElementById('cashSound'); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }
+    document.addEventListener('DOMContentLoaded', prime, {once:true});
+    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
+  })();
+
+  // Cloud-only virtualization for orders list
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    const _set = localStorage.setItem.bind(localStorage);
+    window.__kCloudList = [];
+    window.__kCloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList);
+      if (k===VERSION_KEY) return String(window.__kCloudVer);
+      return _get(k);
+    };
+    localStorage.setItem = function(k,v){
+      if (k===ORDERS_KEY || k===VERSION_KEY) return;
+      return _set(k,v);
+    };
+    window.__kApply = function(list, withAlerts){
+      window.__kCloudList = list;
+      window.__kCloudVer = Date.now();
+      try{ if (typeof render==='function') render({withAlerts: !!withAlerts}); }catch(e){};
+      try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){};
+    };
+  })();
+
+  function toPlain(o){
+    return {
+      id: String(o.get('orderId')||o.id),
+      table: String(o.get('table')||''),
+      items: o.get('items')||[],
+      notes: String(o.get('notes')||''),
+      confirmed: !!o.get('confirmed'),
+      confirmedAt: o.get('confirmedAt') ? (new Date(o.get('confirmedAt')).getTime()) : null,
+      isReady: !!o.get('isReady'),
+      createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+      totalCVE: Number(o.get('totalCVE')||0),
+      servedAt: o.get('servedAt') ? (new Date(o.get('servedAt')).getTime()) : null,
+      rejectedAt: o.get('rejectedAt') ? (new Date(o.get('rejectedAt')).getTime()) : null,
+    };
+  }
+
+  // Stability: detect new ids and keep them for a bit
+  const __hold = new Map();
+  let __prevIds = new Set();
+
+  async function initial(){
+    try{
+      const q=new Parse.Query(Order);
+      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+      q.limit(1000);
+      const res=await q.find();
+      const arr = res.map(toPlain);
+      arr.forEach(o=>__hold.set(String(o.id), Date.now()+8000));
+      window.__kApply(arr, false);
+      __prevIds = new Set(arr.map(o=>String(o.id)));
+    }catch(e){}
+  }
+
+  async function pushApply(res){
+    try{
+      const arr = res.map(toPlain);
+      const ids = new Set(arr.map(o=>String(o.id)));
+      // detect new ready orders for alert
+      let hasNew=false; ids.forEach(id=>{ if(!__prevIds.has(id)) hasNew=true; });
+      // update holds
+      arr.forEach(o=>{ if (!__hold.has(String(o.id))) __hold.set(String(o.id), Date.now()+8000); });
+      // apply
+      window.__kApply(arr, hasNew);
+      __prevIds = ids;
+    }catch(e){}
+  }
+
+  async function subscribe(){
+    try{
+      const q=new Parse.Query(Order);
+      const sub=await q.subscribe();
+      sub.on('create', o=>{ if (o.get('confirmed') && !o.get('servedAt') && !o.get('rejectedAt')) initial(); });
+      sub.on('update', o=> initial());
+      sub.on('delete', o=> initial());
+    }catch(e){}
+  }
+
+  function poll(){
+    setInterval(async ()=>{
+      try{
+        const q=new Parse.Query(Order);
+        q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500);
+        const res=await q.find();
+        await pushApply(res);
+      }catch(e){}
+    }, 5000);
+  }
+
+  // Pronto (checkbox) -> cloud isReady + label
+  (function(){
+    const orig = window.saveServed;
+    if (!orig) return;
+    window.saveServed = function(map){
+      (async ()=>{
+        try{
+          for (const id in (map||{})){
+            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+            const ready = !!map[id];
+            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
+            const res=await q.find();
+            if (res && res.length){
+              for (const obj of res){
+                if (!!obj.get('isReady') !== ready){
+                  obj.set('isReady', ready);
+                  await obj.save();
+                }
+              }
+            }
+          }
+        }catch(e){}
+      })();
+      return orig.apply(this, arguments);
+    };
+  })();
+
+  initial(); subscribe(); poll();
+})();
+</script>
+
 </body>
 </html>
