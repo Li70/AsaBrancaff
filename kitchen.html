@@ -2,18 +2,18 @@
 <html lang="pt">
 <head>
 
-<!-- NOFLASH_ORDERS_GUARD_V1 -->
+<!-- NOFLASH_MINI_V1 -->
 <script>
 (function(){
   try{
-    var t0 = Date.now();
+    var start = Date.now();
     var _get = localStorage.getItem.bind(localStorage);
-    var FIRST_MS = 400;
-    var KEYS = ['orders_simple_v4','orders_simple_v4_ver'];
+    var KEYS = ['orders_simple_v4','orders_simple_v4_ver','orders_served','orders_served_version'];
     localStorage.getItem = function(k){
       try{
-        if (KEYS.indexOf(k)>=0 && Date.now()-t0 < FIRST_MS){
+        if (KEYS.indexOf(k)>=0 && (Date.now() - start) < 500){
           if (k==='orders_simple_v4') return '[]';
+          if (k==='orders_served') return '{}';
           return String(Date.now());
         }
       }catch(e){}
@@ -24,8 +24,6 @@
 </script>
 
 
-<!-- PARSE_INIT_B4A_V1 -->
-<script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
 <script>
 try{
   Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
@@ -390,88 +388,70 @@ try{
 
 
 
-<!-- KITCHEN_PRONTO_CLOUD_V2 -->
+
+<!-- SOUND_ON_DEFAULT_V1 -->
 <script>
 (function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const cashEl = document.getElementById('cashSound');
-  const soundBtn = document.getElementById('soundBtn');
-  function soundOn(){ return !soundBtn || (soundBtn.getAttribute('aria-pressed')==='true' || soundBtn.dataset.on==='1'); }
-  function playCash(){ try{ if (cashEl && soundOn()){ var p=cashEl.play(); if (p&&p.catch) p.catch(function(){}); } }catch(e){} }
-
-  async function setReadyFamily(orderId, ready){
+  function on(){
     try{
-      const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(100);
-      const fam=await q.find();
-      const stamp = Date.now();
-      if (!fam || fam.length===0){
-        let o = new Order();
-        o.set('orderId', String(orderId));
-        o.set('confirmed', true);
-        o.set('isReady', !!ready);
-        o.set('readySeq', stamp);
-        try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){}
-        await o.save();
-        return;
+      var btn = document.getElementById('soundBtn');
+      if (btn){
+        btn.setAttribute('aria-pressed','true');
+        try{ btn.dataset.on = '1'; }catch(e){}
+        try{ if (btn.classList) btn.classList.add('active'); }catch(e){}
       }
-      for (const o of fam){
-        o.set('isReady', !!ready);
-        o.set('readySeq', stamp);
-        await o.save();
+      if (typeof window.enableSound==='function'){
+        try{ window.enableSound(); }catch(e){}
       }
-    }catch(e){ console.warn('[KITCHEN] setReadyFamily error', e); }
+      window.soundEnabled = true;
+    }catch(e){}
   }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', on, {once:true});
+  else on();
+})();
+</script>
 
-  // Wrap existing saveServed(map) to also push to cloud
-  (function(){
-    var orig = window.saveServed;
-    window.saveServed = function(map){
-      // keep original local behavior
-      try{ if (typeof orig === 'function') orig.apply(this, arguments); }catch(e){}
-      // push to cloud
-      (async ()=>{
-        try{
-          for (const id in (map||{})){
-            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-            await setReadyFamily(id, !!map[id]);
-          }
-        }catch(e){}
-      })();
-    };
-  })();
 
-  // Subscribe to cloud changes and merge into local served map + play sound once per change
+<!-- KITCHEN_CLOUD_SOUND_ONLY_V1 -->
+<script>
+(function(){
+  if (!window.Parse || !Parse.applicationId) return; // respect undo
+  if (window.__kCloudSoundV1) return; window.__kCloudSoundV1 = true;
+  const Order = Parse.Object.extend('Order');
   (async function(){
     try{
-      const q = new Parse.Query(Order);
-      const sub = await q.subscribe();
+      const sub = await new Parse.Query(Order).subscribe();
       const seen = Object.create(null);
-      function merge(o){
+      function onChange(o){
         try{
-          const id = String(o.get('orderId')||o.id);
-          const ready = !!o.get('isReady');
-          const seq = o.get('readySeq') || (o.get('readyAt')? new Date(o.get('readyAt')).getTime() : null);
-          // update local served map
+          var id = String(o.get('orderId')||o.id);
+          var ready = !!o.get('isReady');
+          var seq = o.get('readySeq') || (o.get('readyAt')? new Date(o.get('readyAt')).getTime() : (o.updatedAt ? o.updatedAt.getTime() : Date.now()));
+          // Update local served map to align UI
           try{
-            var m = {}; try{ m = JSON.parse(localStorage.getItem('orders_served')||'{}'); }catch{}
+            var m = {}; try{ m = JSON.parse(localStorage.getItem('orders_served')||'{}'); }catch(e){}
             if (m[id] !== ready){
-              m[id] = ready; 
+              m[id] = ready;
               localStorage.setItem('orders_served', JSON.stringify(m));
-              localStorage.setItem('orders_served_ver', String(Date.now()));
-              // re-render with alerts to show banner
+              localStorage.setItem('orders_served_version', String(Date.now()));
               if (typeof render==='function') render({withAlerts:true});
             }
           }catch(e){}
+          // Fallback: if render doesn't play sound, try to play cash sound directly
           if (ready && seq && seen[id] !== seq){
             seen[id] = seq;
-            playCash();
+            try{
+              var btn = document.getElementById('soundBtn');
+              var on = !btn || (btn.getAttribute('aria-pressed')==='true' || btn.dataset.on==='1');
+              var el = document.getElementById('cashSound') || document.getElementById('readySound') || document.getElementById('alertSound');
+              if (on && el){ var p = el.play(); if (p && p.catch) p.catch(function(){}); }
+            }catch(e){}
           }
         }catch(e){}
       }
-      sub.on('update', merge);
-      sub.on('create', merge);
-    }catch(e){ console.warn('[KITCHEN] live error', e); }
+      sub.on('update', onChange);
+      sub.on('create', onChange);
+    }catch(e){ /* ignore */ }
   })();
 })();
 </script>

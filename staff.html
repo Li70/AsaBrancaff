@@ -2,18 +2,18 @@
 <html lang="pt">
 <head>
 
-<!-- NOFLASH_ORDERS_GUARD_V1 -->
+<!-- NOFLASH_MINI_V1 -->
 <script>
 (function(){
   try{
-    var t0 = Date.now();
+    var start = Date.now();
     var _get = localStorage.getItem.bind(localStorage);
-    var FIRST_MS = 400;
-    var KEYS = ['orders_simple_v4','orders_simple_v4_ver'];
+    var KEYS = ['orders_simple_v4','orders_simple_v4_ver','orders_served','orders_served_version'];
     localStorage.getItem = function(k){
       try{
-        if (KEYS.indexOf(k)>=0 && Date.now()-t0 < FIRST_MS){
+        if (KEYS.indexOf(k)>=0 && (Date.now() - start) < 500){
           if (k==='orders_simple_v4') return '[]';
+          if (k==='orders_served') return '{}';
           return String(Date.now());
         }
       }catch(e){}
@@ -24,8 +24,6 @@
 </script>
 
 
-<!-- PARSE_INIT_B4A_V1 -->
-<script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
 <script>
 try{
   Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
@@ -452,46 +450,52 @@ try{
 
 
 
-<!-- STAFF_CLEARALL_CLOUD_V1 -->
+
+<!-- SOUND_ON_DEFAULT_V1 -->
 <script>
 (function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-
-  async function clearAllActive(){
+  function on(){
     try{
-      const q = new Parse.Query(Order);
-      q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      q.limit(1000);
-      const res = await q.find();
-      for (const o of (res||[])){
-        try{ o.set('rejectedAt', new Date()); await o.save(); }catch(e){}
+      var btn = document.getElementById('soundBtn');
+      if (btn){
+        btn.setAttribute('aria-pressed','true');
+        try{ btn.dataset.on = '1'; }catch(e){}
+        try{ if (btn.classList) btn.classList.add('active'); }catch(e){}
       }
-    }catch(e){ console.warn('[STAFF] clearAllActive error', e); }
+      if (typeof window.enableSound==='function'){
+        try{ window.enableSound(); }catch(e){}
+      }
+      window.soundEnabled = true;
+    }catch(e){}
   }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', on, {once:true});
+  else on();
+})();
+</script>
 
+
+<!-- STAFF_ATUALIZAR_REFRESH_V1 -->
+<script>
+(function(){
   function attach(){
     try{
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredCloudClearAll) return;
-      btn.__wiredCloudClearAll = true;
-      btn.addEventListener('click', function(ev){
-        try{
-          var ok = confirm('Quer mesmo apagar todas as encomendas?');
-          if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
-          (async ()=>{
-            await clearAllActive();
-            // also clear local list so UI matches
-            try{ localStorage.setItem('orders_simple_v4','[]'); localStorage.setItem('orders_simple_v4_ver', String(Date.now())); }catch(e){}
-            try{ if (typeof render==='function') render(); }catch(e){}
-          })();
-        }catch(e){}
-      }, true);
+      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+      nodes.forEach(function(n){
+        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+        if (t==='atualizar' || t==='actualizar'){
+          if (n.__wiredRefresh) return;
+          n.__wiredRefresh = true;
+          n.addEventListener('click', function(ev){
+            try{ ev.preventDefault(); }catch(e){}
+            try{ location.reload(); }catch(e){}
+          }, true);
+        }
+      });
     }catch(e){}
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach);
   else attach();
-  setInterval(attach, 2000);
+  setInterval(attach, 1500);
 })();
 </script>
 
