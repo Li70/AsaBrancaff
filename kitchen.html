@@ -381,6 +381,61 @@
 
 
 
+
+<!-- REMOVE_FILTERTABLE_V3 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- SOUND_UI_ON_DEFAULT_V3 -->
+<script>
+(function(){
+  function on(){
+    try{
+      window.soundEnabled = true;
+      var btn = document.getElementById('soundBtn');
+      if (btn){
+        btn.setAttribute('aria-pressed', 'true');
+        btn.dataset.on = '1';
+        try{ btn.classList.add('ring-2','ring-emerald-400','shadow-inner'); }catch(e){};
+      }
+      if (typeof enableSound === 'function'){ try{ enableSound(); }catch(e){} }
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', on, {once:true});
+  else on();
+})();
+</script>
+
+
+<!-- KITCHEN_APPLY_SERVEDS_SNAP_V1 -->
+<script>
+(function(){
+  var orig = window.__kApply;
+  if (typeof orig === 'function'){
+    window.__kApply = function(list, withAlerts){
+      try{
+        window.__cloudList = list||[]; window.__cloudVer = Date.now();
+        window.__servedMapSnap = {}; (window.__cloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
+      }catch(e){}
+      return orig.apply(this, arguments);
+    };
+  }
+})();
+</script>
+
 </body>
 </html>
 

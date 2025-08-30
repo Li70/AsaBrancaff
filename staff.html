@@ -443,6 +443,161 @@
 
 
 
+
+<!-- STAFF_DOM_TWEAKS_V2 -->
+<script>
+(function(){
+  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+  function removeLimparMesa(){
+    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
+  }
+  function removeMesaField(){
+    try{
+      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
+        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
+        if (ph==='mesa'){ el.remove(); return; }
+        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
+        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
+      });
+    }catch(e){}
+  }
+  function run(){ removeLimparMesa(); removeMesaField(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
+</script>
+
+
+<!-- REMOVE_FILTERTABLE_V3 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- SOUND_UI_ON_DEFAULT_V3 -->
+<script>
+(function(){
+  function on(){
+    try{
+      window.soundEnabled = true;
+      var btn = document.getElementById('soundBtn');
+      if (btn){
+        btn.setAttribute('aria-pressed', 'true');
+        btn.dataset.on = '1';
+        try{ btn.classList.add('ring-2','ring-emerald-400','shadow-inner'); }catch(e){};
+      }
+      if (typeof enableSound === 'function'){ try{ enableSound(); }catch(e){} }
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', on, {once:true});
+  else on();
+})();
+</script>
+
+
+<!-- STAFF_ALARM_STRICT_ALL_CONFIRMED_V1 -->
+<script>
+(function(){
+  function getList(){
+    try{
+      var k = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+      var s = localStorage.getItem(k) || '[]';
+      return JSON.parse(s) || [];
+    }catch(e){ return []; }
+  }
+  function start(el){ try{ el.loop = true; if (window.soundEnabled !== false){ var p = el.play(); if (p && p.catch) p.catch(function(){}); } }catch(e){} }
+  function stop(el){ try{ el.pause(); el.currentTime = 0; }catch(e){} }
+  function control(){
+    try{
+      var list = getList();
+      var hasUnconfirmed = list.some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+      var prev = window.__alarmPrev || false; window.__alarmPrev = hasUnconfirmed;
+      var ready = document.getElementById('readySound');
+      var alertE = document.getElementById('alertSound');
+      if (hasUnconfirmed && !prev){ if (ready) start(ready); else if (alertE) start(alertE); }
+      else if (!hasUnconfirmed && prev){ if (ready) stop(ready); if (alertE) stop(alertE); }
+    }catch(e){}
+  }
+  try{
+    var orig = window.__applyCloudList;
+    if (typeof orig === 'function'){
+      window.__applyCloudList = function(list){ try{ orig(list); }finally{ control(); } };
+    } else {
+      document.addEventListener('DOMContentLoaded', control);
+    }
+  }catch(e){ document.addEventListener('DOMContentLoaded', control); }
+  setInterval(control, 1200);
+})();
+</script>
+
+
+<!-- STAFF_SOFT_REJECT_V1 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  async function findFamily(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(100); return q.find(); }
+
+  const orj=window.rejectOrder;
+  window.rejectOrder=function(id){
+    (async()=>{
+      try{
+        const fam=await findFamily(id);
+        for (const o of (fam||[])){ try{ o.set('rejectedAt', new Date()); await o.save(); }catch(e){} }
+      }catch(e){}
+    })();
+    if (typeof orj==='function') return orj.apply(this, arguments);
+  };
+})();
+</script>
+
+
+<!-- STAFF_CLEARALL_UNIFIED_V4 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  var hooked = false;
+  function attach(){
+    if (hooked) return;
+    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+    nodes.forEach(function(n){
+      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+      if (t==='limpar tudo'){
+        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
+        n.addEventListener('click', function(ev){
+          try{
+            var ok = window.confirm('Quer mesmo remover todas as encomendas?');
+            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
+          }catch(e){}
+          (async function(){
+            try{
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
+            }catch(e){}
+          })();
+        }, true);
+      }
+    });
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+})();
+</script>
+
 </body>
 </html>
 
