@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="pt">
 <head>
+
+<!-- EARLY_PURGE_V2 -->
+<script>
+(function(){
+  try{
+    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    var SERVED_KEY  = 'orders_served';
+    var SERVED_VERSION = 'orders_served_version';
+    localStorage.setItem(ORDERS_KEY, '[]');
+    localStorage.setItem(VERSION_KEY, String(Date.now()));
+    localStorage.setItem(SERVED_KEY, '{}');
+    localStorage.setItem(SERVED_VERSION, String(Date.now()));
+  }catch(e){}
+})();
+</script>
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Staff – Pedidos em Tempo Real</title>
@@ -749,6 +766,23 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', activateSoundBtn);
   else activateSoundBtn();
   try{ if (typeof enableSound === 'function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
+})();
+</script>
+
+
+<!-- REMOVE_FILTERTABLE_V1 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
 })();
 </script>
 

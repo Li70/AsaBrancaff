@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="pt">
 <head>
+
+<!-- EARLY_PURGE_V2 -->
+<script>
+(function(){
+  try{
+    var ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+    var VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+    var SERVED_KEY  = 'orders_served';
+    var SERVED_VERSION = 'orders_served_version';
+    localStorage.setItem(ORDERS_KEY, '[]');
+    localStorage.setItem(VERSION_KEY, String(Date.now()));
+    localStorage.setItem(SERVED_KEY, '{}');
+    localStorage.setItem(SERVED_VERSION, String(Date.now()));
+  }catch(e){}
+})();
+</script>
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Cozinha – Pedidos (Só Visualização)</title>
@@ -449,6 +466,131 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', activateSoundBtn);
   else activateSoundBtn();
   try{ if (typeof enableSound === 'function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
+})();
+</script>
+
+
+<!-- KITCHEN_CLOUD_ONLY_V3 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    const _set = localStorage.setItem.bind(localStorage);
+    window.__kCloudList = [];
+    window.__kCloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList);
+      if (k===VERSION_KEY) return String(window.__kCloudVer);
+      return _get(k);
+    };
+    localStorage.setItem = function(k,v){
+      if (k===ORDERS_KEY || k===VERSION_KEY) return;
+      return _set(k,v);
+    };
+  })();
+
+  function toPlain(o){
+    return {
+      id: String(o.get('orderId')||o.id),
+      table: String(o.get('table')||''),
+      items: o.get('items')||[],
+      notes: String(o.get('notes')||''),
+      confirmed: !!o.get('confirmed'),
+      isReady: !!o.get('isReady'),
+      createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+      servedAt: o.get('servedAt') ? (new Date(o.get('servedAt')).getTime()) : null,
+      rejectedAt: o.get('rejectedAt') ? (new Date(o.get('rejectedAt')).getTime()) : null
+    };
+  }
+
+  function pickBetter(a,b){
+    try{
+      if (!!a.get('confirmed') !== !!b.get('confirmed')) return a.get('confirmed') ? a : b;
+      if (!!a.get('isReady') !== !!b.get('isReady')) return a.get('isReady') ? a : b;
+      const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0;
+      if (au !== bu) return au>bu? a:b;
+    }catch(e){}
+    return a;
+  }
+  function coalesceById(list){
+    const m=new Map();
+    (list||[]).forEach(o=>{
+      const id=String(o.get('orderId')||o.id);
+      const cur=m.get(id); m.set(id, cur ? pickBetter(cur,o) : o);
+    });
+    return Array.from(m.values());
+  }
+
+  function applyList(res, withAlerts){
+    try{
+      const arr = res.map(toPlain);
+      window.__kCloudList = arr;
+      window.__kCloudVer = Date.now();
+      try{ if (typeof render==='function') render({withAlerts: !!withAlerts}); }catch(e){}
+      try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
+    }catch(e){}
+  }
+
+  async function refreshAll(playAlerts){
+    try{
+      const q=new Parse.Query(Order);
+      q.equalTo('confirmed', true);
+      q.doesNotExist('servedAt');
+      q.doesNotExist('rejectedAt');
+      q.limit(1000);
+      const res = await q.find();
+      const best = coalesceById(res);
+      applyList(best, !!playAlerts);
+    }catch(e){}
+  }
+
+  async function live(){
+    try{
+      const q = new Parse.Query(Order);
+      const sub = await q.subscribe();
+      const ref = ()=> refreshAll(true);
+      sub.on('create', ref);
+      sub.on('update', ref);
+      sub.on('delete', ref);
+    }catch(e){}
+  }
+
+  function poll(){
+    setInterval(()=>{ refreshAll(false); }, 5000);
+  }
+
+  (function(){
+    const orig = window.saveServed;
+    if (!orig) return;
+    window.saveServed = function(map){
+      (async ()=>{
+        try{
+          for (const id in (map||{})){
+            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+            const ready = !!map[id];
+            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
+            const res=await q.find();
+            if (res && res.length){
+              for (const obj of res){
+                if (!!obj.get('isReady') !== ready){
+                  obj.set('isReady', ready);
+                  await obj.save();
+                }
+              }
+            }
+          }
+        }catch(e){}
+      })();
+      return orig.apply(this, arguments);
+    };
+  })();
+
+  refreshAll(false); live(); poll();
 })();
 </script>
 
