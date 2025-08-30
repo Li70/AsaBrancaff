@@ -77,6 +77,17 @@
     window.bcPost = (msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
   })();
   </script>
+
+  <!-- CLOUD_PARSE_INIT_V1 -->
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL = "https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
+
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
@@ -519,6 +530,27 @@
         confirmed: false,
         totalCVE: total
       });
+      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
+      try {
+        if (window.Parse && Parse.applicationId) {
+          const Order = Parse.Object.extend('Order');
+          const obj = new Order();
+          obj.set('orderId', String(orders[orders.length-1].id));
+          obj.set('table', String(orders[orders.length-1].table));
+          obj.set('items', orders[orders.length-1].items || []);
+          obj.set('notes', String(orders[orders.length-1].notes || ''));
+          obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
+          obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
+          obj.set('confirmed', false);
+          const acl = new Parse.ACL();
+          acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
+          obj.setACL(acl);
+          obj.save().then(()=>{
+            try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
+          }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
+        }
+      } catch(e){ try{ console.warn('Parse not available', e); }catch(e2){} }
+
       setOrdersCompat(orders);
       bcPost({type:'orders_updated'});
 
