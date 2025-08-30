@@ -320,17 +320,31 @@
 
   /* === Actions === */
   function confirmOrder(id){
-    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
-    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
+    const all = getOrders();
+    const idx = all.findIndex(o=>String(o.id)===String(id));
+    if (idx<0) return;
+    all[idx].confirmed = true; all[idx].confirmedAt = Date.now();
     setOrders(all);
     bcPost({type:'orders_updated'});
+    // Only stop alarm if no unconfirmed orders remain
+    try{
+      const stillPending = getOrders().some(o=>!o.confirmed && !o.rejectedAt && !o.servedAt);
+      if (!stillPending) stopAlarm();
+    }catch(e){}
+    render();
+  });
     stopAlarm();
     render();
   }
   function rejectOrder(id){
-    if(!confirm('Rejeitar este pedido?')) return;
-    const keep=getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep); bcPost({type:'orders_updated'}); render();
+    var ok = true;
+    try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
+    if (!ok) return;
+    const keep = getOrders().filter(o=>String(o.id)!==String(id));
+    setOrders(keep);
+    bcPost({type:'orders_updated'});
+    render();
+  }); render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
