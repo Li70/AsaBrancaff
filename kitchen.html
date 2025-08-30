@@ -534,6 +534,94 @@
 })();
 </script>
 
+
+<!-- KITCHEN_APPLY_SERVEDSYNC_V2 -->
+<script>
+(function(){
+  var orig = window.__kApply;
+  window.__kApply = function(list, withAlerts){
+    try{
+      window.__kCloudList = Array.isArray(list) ? list : [];
+      window.__kCloudVer = Date.now();
+      window.__servedMapSnap = {};
+      (window.__kCloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
+    }catch(e){}
+    try{ if (typeof orig === 'function') orig.apply(this, arguments); }catch(e){}
+    try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){}
+  };
+  console.log("[KITCHEN] __kApply served sync installed");
+})();
+</script>
+
+
+<!-- KITCHEN_SAVE_SERVED_HARDEN_V2 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  function toIdMap(arr){ var m={}; (arr||[]).forEach(function(o){ m[String(o.id)] = !!o.isReady; }); return m; }
+
+  async function cloudSetReady(map){
+    try{
+      for (const id in (map||{})){
+        if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+        const ready = !!map[id];
+        const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(50);
+        const fam=await q.find();
+        for (const o of (fam||[])){ if (!!o.get('isReady')!==ready){ o.set('isReady', ready); await o.save(); } }
+      }
+    }catch(e){ console.warn("[KITCHEN] cloudSetReady error", e); }
+  }
+
+  function patch(){
+    var orig = window.saveServed;
+    window.saveServed = function(map){
+      try{
+        var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList.slice() : [];
+        var changed=false;
+        for (var i=0;i<arr.length;i++){
+          var o = arr[i], k = String(o.id);
+          if (Object.prototype.hasOwnProperty.call(map,k)){
+            var v = !!map[k];
+            if (!!o.isReady !== v){ o.isReady = v; changed = true; }
+          }
+        }
+        if (changed){
+          window.__kApply(arr, false);
+        }
+      }catch(e){}
+      (async ()=>{ try{ await cloudSetReady(map); }catch(e){} })();
+    };
+    window.saveServed.__hardenedV2 = true;
+    console.log("[KITCHEN] saveServed hardened V2");
+  }
+
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', patch);
+  else patch();
+})();
+</script>
+
+
+<!-- KITCHEN_REFRESH_PATCH_V1 -->
+<script>
+(function(){
+  var origRefreshAll = window.__kitchenRefreshAll;
+  window.__kitchenRefreshAll = function(list){
+    try{
+      window.__kCloudList = Array.isArray(list)? list : [];
+      window.__kCloudVer = Date.now();
+      window.__servedMapSnap = {};
+      (window.__kCloudList||[]).forEach(function(o){ window.__servedMapSnap[String(o.id)] = !!o.isReady; });
+      if (typeof window.__kApply === 'function'){
+        window.__kApply(window.__kCloudList, false);
+      } else {
+        try{ if (typeof render==='function') render({withAlerts:false}); }catch(e){}
+      }
+    }catch(e){}
+  };
+})();
+</script>
+
 </body>
 </html>
 
