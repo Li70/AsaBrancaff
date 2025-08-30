@@ -15,16 +15,6 @@
     .items li { list-style: disc; margin-left: 1.25rem; }
     details summary { cursor: pointer; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-
-  <script>
-    try{
-      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
-      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
-  </script>
-
 </head>
 <body class="p-4">
   <div class="max-w-5xl mx-auto">
@@ -342,128 +332,49 @@
 
 
 
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
-
-
-<!-- KITCHEN_SERVED_VIRTUAL_RO_V1 -->
-<script>
-(function(){
-  var SERVED_KEY = 'orders_served';
-  var SERVED_VERSION = 'orders_served_version';
-  var _get = null;
-  try{ _get = localStorage.getItem.bind(localStorage); }catch(e){}
-  function servedMapFromCloud(){
-    try{
-      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
-      var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
-      return m;
-    }catch(e){ return {}; }
-  }
-  localStorage.getItem = function(k){
-    try{
-      if (k===SERVED_KEY){ return JSON.stringify(servedMapFromCloud()); }
-      if (k===SERVED_VERSION){ return String(Date.now()); }
-    }catch(e){}
-    return _get ? _get(k) : null;
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
+    authDomain: "asabrancaff-aa13d.firebaseapp.com",
+    projectId: "asabrancaff-aa13d",
+    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
+    messagingSenderId: "1031914620871",
+    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
   };
-})();
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
 </script>
 
 
 
 
 
-<!-- REMOVE_FILTERTABLE_V2 -->
+<!-- SOUND_ON_DEFAULT_V3 -->
 <script>
 (function(){
-  function run(){
+  function on(){
     try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+      var btn = document.getElementById('soundBtn');
+      if (btn){
+        btn.setAttribute('aria-pressed','true');
+        try{ btn.dataset.on = '1'; }catch(e){}
+        try{ if (btn.classList) btn.classList.add('active'); }catch(e){}
+      }
+      if (typeof window.enableSound==='function'){
+        try{ window.enableSound(); }catch(e){}
+      }
+      window.soundEnabled = true;
     }catch(e){}
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- KITCHEN_CLOUD_ONLY_V3B -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  (function(){
-    const _get = localStorage.getItem.bind(localStorage);
-    window.__kCloudList = []; window.__kCloudVer = Date.now();
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList);
-      if (k===VERSION_KEY) return String(window.__kCloudVer);
-      return _get(k);
-    };
-    window.__kApply = function(list,withAlerts){ try{ list = (list||[]).map(function(x){ return (x && x.id && x.items) ? x : toPlain(x); }); }catch(e){}
-      window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
-  })();
-
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-      createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-  function pickBetter(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
-  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
-
-  async function refreshAll(playAlerts){
-    try{
-      const q=new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      q.limit(1000);
-      const res=await q.find();
-      const best = coalesceById(res).map(toPlain);
-      window.__kApply(best, !!playAlerts);
-}catch(e){}
-  }
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
-  function poll(){ setInterval(()=>refreshAll(false), 5000); }
-
-  function updateLocalReadyFromMap(map){
-    try{
-      const arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
-      arr.forEach(function(o){ if (Object.prototype.hasOwnProperty.call(map, String(o.id))) o.isReady = !!map[String(o.id)]; });
-      window.__kApply(arr, false);
-    }catch(e){}
-  }
-
-  (function(){
-    const orig = window.saveServed;
-    if (!orig) return;
-    window.saveServed = function(map){
-      (async ()=>{
-        try{
-          for (const id in (map||{})){
-            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
-            const ready = !!map[id];
-            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
-            const res=await q.find();
-            if (res && res.length){
-              for (const obj of res){
-                if (!!obj.get('isReady') !== ready){
-                  obj.set('isReady', ready);
-                  await obj.save();
-                }
-              }
-            }
-          }
-          updateLocalReadyFromMap(map); // instant checkbox sync locally
-        }catch(e){}
-      })();
-      return orig.apply(this, arguments);
-    };
-  })();
-
-  refreshAll(false); live(); poll();
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', on, {once:true});
+  else on();
 })();
 </script>
 
