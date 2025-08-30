@@ -77,6 +77,16 @@
     window.bcPost = (msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
   })();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL="https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
+
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
@@ -554,29 +564,75 @@
 
 
 
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
 
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
-    authDomain: "asabrancaff-aa13d.firebaseapp.com",
-    projectId: "asabrancaff-aa13d",
-    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
-    messagingSenderId: "1031914620871",
-    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
-  };
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
+
+
+
+
+<!-- FLOOR_PUBLISH_V4C -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+  const MIRROR_KEY = 'orders_mirrored_ids_v4';
+
+  function readLocal(){ try{ return JSON.parse(localStorage.getItem(ORDERS_KEY)||'[]')||[]; }catch(e){ return []; } }
+  function readMirrored(){ try{ return new Set(JSON.parse(localStorage.getItem(MIRROR_KEY)||'[]')); }catch(e){ return new Set(); } }
+  function writeMirrored(s){ try{ localStorage.setItem(MIRROR_KEY, JSON.stringify(Array.from(s))); }catch(e){} }
+  const mirrored = readMirrored();
+
+  function norm(o){
+    return {
+      id: String(o.id),
+      table: String(o.table||''),
+      items: Array.isArray(o.items)? o.items: [],
+      notes: String(o.notes||''),
+      confirmed: !!o.confirmed,
+      confirmedAt: o.confirmedAt? new Date(Number(o.confirmedAt)) : null,
+      totalCVE: Number(o.totalCVE||0),
+      createdAtMs: Number(o.createdAt || Date.now())
+    };
+  }
+
+  async function upsertOne(o){
+    const n = norm(o);
+    try{
+      const q=new Parse.Query(Order); q.equalTo('orderId', n.id); q.limit(10);
+      const res=await q.find();
+      let obj = res[0];
+      if (!obj) { obj = new Order(); obj.set('orderId', n.id); }
+      obj.set('table', n.table);
+      obj.set('items', n.items);
+      obj.set('notes', n.notes);
+      const mergedConfirmed = (!!(obj.get && obj.get('confirmed'))) || !!n.confirmed;
+      obj.set('confirmed', mergedConfirmed);
+      if (mergedConfirmed && !obj.get('confirmedAt') && n.confirmedAt) obj.set('confirmedAt', n.confirmedAt);
+      obj.set('totalCVE', n.totalCVE);
+      obj.set('createdAtMs', n.createdAtMs);
+      try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); obj.setACL(acl);}catch(e){}
+      await obj.save();
+      if (res && res.length>1){ for (let i=1;i<res.length;i++){ try{ await res[i].destroy(); }catch(e){} } }
+      mirrored.add(n.id); writeMirrored(mirrored);
+    }catch(e){ console && console.warn && console.warn('floor upsert error', e); }
+  }
+
+  function publishAll(){
+    try{ (readLocal()||[]).forEach(o=>{ if (!o || o.id==null) return; const id=String(o.id); if(!mirrored.has(id)) upsertOne(o); }); }catch(e){}
+  }
+
+  ['setOrdersCompat','setOrders'].forEach(fn=>{
+    if (typeof window[fn]==='function'){
+      const orig = window[fn].bind(window);
+      window[fn] = function(arr){ const r = orig(arr); try{ publishAll(); }catch(e){} return r; };
+    }
+  });
+  window.addEventListener('storage', function(ev){ try{ if (!ev || !ev.key) return; if (ev.key===ORDERS_KEY || ev.key===VERSION_KEY) publishAll(); }catch(e){} });
+  setInterval(publishAll, 1500); setTimeout(publishAll, 300);
+})();
 </script>
-
-
-
-
 
 </body>
 </html>
