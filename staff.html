@@ -1,38 +1,6 @@
 <!doctype html>
 <html lang="pt">
 <head>
-
-<!-- NOFLASH_MINI_V1 -->
-<script>
-(function(){
-  try{
-    var start = Date.now();
-    var _get = localStorage.getItem.bind(localStorage);
-    var KEYS = ['orders_simple_v4','orders_simple_v4_ver','orders_served','orders_served_version'];
-    localStorage.getItem = function(k){
-      try{
-        if (KEYS.indexOf(k)>=0 && (Date.now() - start) < 500){
-          if (k==='orders_simple_v4') return '[]';
-          if (k==='orders_served') return '{}';
-          return String(Date.now());
-        }
-      }catch(e){}
-      try{ return _get(k); }catch(e){ return null; }
-    };
-  }catch(e){}
-})();
-</script>
-
-
-<script>
-try{
-  Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-  Parse.serverURL = "https://parseapi.back4app.com";
-  Parse.liveQueryServerURL = "wss://asabrancaff.b4a.io";
-  console.log("[B4A] Parse init OK");
-}catch(e){ console.warn("[B4A] init failed", e); }
-</script>
-
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Staff – Pedidos em Tempo Real</title>
@@ -100,6 +68,16 @@ try{
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL="https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
+
 </head>
 <body class="p-4">
   <!-- sound controls -->
@@ -425,79 +403,196 @@ try{
 
 
 
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
 
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
-    authDomain: "asabrancaff-aa13d.firebaseapp.com",
-    projectId: "asabrancaff-aa13d",
-    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
-    messagingSenderId: "1031914620871",
-    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
-
-
-
-
-
-
-
-<!-- SOUND_ON_DEFAULT_V1 -->
+<!-- STAFF_SERVED_VIRTUAL_V2 -->
 <script>
 (function(){
-  function on(){
+  var SERVED_KEY = 'orders_served';
+  var SERVED_VERSION = 'orders_served_version';
+  var _get = null;
+  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
+  localStorage.getItem = function(k){
     try{
-      var btn = document.getElementById('soundBtn');
-      if (btn){
-        btn.setAttribute('aria-pressed','true');
-        try{ btn.dataset.on = '1'; }catch(e){}
-        try{ if (btn.classList) btn.classList.add('active'); }catch(e){}
+      if (k===SERVED_KEY){
+        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
+        return JSON.stringify(m);
       }
-      if (typeof window.enableSound==='function'){
-        try{ window.enableSound(); }catch(e){}
+      if (k===SERVED_VERSION){
+        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
+        return String(v);
       }
-      window.soundEnabled = true;
     }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', on, {once:true});
-  else on();
+    return _get ? _get(k) : null;
+  };
 })();
 </script>
 
 
-<!-- STAFF_ATUALIZAR_REFRESH_V1 -->
+<!-- REMOVE_FILTERTABLE_V2 -->
 <script>
 (function(){
-  function attach(){
+  function run(){
     try{
-      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-      nodes.forEach(function(n){
-        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-        if (t==='atualizar' || t==='actualizar'){
-          if (n.__wiredRefresh) return;
-          n.__wiredRefresh = true;
-          n.addEventListener('click', function(ev){
-            try{ ev.preventDefault(); }catch(e){}
-            try{ location.reload(); }catch(e){}
-          }, true);
-        }
-      });
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
     }catch(e){}
   }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach);
-  else attach();
-  setInterval(attach, 1500);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- STAFF_CLOUD_ONLY_V3B -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    window.__cloudList = []; window.__cloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
+      if (k===VERSION_KEY) return String(window.__cloudVer);
+      return _get(k);
+    };
+    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
+  })();
+
+  function pickBetter(a,b){
+    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
+         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
+         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
+    return a;
+  }
+  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+  const cache=new Map(); const confirmedLatch=new Map();
+
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
+    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
+
+  function controlAlarm(list){
+    try{
+      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+      var prev = window.__prevHasUnconf || false;
+      window.__prevHasUnconf = hasUnconfirmed;
+      var el = document.getElementById('alertSound') || document.getElementById('readySound');
+      if (!el) return;
+      if (hasUnconfirmed && !prev){
+        try{
+          el.loop = true;
+          if (window.soundEnabled !== false){
+            var p = el.play();
+            if (p && typeof p.catch==='function'){ p.catch(function(){}); }
+          }
+        }catch(e){}
+      } else if (!hasUnconfirmed && prev){
+        try{ el.pause(); el.currentTime = 0; }catch(e){}
+      }
+    }catch(e){}
+  }
+
+  function flush(){
+    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
+    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){};
+    window.__applyCloudList(list);
+    controlAlarm(list);
+  }
+
+  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
+
+  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
+    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
+
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
+  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
+      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
+
+  (function(){
+    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
+    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
+    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
+    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
+  })();
+
+  initial(); live(); poll();
 })();
 </script>
 
 </body>
 </html>
+
+
+
+
+
+
+<!-- STAFF_DOM_TWEAKS_V2 -->
+<script>
+(function(){
+  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+  function removeLimparMesa(){
+    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
+  }
+  function removeMesaField(){
+    try{
+      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
+        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
+        if (ph==='mesa'){ el.remove(); return; }
+        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
+        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
+      });
+    }catch(e){}
+  }
+  function run(){ removeLimparMesa(); removeMesaField(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
+</script>
+
+
+
+<!-- STAFF_CLEARALL_UNIFIED_V4 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  var hooked = false;
+  function attach(){
+    if (hooked) return;
+    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+    nodes.forEach(function(n){
+      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+      if (t==='limpar tudo'){
+        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
+        n.addEventListener('click', function(ev){
+          try{
+            var ok = window.confirm('Quer mesmo remover todas as encomendas?');
+            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
+          }catch(e){}
+          (async function(){
+            try{
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
+              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
+            }catch(e){}
+          })();
+        }, true);
+      }
+    });
+  }
+  
+})();
+</script>
+
