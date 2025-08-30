@@ -543,7 +543,21 @@
   (function(){
     async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
     const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
-    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
+    
+const orj=window.rejectOrder;
+window.rejectOrder=function(id){
+  (async()=>{
+    try{
+      const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(100);
+      const fam=await q.find();
+      for (const o of (fam||[])){
+        try{ o.set('rejectedAt', new Date()); await o.save(); }catch(e){}
+      }
+    }catch(e){}
+  })();
+  if (typeof orj==='function') return orj.apply(this, arguments);
+};
+
     const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
   })();
 
@@ -583,6 +597,7 @@
 
 
 
+
 <!-- STAFF_CLEARALL_UNIFIED_V4 -->
 <script>
 (function(){
@@ -608,7 +623,6 @@
               q.limit(1000);
               var res = await q.find();
               for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
               try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
             }catch(e){}
           })();
@@ -619,4 +633,5 @@
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
 })();
 </script>
+
 
