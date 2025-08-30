@@ -633,5 +633,131 @@
 })();
 </script>
 
+
+<!-- STAFF_CLOUD_ONLY_V1 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  // Audio: enable by default + prime for mobile
+  (function(){
+    try{ window.soundEnabled = true; if (typeof enableSound==='function') document.addEventListener('DOMContentLoaded', enableSound); }catch(e){}
+    function prime(){ ['alertSound','doneSound'].forEach(id=>{ const el=document.getElementById(id); if(!el)return; el.muted=true; el.play().then(()=>setTimeout(()=>{ try{ el.pause(); el.currentTime=0; el.muted=false; }catch{} },60)).catch(()=>{}); }); }
+    document.addEventListener('DOMContentLoaded', prime, {once:true});
+    ['pointerdown','touchstart','keydown','visibilitychange'].forEach(evt=>{ window.addEventListener(evt, ()=>{ try{ prime(); }catch{} }, {once:true, passive:true, capture:true}); });
+  })();
+
+  // --- Virtualize localStorage for ORDERS_KEY/VERSION_KEY (cloud-only) ---
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    const _set = localStorage.setItem.bind(localStorage);
+    window.__cloudList = [];
+    window.__cloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
+      if (k===VERSION_KEY) return String(window.__cloudVer);
+      return _get(k);
+    };
+    localStorage.setItem = function(k,v){
+      if (k===ORDERS_KEY || k===VERSION_KEY) { /* ignore in cloud-only mode */ return; }
+      return _set(k,v);
+    };
+    window.__applyCloudList = function(list){
+      window.__cloudList = list;
+      window.__cloudVer = Date.now();
+      try{ if (typeof render==='function') render(); }catch(e){}
+      try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
+    };
+  })();
+
+  // --- Cloud cache & sounds ---
+  const cache = new Map();
+  let pendSnap = new Set();
+  let readySnap = new Set();
+
+  function toPlain(o){
+    return {
+      id: String(o.get('orderId')||o.id),
+      table: String(o.get('table')||''),
+      items: o.get('items')||[],
+      notes: String(o.get('notes')||''),
+      confirmed: !!o.get('confirmed'),
+      confirmedAt: o.get('confirmedAt') ? (new Date(o.get('confirmedAt')).getTime()) : null,
+      isReady: !!o.get('isReady'),
+      createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+      totalCVE: Number(o.get('totalCVE')||0),
+      servedAt: o.get('servedAt') ? (new Date(o.get('servedAt')).getTime()) : null,
+      rejectedAt: o.get('rejectedAt') ? (new Date(o.get('rejectedAt')).getTime()) : null,
+    };
+  }
+
+  function flush(){
+    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt);
+    // Sounds
+    try{
+      const pend = new Set(list.filter(o=>!o.confirmed).map(o=>String(o.id)));
+      const ready = new Set(list.filter(o=>o.isReady && !o.servedAt).map(o=>String(o.id)));
+      let newPend=false, newReady=false;
+      pend.forEach(id=>{ if(!pendSnap.has(id)) newPend=true; });
+      ready.forEach(id=>{ if(!readySnap.has(id)) newReady=true; });
+      if (newPend){ const a=document.getElementById('alertSound'); if(a){ a.currentTime=0; a.play(); } }
+      if (newReady){ const d=document.getElementById('doneSound'); if(d){ d.currentTime=0; d.play(); } }
+      pendSnap = pend; readySnap = ready;
+    }catch(e){}
+    window.__applyCloudList(list);
+  }
+
+  async function initial(){
+    try{
+      const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+      const res=await q.find();
+      res.forEach(o=>{ cache.set(String(o.get('orderId')||o.id), toPlain(o)); });
+      flush();
+    }catch(e){}
+  }
+  async function live(){
+    try{
+      const q=new Parse.Query(Order);
+      const sub=await q.subscribe();
+      sub.on('create', o=>{ const p=toPlain(o); cache.set(p.id, p); flush(); });
+      sub.on('update', o=>{ const id=String(o.get('orderId')||o.id); const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(id);} else { cache.set(id,p);} flush(); });
+      sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); flush(); });
+    }catch(e){}
+  }
+  function poll(){
+    setInterval(async ()=>{
+      try{
+        const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500);
+        const res=await q.find();
+        const map=new Map(); res.forEach(o=>{ const p=toPlain(o); map.set(p.id,p); });
+        // merge: replace cache with latest map
+        cache.clear(); map.forEach((v,k)=>cache.set(k,v));
+        flush();
+      }catch(e){}
+    }, 5000);
+  }
+
+  // Actions write to cloud
+  (function(){
+    async function findObj(id){
+      const q1=new Parse.Query(Order); q1.equalTo('orderId', String(id));
+      let obj=await q1.first(); if (obj) return obj;
+      return null;
+    }
+    const oc = window.confirmOrder;
+    window.confirmOrder = function(id){ (async()=>{ try{ let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){} } o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save(); }catch(e){} })(); try{ if(typeof oc==='function') return oc.apply(this, arguments); }catch{} };
+    const orj = window.rejectOrder;
+    window.rejectOrder = function(id){ (async()=>{ try{ let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} } }catch(e){} })(); try{ if(typeof orj==='function') return orj.apply(this, arguments); }catch{} };
+    const os = window.markServedAndClear;
+    window.markServedAndClear = function(id){ (async()=>{ try{ let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} } }catch(e){} })(); try{ if(typeof os==='function') return os.apply(this, arguments); }catch{} };
+  })();
+
+  initial(); live(); poll();
+})();
+</script>
+
 </body>
 </html>
