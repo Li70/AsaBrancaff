@@ -782,13 +782,33 @@
       if (!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl); }
       return o;
     }
-    const oc=window.confirmOrder;
-    window.confirmOrder=function(id){
-      (async()=>{
-        try{ let o=await findOrCreate(id); o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save(); }catch(e){}
-      })();
-      if (typeof oc==='function') return oc.apply(this, arguments);
-    };
+    
+const oc=window.confirmOrder;
+window.confirmOrder=function(id){
+  (async()=>{
+    try{
+      const Order = Parse.Object.extend('Order');
+      async function family(orderId){ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(100); return q.find(); }
+      let fam = await family(id);
+      if (!fam || fam.length===0){
+        let o = new Order();
+        o.set('orderId', String(id));
+        try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){}
+        o.set('confirmed', true);
+        o.set('confirmedAt', new Date());
+        await o.save();
+      } else {
+        for (const o of fam){
+          o.set('confirmed', true);
+          o.set('confirmedAt', new Date());
+          await o.save();
+        }
+      }
+    }catch(e){ console && console.warn && console.warn('[STAFF] confirm error', e); }
+  })();
+  if (typeof oc==='function') return oc.apply(this, arguments);
+};
+
     const orj=window.rejectOrder;
     window.rejectOrder=function(id){
       (async()=>{
@@ -899,8 +919,33 @@
 
   (function(){
     async function family(orderId){ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(100); return q.find(); }
-    const oc=window.confirmOrder;
-    window.confirmOrder=function(id){ (async()=>{ try{ const fam=await family(id); for (const o of fam){ o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save(); } }catch(e){} })(); if (typeof oc==='function') return oc.apply(this, arguments); };
+    
+const oc=window.confirmOrder;
+window.confirmOrder=function(id){
+  (async()=>{
+    try{
+      const Order = Parse.Object.extend('Order');
+      async function family(orderId){ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(100); return q.find(); }
+      let fam = await family(id);
+      if (!fam || fam.length===0){
+        let o = new Order();
+        o.set('orderId', String(id));
+        try{ const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);}catch(e){}
+        o.set('confirmed', true);
+        o.set('confirmedAt', new Date());
+        await o.save();
+      } else {
+        for (const o of fam){
+          o.set('confirmed', true);
+          o.set('confirmedAt', new Date());
+          await o.save();
+        }
+      }
+    }catch(e){ console && console.warn && console.warn('[STAFF] confirm error', e); }
+  })();
+  if (typeof oc==='function') return oc.apply(this, arguments);
+};
+
     const orj=window.rejectOrder;
     window.rejectOrder=function(id){ (async()=>{ try{ const fam=await family(id); for (const o of fam){ o.set('rejectedAt', new Date()); await o.save(); } }catch(e){} })(); if (typeof orj==='function') return orj.apply(this, arguments); };
     const os=window.markServedAndClear;
