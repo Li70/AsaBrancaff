@@ -82,7 +82,7 @@
 <body class="p-4">
   <!-- sound controls -->
   <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
+    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
     <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
   </div>
 
@@ -180,9 +180,13 @@
   __soundChip.id = 'soundChip';
   __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border';
   function updateSoundChip(){
-    if (soundEnabled){
-      __soundChip.textContent = '✅ ativo';
-      __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40';
+      if (soundEnabled){
+        __soundChip.textContent = '🔊';
+        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40';
+      }else{
+        __soundChip.textContent = '🔇';
+        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
+      }
     }else{
       __soundChip.textContent = '🔇 bloqueado';
       __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
