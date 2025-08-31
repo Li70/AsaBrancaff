@@ -41,7 +41,7 @@
     window.lsGet=(k,f=null)=>{ try{const v=localStorage.getItem(k); return v===null?f:v;}catch{return f;} };
     window.lsSet=(k,v)=>{ try{localStorage.setItem(k,v); return true;}catch{return false;} };
 
-    window.getOrders=()=>{ try{return JSON.parse(lsGet(ORDERS_KEY,'[]'))||[];}catch{return[];} };
+    window.getOrders=()=>{ try{ if(Array.isArray(window.__cloudPlainList) && window.__cloudPlainList.length) return window.__cloudPlainList; return JSON.parse(lsGet(ORDERS_KEY,'[]'))||[]; }catch{return[];} };
     window.setOrders=(arr)=>{ lsSet(ORDERS_KEY,JSON.stringify(arr)); lsSet(VERSION_KEY,String(Date.now())); };
 
     window.getHistory=()=>{ try{return JSON.parse(lsGet(HISTORY_KEY,'[]'))||[];}catch{return[];} };
@@ -182,6 +182,7 @@
   async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
   function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
+  const __oldEnableSound = enableSound; enableSound = async function(){ await __oldEnableSound(); try{ updateSoundUI(); }catch(e){} };
   ackBtn.addEventListener('click', stopAlarm);
   document.addEventListener('DOMContentLoaded', enableSound);
   document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
