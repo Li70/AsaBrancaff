@@ -77,6 +77,16 @@
     window.bcPost = (msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
   })();
   </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL="https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed (floor)', e); }
+  </script>
+
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
@@ -528,27 +538,56 @@
     }
     function sendOrder(){
       if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
-      const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
+      const keys = Object.keys(cart); 
+      if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
-      const items = keys.map(k=>({ pizzaType: cart[k].name, size: '', qty: Number(cart[k].qty)||1, notes: '', priceNum: Number(cart[k].priceNum)||0 }));
-      const total = Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0);
+      const items = keys.map(k=>({
+        pizzaType: cart[k].name,
+        size: '',
+        qty: Number(cart[k].qty)||1,
+        notes: '',
+        priceNum: Number(cart[k].priceNum)||0
+      }));
+      const total = Object.values(cart).reduce((s,it)=> s + ((Number(it.priceNum)||0)*(Number(it.qty)||1)), 0);
 
-      const orders=getOrdersCompat();
+      const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+      // Local storage (legacy) to keep Floor's history
+      const orders = getOrdersCompat();
       orders.push({
-        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        id,
         table: String(selectedTable),
         items,
-        createdAt: Date.now(),
-        notes: gatherNotes(),
-        confirmed: false,
-        totalCVE: total
+        notes: '',
+        totalCVE: Math.round(total),
+        createdAt: Date.now()
       });
       setOrdersCompat(orders);
-      bcPost({type:'orders_updated'});
 
-      cart={}; renderCart(); if(notesDesktop) notesDesktop.value=''; notesMobile.value='';
-      if(cartSheet.classList.contains('open')) closeSheet();
-      alert('Pedido enviado ao staff para confirmação!');
+      // Cloud save to Back4App so Staff/Kitchen receive it across devices
+      (async ()=>{
+        try{
+          if (window.Parse && Parse.applicationId){
+            const Order = Parse.Object.extend('Order');
+            const o = new Order();
+            o.set('orderId', id);
+            o.set('table', String(selectedTable));
+            o.set('items', items);
+            o.set('notes', '');
+            o.set('confirmed', false);
+            o.set('isReady', false);
+            o.set('createdAtMs', Date.now());
+            await o.save();
+          }
+        }catch(e){ console && console.warn && console.warn('Cloud save failed', e); }
+      })();
+
+      // Broadcast to same-device listeners
+      try{ bcPost({type:'orders_updated'}); }catch(e){}
+
+      // Clear cart and refresh UI
+      cart = {}; renderCart();
+      alert('Pedido enviado!');
     }
 
     const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
