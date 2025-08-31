@@ -530,7 +530,7 @@
       if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
       const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
-      const items=keys.map(k=>({ pizzaType:cart[k].name, size:'', qty:Number(cart[k].qty)||1, notes:'', priceNum:Number(cart[k].priceNum)||0 }));
+      const items = keys.map(k=>({ pizzaType: cart[k].name, size: '', qty: Number(cart[k].qty)||1, notes: '', priceNum: Number(cart[k].priceNum)||0 }));
       const total = Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0);
 
       const orders=getOrdersCompat();
