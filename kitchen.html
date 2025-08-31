@@ -242,6 +242,12 @@
     // Armed-by-default: first gesture anywhere unlocks and flushes queue
     document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
     document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
+    // Desktop-only auto-unlock on load (mobile browsers still require a gesture)
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent||'');
+      if(!isMobile && !soundEnabled) enableSound();
+    });
+
 /* ====== Utils ====== */
     function escapeHtml(str){
       return String(str||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
