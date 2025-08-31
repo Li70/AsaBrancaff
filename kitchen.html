@@ -35,7 +35,7 @@
           <input id="hideServedChk" type="checkbox" /> Ocultar servidos
         </label>
         <button id="clearServedBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar servidos</button>
-        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
+        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som 🔊</button>
       </div>
     </div>
 
@@ -474,6 +474,18 @@
   })();
 
   refreshAll(false); live(); poll();
+})();
+</script>
+
+
+<!-- FORCE_SOM_ICON_STATIC -->
+<script>
+(function(){
+  try{
+    const btn = document.getElementById('soundBtn');
+    function enforce(){ try{ if(btn) btn.textContent = 'Som 🔊'; }catch(e){} }
+    enforce(); setInterval(enforce, 1500);
+  }catch(e){}
 })();
 </script>
 

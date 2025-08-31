@@ -82,7 +82,7 @@
 <body class="p-4">
   <!-- sound controls -->
   <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som 🔇</button>
+    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som 🔊</button>
     <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
   </div>
 
@@ -742,6 +742,197 @@
     }catch(e){}
   }catch(e){}
 })();
+</script>
+
+
+<!-- STAFF_RENDER_OVERRIDE_V1 -->
+<script>
+(function(){
+  try{
+    const pendingDiv    = document.getElementById('pending');
+    const confirmedDiv  = document.getElementById('confirmed');
+    const countPend     = document.getElementById('countPend');
+    const countConf     = document.getElementById('countConf');
+    const filterInput   = document.getElementById('filterTable');
+
+    function esc(x){ try{ return String(x||'').replace(/[&<>"]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }catch(e){ return ''; } }
+    function formatCVE(n){ try{ return new Intl.NumberFormat('pt-CV',{style:'currency',currency:'CVE',maximumFractionDigits:0}).format(Number(n||0)); }catch(e){ return (Number(n||0).toFixed(0)+'$'); } }
+    function computeOrderTotal(o){
+      try{
+        const items = Array.isArray(o.items)? o.items : [];
+        return items.reduce((sum,it)=> sum + (Number(it.priceNum||0)*Number(it.qty||1)), 0);
+      }catch(e){ return 0; }
+    }
+
+    window.render = function(){
+      try{
+        const tableFilter = Number((filterInput && filterInput.value)||'0') || null;
+        const all = (Array.isArray(window.getOrders())? window.getOrders() : []).slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+        const pend = all.filter(o=>!o.confirmed && !o.servedAt && !o.rejectedAt && (!tableFilter || Number(o.table)===tableFilter));
+        const conf = all.filter(o=> o.confirmed && !o.rejectedAt && !o.servedAt && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
+
+        pendingDiv.innerHTML=''; confirmedDiv.innerHTML='';
+        countPend.textContent=pend.length; countConf.textContent=conf.length;
+
+        if (!pend.length){
+          pendingDiv.innerHTML='<p class="muted">Sem pendentes.</p>';
+        } else {
+          pend.forEach(o=>{
+            const when = o.createdAt? new Date(o.createdAt).toLocaleTimeString() : '';
+            const items = (Array.isArray(o.items)? o.items : []).map(i=>{
+              const name = (i && (i.pizzaType || i.name || '')) || '';
+              const qty  = (i && (i.qty || 1)) || 1;
+              const note = (i && i.notes) ? ` <span class="muted">(${esc(i.notes)})</span>` : '';
+              return `${qty} × ${esc(name)}${note}`;
+            }).join('<br>') || '(sem itens)';
+            const total = computeOrderTotal(o);
+
+            const card = document.createElement('div'); card.className='card p-3 rounded-xl';
+            card.innerHTML = `
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <div class="font-semibold">Mesa ${esc(o.table)}</div>
+                  <div class="muted text-sm leading-5">${items}</div>
+                  ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
+                  <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
+                  <div class="muted text-xs mt-1">${when}</div>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <button class="btn bg-emerald-700 hover:bg-emerald-600" data-confirm="${esc(o.id)}">Confirmar</button>
+                  <button class="btn bg-slate-700 hover:bg-slate-600" data-reject="${esc(o.id)}">Rejeitar</button>
+                </div>
+              </div>`;
+            const cbtn = card.querySelector('[data-confirm]');
+            const rbtn = card.querySelector('[data-reject]');
+            if (cbtn) cbtn.addEventListener('click', ()=>{ try{ window.confirmOrder && window.confirmOrder(o.id); }catch(e){} });
+            if (rbtn) rbtn.addEventListener('click', (ev)=>{ try{ window.rejectOrder && window.rejectOrder(ev, o.id); }catch(e){} });
+            pendingDiv.appendChild(card);
+          });
+        }
+
+        if (!conf.length){
+          confirmedDiv.innerHTML='<p class="muted">Sem confirmados.</p>';
+        } else {
+          conf.forEach(o=>{
+            const when = o.createdAt? new Date(o.createdAt).toLocaleTimeString() : '';
+            const pill = o.isReady ? '<span class="pill pill-ready">Pronto</span>' : '<span class="pill">Confirmado</span>';
+            const card = document.createElement('div'); card.className='card p-3 rounded-xl'+(o.isReady?' ready':'');
+            card.innerHTML = `
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <div class="font-semibold">Mesa ${esc(o.table)} ${pill}</div>
+                  <div class="muted text-xs mt-1">${when}</div>
+                </div>
+                <div>
+                  <button class="btn bg-slate-700 hover:bg-slate-600" data-done="${esc(o.id)}">Servido</button>
+                </div>
+              </div>`;
+            const sbtn = card.querySelector('[data-done]');
+            if (sbtn) sbtn.addEventListener('click', ()=>{ try{ window.markServedAndClear && window.markServedAndClear(o.id); }catch(e){} });
+            confirmedDiv.appendChild(card);
+          });
+        }
+      }catch(e){ try{ console.warn('render override failed', e); }catch(_){} }
+    };
+
+    // Call once in case cloud already fetched
+    try{ window.render(); }catch(e){}
+  }catch(e){}
+})();
+</script>
+
+<!-- STAFF_SOUND_ICON_FIX_V1 -->
+<script>
+(function(){
+  try{
+    const soundBtn=document.getElementById('soundBtn');
+    function updateSoundUI(){ try{ if (soundBtn) soundBtn.textContent = 'Som ' + (window.soundEnabled?'🔊':'🔇'); }catch(e){} }
+    // update on enableSound
+    try{
+      if (typeof window.enableSound==='function' && !window.__wrapEnableSound){
+        window.__wrapEnableSound = true;
+        const old = window.enableSound;
+        window.enableSound = async function(){ try{ await old(); }finally{ updateSoundUI(); } };
+      }
+    }catch(e){}
+    // update periodically as a safety net
+    setInterval(updateSoundUI, 800);
+    // initial
+    updateSoundUI();
+  }catch(e){}
+})();
+</script>
+
+
+<!-- STAFF_MINI_FETCH_V1 -->
+<script>
+(function(){
+  try{
+    if (!(window.Parse && Parse.applicationId)) return;
+    const Order = Parse.Object.extend('Order');
+    async function fetchCloudOnce(){
+      try{
+        const q=new Parse.Query(Order);
+        q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+        const res=await q.find();
+        if (!res) return;
+        const plain = res.map(function(o){
+          try{
+            if (o && typeof o.get==='function'){
+              return {
+                id:String(o.get('orderId')||o.id),
+                orderId:String(o.get('orderId')||o.id),
+                table:String(o.get('table')||''),
+                items:o.get('items')||[],
+                notes:String(o.get('notes')||''),
+                confirmed:!!o.get('confirmed'),
+                isReady:!!o.get('isReady'),
+                createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+                updatedAt:o.updatedAt? o.updatedAt.getTime() : (o.get('updatedAtMs')||Date.now())
+              };
+            }
+          }catch(e){}
+          return {};
+        });
+        // coalesce
+        const m=new Map();
+        for (const o of plain){
+          const id=String((o && (o.orderId||o.id))||'');
+          if(!id) continue;
+          const cur=m.get(id);
+          if(!cur){ m.set(id,o); continue; }
+          if (!!cur.confirmed !== !!o.confirmed){ m.set(id, o.confirmed ? o : cur); continue; }
+          if (!!cur.isReady   !== !!o.isReady)  { m.set(id, o.isReady   ? o : cur); continue; }
+          const au=Number(cur.updatedAt||cur.createdAt||0), bu=Number(o.updatedAt||o.createdAt||0);
+          m.set(id, bu>au? o: cur);
+        }
+        window.__cloudPlainList = Array.from(m.values());
+        try{ render(); }catch(e){}
+      }catch(e){}
+    }
+    // first run quickly, then poll
+    fetchCloudOnce();
+    setInterval(fetchCloudOnce, 5000);
+  }catch(e){}
+})();
+</script>
+
+
+<!-- FORCE_SOM_ICON_STATIC -->
+<script>
+(function(){
+  try{
+    const btn = document.getElementById('soundBtn');
+    function enforce(){ try{ if(btn) btn.textContent = 'Som 🔊'; }catch(e){} }
+    enforce(); setInterval(enforce, 1500);
+  }catch(e){}
+})();
+</script>
+
+
+<!-- STAFF_RENDER_TICK_V1 -->
+<script>
+(function(){ try{ if (typeof window.render==='function'){ setInterval(()=>{ try{ window.render(); }catch(e){} }, 1000); } }catch(e){} })();
 </script>
 
 </body>
