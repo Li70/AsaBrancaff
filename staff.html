@@ -161,6 +161,22 @@
   const alertBanner=document.getElementById('alertBanner');
   const alertEl=document.getElementById('alertSound');
   const doneEl=document.getElementById('doneSound');
+  // Unified sound UI updater
+  function updateSoundUI(){
+    try{
+      if (typeof __soundChip !== 'undefined' && __soundChip){
+        __soundChip.textContent = soundEnabled ? '🔊' : '🔇';
+        __soundChip.className = soundEnabled
+          ? 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40'
+          : 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
+      }
+      if (typeof soundBtn !== 'undefined' && soundBtn){
+        const base = 'Som';
+        soundBtn.textContent = base + ' ' + (soundEnabled ? '🔊' : '🔇');
+      }
+    }catch(e){}
+  }
+
 
   /* === Sound / alarm === */
   let soundEnabled=false, audioCtx, fallbackLoop=null;
@@ -194,7 +210,7 @@
   }
   try{ soundBtn.appendChild(__soundChip); }catch{}
   const __oldEnableSound = enableSound;
-  enableSound = async function(){ await __oldEnableSound(); updateSoundChip(); };
+  enableSound = async function(){ await __oldEnableSound(); try{ updateSoundChip(); }catch(e){} try{ updateSoundUI(); }catch(e){} };
   updateSoundChip();
 
   ackBtn.addEventListener('click', stopAlarm);
@@ -675,6 +691,81 @@
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- STAFF_CLOUD_LIST_FIX_V2 -->
+<script>
+(function(){
+  try{
+    // Use a plain-object list for localStorage shadowing
+    const _get = localStorage.getItem.bind(localStorage);
+    window.__cloudPlainList = [];
+    window.__cloudVer = Date.now();
+
+    // Shadow getItem so getOrders() reads from cloud
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList);
+      if (k===VERSION_KEY) return String(window.__cloudVer);
+      return _get(k);
+    };
+
+    // Helper: pick newer/confirmed/ready variants across duplicates
+    function pickBetter(a,b){
+      try{
+        if (!!a.confirmed !== !!b.confirmed) return a.confirmed ? a : b;
+        if (!!a.isReady !== !!b.isReady)     return a.isReady   ? a : b;
+        const au = Number(a.updatedAt || a.createdAt || 0);
+        const bu = Number(b.updatedAt || b.createdAt || 0);
+        if (au !== bu) return au > bu ? a : b;
+      }catch(e){}
+      return a;
+    }
+
+    function coalesceByIdPlain(list){
+      const m = new Map();
+      (list||[]).forEach(o=>{
+        const id=String((o && (o.orderId||o.id))||'');
+        if(!id) return;
+        const cur=m.get(id);
+        m.set(id, cur ? pickBetter(cur,o) : o);
+      });
+      return Array.from(m.values());
+    }
+
+    window.__applyCloudList = function(list){
+      try{
+        // map Parse.Object -> plain objects
+        const plain = (list||[]).map(function(o){
+          try{
+            if (o && typeof o.get === 'function'){
+              return {
+                id: String(o.get('orderId')||o.id),
+                orderId: String(o.get('orderId')||o.id),
+                table: String(o.get('table')||''),
+                items: o.get('items')||[],
+                notes: String(o.get('notes')||''),
+                confirmed: !!o.get('confirmed'),
+                isReady: !!o.get('isReady'),
+                createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+                updatedAt: o.updatedAt? o.updatedAt.getTime() : (o.get('updatedAtMs')||Date.now()),
+                servedAt: o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null,
+                rejectedAt: o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null
+              };
+            }
+          }catch(e){}
+          // already plain
+          return o || {};
+        });
+
+        window.__cloudPlainList = coalesceByIdPlain(plain);
+        window.__cloudVer = Date.now();
+        try{ if (typeof render==='function') render(); }catch(e){}
+        try{ if (typeof renderHistory==='function') renderHistory(); }catch(e){}
+      }catch(e){}
+    };
+  }catch(e){}
 })();
 </script>
 
