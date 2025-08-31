@@ -309,162 +309,46 @@
     try{ const saved=localStorage.getItem('my_table'); if(saved && floor.children[Number(saved)-1]) floor.children[Number(saved)-1].click(); }catch{}
 
     /* ===== helpers ===== */
-    function formatCVE(n){return Math.floor(n)+'$00';}
-    function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+    
+    function formatCVE(n){
+      try{
+        const v = Number(n)||0;
+        return Math.floor(v) + '$00';
+      }catch(e){ return '0$00'; }
+    }
+    function escapeHtml(s){
+      try{
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      }catch(e){ return ''; }
+    }
     function flattenItems(dsets){
       const out=[];
-      dsets.forEach(ds=>ds.forEach(cat=>cat.items&&cat.items.forEach(x=>out.push(x))));
+      dsets.forEach(ds=> ds.forEach(cat=> (cat.items||[]).forEach(x=> out.push(x))));
       return out;
     }
+    
     function buildIndex(){
       const idx={};
-      flattenItems([PIZZAS]).concat(flattenItems([MENU])).forEach(it=>{ idx[it.id]=it; });
+      flattenItems([PIZZAS]).concat(flattenItems([MENU])).forEach(it=>{
+        const obj = Object.assign({}, it);
+        const pn = (Number(obj.priceNum)||0) > 0 ? Number(obj.priceNum) : parseCVEToNum(obj.price);
+        obj.priceNum = pn;
+        if (!obj.price) obj.price = formatCVE(pn);
+        idx[obj.id] = obj;
+      });
       return idx;
     }
     let ITEM_INDEX = buildIndex();
-
-    
-    function parseCVEToNum(p){
+function parseCVEToNum(p){
       try{
         if (typeof p === 'number' && isFinite(p)) return Math.round(p);
         const digits = String(p||'').replace(/\D/g,'');
         if(!digits) return 0;
-        // If it looks like "250$00" -> 4+ digits, treat last 2 as cents; otherwise as whole CVE.
         if (digits.length >= 4) return Math.round(Number(digits)/100);
         return Number(digits);
       }catch(e){ return 0; }
     }
-
-    function itemRowHtml(item){
-      const iconHtml = item.icon ? `<img src="${encodeURI(item.icon)}" alt="${escapeHtml(item.name)}" class="icon" onerror="this.style.display='none'">` : '';
-      return `
-        <div class="row">
-          <div class="flex-1 min-w-0">
-            <div class="name name-line">${iconHtml}${escapeHtml(item.name)}</div>
-            ${item.desc?`<div class="desc">${escapeHtml(item.desc)}</div>`:''}
-          </div>
-          <div class="price">${escapeHtml(item.price||formatCVE(item.priceNum||0))}</div>
-        </div>
-        <div class="row mt-2">
-          <div class="muted text-xs">Quantidade</div>
-          <div class="flex items-center gap-2">
-            <button class="btn bg-slate-700 hover:bg-slate-600" data-action="minus" data-id="${item.id}">−</button>
-            <input inputmode="numeric" pattern="[0-9]*" data-qty="${item.id}" type="number" value="1" min="1" class="qty px-2 py-2 rounded-lg bg-slate-800 border border-slate-700" />
-            <button class="btn bg-slate-700 hover:bg-slate-600" data-action="plus" data-id="${item.id}">+</button>
-            <button class="btn bg-emerald-700 hover:bg-emerald-600" data-action="add" data-id="${item.id}">Adicionar</button>
-          </div>
-        </div>`;
-    }
-    function renderTabs(container,categories,getActive,setActive){
-      container.innerHTML='';
-      if(!categories||categories.length<=1){container.classList.add('hidden');return;}
-      container.classList.remove('hidden');
-      categories.forEach(cat=>{
-        const btn=document.createElement('button');
-        btn.className='tab'+(cat===getActive()?' active':'');
-        btn.textContent=cat;
-        btn.addEventListener('click',()=>setActive(cat));
-        container.appendChild(btn);
-      });
-    }
-    function renderGrid(container,dataset,activeCategory){
-      container.innerHTML='';
-      const cat=dataset.find(c=>c.category===activeCategory);
-      if(!cat){ container.innerHTML='<p class="muted">Nenhum item.</p>'; return; }
-      cat.items.forEach((item,idx)=>{
-        const wrap=document.createElement('div'); wrap.className='card rounded-2xl p-3'; wrap.innerHTML=itemRowHtml(item);
-        if(idx<cat.items.length-1){ const d=document.createElement('div'); d.className='divider'; wrap.appendChild(d);}
-        container.appendChild(wrap);
-      });
-    }
-
-    /* ===== PIZZAS ===== */
-    let activePizzaCat = PIZZAS[0]?.category||''; const PIZZA_CATS = PIZZAS.map(c=>c.category);
-    function setActivePizzaCat(cat){ activePizzaCat=cat; renderTabs(pizzaTabsEl,PIZZA_CATS,()=>activePizzaCat,setActivePizzaCat); renderGrid(pizzaGridEl,PIZZAS,activePizzaCat); }
-    setActivePizzaCat(activePizzaCat);
-
-    // start COLLAPSED by default for Pizzas
-    let pizzaCollapsed = true;
-    pizzaGridEl.style.display = 'none';
-    pizzaTabsEl.style.display = 'none';
-    document.getElementById('togglePizza').textContent = 'Expandir';
-    document.getElementById('togglePizza').addEventListener('click',()=>{
-      pizzaCollapsed = !pizzaCollapsed;
-      pizzaGridEl.style.display = pizzaCollapsed ? 'none' : '';
-      pizzaTabsEl.style.display = pizzaCollapsed ? 'none' : '';
-      document.getElementById('togglePizza').textContent = pizzaCollapsed ? 'Expandir' : 'Recolher';
-    });
-
-    /* ===== Build sections (icon + Recolher) ===== */
-    const SECTION_ICONS = {
-      'Hambúrgueres':'🍔','Hot Dog':'🌭','Fried Chicken':'🍗','Shawarma':'🌯',
-      'Sumos Naturais':'🍹','Gelados':'🍦','Combos':'🎁','Salgados/Petiscos':'🥟','Molhos':'🥫'
-    };
-    const SECTION_ORDER = ['Hambúrgueres','Hot Dog','Fried Chicken','Shawarma','Sumos Naturais','Gelados','Combos','Salgados/Petiscos','Molhos'];
-
-    function slugify(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-'); }
-
-    SECTION_ORDER.forEach(name=>{
-      const catData = MENU.find(c=>c.category===name);
-      if(!catData) return;
-
-      const slug = slugify(name);
-      const sec = document.createElement('section');
-      sec.className = 'card p-4 rounded-2xl';
-
-      sec.innerHTML = `
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-lg font-semibold">${SECTION_ICONS[name]||'🍽️'} ${name}</h2>
-          <button class="text-slate-300 hover:underline" data-toggle="${slug}">Recolher</button>
-        </div>
-        <div id="tabs-${slug}" class="flex flex-wrap gap-2 mb-4 hidden"></div>
-        <div id="grid-${slug}" class="space-y-4"></div>
-      `;
-      leftCol.appendChild(sec);
-
-      const tabsDiv = sec.querySelector(`#tabs-${slug}`);
-      const gridDiv = sec.querySelector(`#grid-${slug}`);
-
-      renderTabs(tabsDiv, [catData.category], ()=>catData.category, ()=>{});
-      renderGrid(gridDiv, [catData], catData.category);
-
-      const toggleBtn = sec.querySelector(`[data-toggle="${slug}"]`);
-
-      // start COLLAPSED by default for all other sections
-      let collapsed = true;
-      gridDiv.style.display = 'none';
-      tabsDiv.style.display = 'none';
-      toggleBtn.textContent = 'Expandir';
-
-      toggleBtn.addEventListener('click', ()=>{
-        collapsed = !collapsed;
-        gridDiv.style.display = collapsed ? 'none' : '';
-        tabsDiv.style.display = collapsed ? 'none' : '';
-        toggleBtn.textContent = collapsed ? 'Expandir' : 'Recolher';
-      });
-    });
-
-    /* ===== GLOBAL delegated handler for ALL "Adicionar/+/−" buttons ===== */
-    leftCol.addEventListener('click', (e)=>{
-      const btn=e.target.closest('button[data-action]');
-      if(!btn) return;
-
-      const action=btn.getAttribute('data-action');
-      const id=btn.getAttribute('data-id');
-      const card = btn.closest('.card');
-      const qtyInput = card ? card.querySelector(`input[data-qty="${CSS.escape(id)}"]`) : null;
-      let q=Math.max(1, Number(qtyInput && qtyInput.value || 1) || 1);
-
-      if(action==='minus'){ q=Math.max(1,q-1); if(qtyInput) qtyInput.value=q; return; }
-      if(action==='plus'){ q=q+1; if(qtyInput) qtyInput.value=q; return; }
-      if(action==='add'){
-        const item = ITEM_INDEX[id];
-        if(!item) return;
-        addToCart(item, q);
-        toast('Adicionado: ' + item.name);
-        return;
-      }
-    });
 
     /* ===== CART ===== */
     let cart={};
