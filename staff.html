@@ -375,14 +375,18 @@
     renderHistory();
   }
 
+  
   /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
   let _knownServed = new Set();
   function snapshotServedIds(){
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    } 
-  
+    } catch (e) {
+      return new Set();
+    }
+  }
+
   // Detect newly marked-as-ready orders (from Kitchen/other devices) and notify once
   function detectNewServedAndNotify(){
     try {
@@ -392,7 +396,6 @@
       latest.forEach(function(id){
         id = String(id);
         if (!_knownServed.has(id)){
-          // only count it if the order is in our list and confirmed (avoid noise)
           const o = all.find(function(x){ return String(x.id)===id; });
           if (!o || o.confirmed) hasNew = true;
         }
@@ -404,14 +407,8 @@
       _knownServed = latest;
     } catch (e) { /* no-op */ }
   }
-      _knownServed = latest;
-    } catch (e) { /* no-op */ }
-  }
-catch { return new Set(); }
-  }
- 
 
-  /* === subscriptions / polling === */
+/* === subscriptions / polling === */
   subscribeAll((evt)=>{
     render(); 
     detectNewOrdersAndMaybeAlarm(); 
