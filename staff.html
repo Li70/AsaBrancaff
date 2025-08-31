@@ -82,7 +82,7 @@
 <body class="p-4">
   <!-- sound controls -->
   <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
+    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som 🔇</button>
     <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
   </div>
 
@@ -249,7 +249,7 @@
           </div>
         </div>`;
       card.querySelector('[data-confirm]').addEventListener('click',()=>confirmOrder(o.id));
-      card.querySelector('[data-reject]').addEventListener('click',()=>rejectOrder(o.id));
+      card.querySelector('[data-reject]').addEventListener('click',(ev)=>rejectOrder(ev,o.id));
       pendingDiv.appendChild(card);
     });
 
