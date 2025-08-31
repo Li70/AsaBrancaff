@@ -82,7 +82,7 @@
 <body class="p-4">
   <!-- sound controls -->
   <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
+    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
     <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
   </div>
 
@@ -161,6 +161,7 @@
   const alertBanner=document.getElementById('alertBanner');
   const alertEl=document.getElementById('alertSound');
   const doneEl=document.getElementById('doneSound');
+  function updateSoundUI(){ try{ if (soundBtn){ soundBtn.textContent = 'Som ' + (soundEnabled?'🔊':'🔇'); } }catch(e){} }
   // Ensure a label span for the button text + icon, without removing the chip
   let __soundLabel = document.getElementById('soundLabel');
   if (!__soundLabel){
@@ -468,11 +469,52 @@
   (function(){
     const _get = localStorage.getItem.bind(localStorage);
     window.__cloudList = []; window.__cloudVer = Date.now();
-    localStorage.getItem = function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList||[]);
-      if (k===VERSION_KEY) return String(window.__cloudVer);
-      return _get(k);
+    localStorage.getItem = function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList||[]); if (k===VERSION_KEY) return String(window.__cloudVer||Date.now()); return _get(k); };
+    window.__applyCloudList = function(list){
+      try{
+        // Ensure plain storage structures exist
+        window.__cloudPlainList = window.__cloudPlainList || [];
+        window.__cloudVer = Date.now();
+        // Convert Parse objects to plain JSON
+        const plain = (list||[]).map(function(o){
+          try{
+            if (o && typeof o.get === 'function'){
+              return {
+                id: String(o.get('orderId')||o.id),
+                orderId: String(o.get('orderId')||o.id),
+                table: String(o.get('table')||''),
+                items: o.get('items')||[],
+                notes: String(o.get('notes')||''),
+                confirmed: !!o.get('confirmed'),
+                isReady: !!o.get('isReady'),
+                createdAt: o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+                updatedAt: o.updatedAt? o.updatedAt.getTime() : (o.get('updatedAtMs')||Date.now()),
+                servedAt: o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null,
+                rejectedAt: o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null
+              };
+            }
+          }catch(e){}
+          return o || {};
+        });
+        // Coalesce by id
+        const m = new Map();
+        for (const o of plain){
+          try{
+            const id = String((o && (o.orderId||o.id))||''); if(!id) continue;
+            const cur = m.get(id);
+            if (!cur) { m.set(id, o); continue; }
+            // pick better
+            if (!!cur.confirmed !== !!o.confirmed){ m.set(id, o.confirmed ? o : cur); continue; }
+            if (!!cur.isReady   !== !!o.isReady)  { m.set(id, o.isReady   ? o : cur); continue; }
+            const au = Number(cur.updatedAt||cur.createdAt||0), bu = Number(o.updatedAt||o.createdAt||0);
+            m.set(id, bu>au ? o : cur);
+          }catch(e){}
+        }
+        window.__cloudPlainList = Array.from(m.values());
+        try{ if (typeof render==='function') render(); }catch(e){}
+        try{ if (typeof renderHistory==='function') renderHistory(); }catch(e){}
+      }catch(e){}
     };
-    window.__applyCloudList=function(list){ try{ if (window.__applyCloudListV3) return window.__applyCloudListV3(list); }catch(e){} };
   })();
 
   function pickBetter(a,b){
@@ -637,11 +679,7 @@
     window.__cloudPlainList = window.__cloudPlainList || [];
     window.__cloudVer = window.__cloudVer || Date.now();
 
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList||[]);
-      if (k===VERSION_KEY) return String(window.__cloudVer);
-      return _get(k);
-    };
+    localStorage.getItem = function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList||[]); if (k===VERSION_KEY) return String(window.__cloudVer||Date.now()); return _get(k); };
 
     function pickBetter(a,b){
       try{

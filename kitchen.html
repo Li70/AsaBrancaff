@@ -35,7 +35,7 @@
           <input id="hideServedChk" type="checkbox" /> Ocultar servidos
         </label>
         <button id="clearServedBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar servidos</button>
-        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
+        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
       </div>
     </div>
 
@@ -92,6 +92,7 @@
     const ordersDiv      = document.getElementById('orders');
     const banner         = document.getElementById('banner');
     const soundBtn       = document.getElementById('soundBtn');
+    function updateSoundUI(){ try{ if (soundBtn){ soundBtn.textContent = 'Som ' + (soundEnabled?'🔊':'🔇'); } }catch(e){} }
     const cashEl         = document.getElementById('cashSound');
     const hideServedChk  = document.getElementById('hideServedChk');
     const clearServedBtn = document.getElementById('clearServedBtn');
@@ -205,9 +206,12 @@
       o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
     }
     soundBtn.addEventListener('click', enableSound);
+    const __oldEnableSound = enableSound; enableSound = async function(){ await __oldEnableSound(); try{ updateSoundUI(); }catch(e){} };
+    try{ updateSoundUI(); }catch(e){}
 
     // tentar ativar som por omissão
     document.addEventListener('DOMContentLoaded', enableSound);
+    document.addEventListener('DOMContentLoaded', ()=>{ try{ updateSoundUI(); }catch(e){} });
     document.addEventListener('pointerdown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
     document.addEventListener('keydown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
     document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible' && !soundEnabled) enableSound(); });
