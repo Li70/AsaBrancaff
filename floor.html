@@ -78,13 +78,14 @@
   })();
   </script>
 
+  <!-- CLOUD_PARSE_INIT_V1 -->
   <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
   <script>
     try{
       Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
+      Parse.serverURL = "https://parseapi.back4app.com";
       Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed (floor)', e); }
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
   </script>
 
 </head>
@@ -309,62 +310,154 @@
     try{ const saved=localStorage.getItem('my_table'); if(saved && floor.children[Number(saved)-1]) floor.children[Number(saved)-1].click(); }catch{}
 
     /* ===== helpers ===== */
-    
-    function formatCVE(n){
-      try{
-        const v = Number(n)||0;
-        return Math.floor(v) + '$00';
-      }catch(e){ return '0$00'; }
-    }
-    function escapeHtml(s){
-      try{
-        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
-          .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-      }catch(e){ return ''; }
-    }
+    function formatCVE(n){return Math.floor(n)+'$00';}
+    function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
     function flattenItems(dsets){
       const out=[];
-      dsets.forEach(ds=> ds.forEach(cat=> (cat.items||[]).forEach(x=> out.push(x))));
+      dsets.forEach(ds=>ds.forEach(cat=>cat.items&&cat.items.forEach(x=>out.push(x))));
       return out;
     }
-    
     function buildIndex(){
       const idx={};
-      flattenItems([PIZZAS]).concat(flattenItems([MENU])).forEach(it=>{
-        const obj = Object.assign({}, it);
-        const pn = (Number(obj.priceNum)||0) > 0 ? Number(obj.priceNum) : parseCVEToNum(obj.price);
-        obj.priceNum = pn;
-        if (!obj.price) obj.price = formatCVE(pn);
-        idx[obj.id] = obj;
-      });
+      flattenItems([PIZZAS]).concat(flattenItems([MENU])).forEach(it=>{ idx[it.id]=it; });
       return idx;
     }
     let ITEM_INDEX = buildIndex();
-function parseCVEToNum(p){
-      try{
-        if (typeof p === 'number' && isFinite(p)) return Math.round(p);
-        const digits = String(p||'').replace(/\D/g,'');
-        if(!digits) return 0;
-        if (digits.length >= 4) return Math.round(Number(digits)/100);
-        return Number(digits);
-      }catch(e){ return 0; }
+
+    function itemRowHtml(item){
+      const iconHtml = item.icon ? `<img src="${encodeURI(item.icon)}" alt="${escapeHtml(item.name)}" class="icon" onerror="this.style.display='none'">` : '';
+      return `
+        <div class="row">
+          <div class="flex-1 min-w-0">
+            <div class="name name-line">${iconHtml}${escapeHtml(item.name)}</div>
+            ${item.desc?`<div class="desc">${escapeHtml(item.desc)}</div>`:''}
+          </div>
+          <div class="price">${escapeHtml(item.price||formatCVE(item.priceNum||0))}</div>
+        </div>
+        <div class="row mt-2">
+          <div class="muted text-xs">Quantidade</div>
+          <div class="flex items-center gap-2">
+            <button class="btn bg-slate-700 hover:bg-slate-600" data-action="minus" data-id="${item.id}">−</button>
+            <input inputmode="numeric" pattern="[0-9]*" data-qty="${item.id}" type="number" value="1" min="1" class="qty px-2 py-2 rounded-lg bg-slate-800 border border-slate-700" />
+            <button class="btn bg-slate-700 hover:bg-slate-600" data-action="plus" data-id="${item.id}">+</button>
+            <button class="btn bg-emerald-700 hover:bg-emerald-600" data-action="add" data-id="${item.id}">Adicionar</button>
+          </div>
+        </div>`;
     }
+    function renderTabs(container,categories,getActive,setActive){
+      container.innerHTML='';
+      if(!categories||categories.length<=1){container.classList.add('hidden');return;}
+      container.classList.remove('hidden');
+      categories.forEach(cat=>{
+        const btn=document.createElement('button');
+        btn.className='tab'+(cat===getActive()?' active':'');
+        btn.textContent=cat;
+        btn.addEventListener('click',()=>setActive(cat));
+        container.appendChild(btn);
+      });
+    }
+    function renderGrid(container,dataset,activeCategory){
+      container.innerHTML='';
+      const cat=dataset.find(c=>c.category===activeCategory);
+      if(!cat){ container.innerHTML='<p class="muted">Nenhum item.</p>'; return; }
+      cat.items.forEach((item,idx)=>{
+        const wrap=document.createElement('div'); wrap.className='card rounded-2xl p-3'; wrap.innerHTML=itemRowHtml(item);
+        if(idx<cat.items.length-1){ const d=document.createElement('div'); d.className='divider'; wrap.appendChild(d);}
+        container.appendChild(wrap);
+      });
+    }
+
+    /* ===== PIZZAS ===== */
+    let activePizzaCat = PIZZAS[0]?.category||''; const PIZZA_CATS = PIZZAS.map(c=>c.category);
+    function setActivePizzaCat(cat){ activePizzaCat=cat; renderTabs(pizzaTabsEl,PIZZA_CATS,()=>activePizzaCat,setActivePizzaCat); renderGrid(pizzaGridEl,PIZZAS,activePizzaCat); }
+    setActivePizzaCat(activePizzaCat);
+
+    // start COLLAPSED by default for Pizzas
+    let pizzaCollapsed = true;
+    pizzaGridEl.style.display = 'none';
+    pizzaTabsEl.style.display = 'none';
+    document.getElementById('togglePizza').textContent = 'Expandir';
+    document.getElementById('togglePizza').addEventListener('click',()=>{
+      pizzaCollapsed = !pizzaCollapsed;
+      pizzaGridEl.style.display = pizzaCollapsed ? 'none' : '';
+      pizzaTabsEl.style.display = pizzaCollapsed ? 'none' : '';
+      document.getElementById('togglePizza').textContent = pizzaCollapsed ? 'Expandir' : 'Recolher';
+    });
+
+    /* ===== Build sections (icon + Recolher) ===== */
+    const SECTION_ICONS = {
+      'Hambúrgueres':'🍔','Hot Dog':'🌭','Fried Chicken':'🍗','Shawarma':'🌯',
+      'Sumos Naturais':'🍹','Gelados':'🍦','Combos':'🎁','Salgados/Petiscos':'🥟','Molhos':'🥫'
+    };
+    const SECTION_ORDER = ['Hambúrgueres','Hot Dog','Fried Chicken','Shawarma','Sumos Naturais','Gelados','Combos','Salgados/Petiscos','Molhos'];
+
+    function slugify(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-'); }
+
+    SECTION_ORDER.forEach(name=>{
+      const catData = MENU.find(c=>c.category===name);
+      if(!catData) return;
+
+      const slug = slugify(name);
+      const sec = document.createElement('section');
+      sec.className = 'card p-4 rounded-2xl';
+
+      sec.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-semibold">${SECTION_ICONS[name]||'🍽️'} ${name}</h2>
+          <button class="text-slate-300 hover:underline" data-toggle="${slug}">Recolher</button>
+        </div>
+        <div id="tabs-${slug}" class="flex flex-wrap gap-2 mb-4 hidden"></div>
+        <div id="grid-${slug}" class="space-y-4"></div>
+      `;
+      leftCol.appendChild(sec);
+
+      const tabsDiv = sec.querySelector(`#tabs-${slug}`);
+      const gridDiv = sec.querySelector(`#grid-${slug}`);
+
+      renderTabs(tabsDiv, [catData.category], ()=>catData.category, ()=>{});
+      renderGrid(gridDiv, [catData], catData.category);
+
+      const toggleBtn = sec.querySelector(`[data-toggle="${slug}"]`);
+
+      // start COLLAPSED by default for all other sections
+      let collapsed = true;
+      gridDiv.style.display = 'none';
+      tabsDiv.style.display = 'none';
+      toggleBtn.textContent = 'Expandir';
+
+      toggleBtn.addEventListener('click', ()=>{
+        collapsed = !collapsed;
+        gridDiv.style.display = collapsed ? 'none' : '';
+        tabsDiv.style.display = collapsed ? 'none' : '';
+        toggleBtn.textContent = collapsed ? 'Expandir' : 'Recolher';
+      });
+    });
+
+    /* ===== GLOBAL delegated handler for ALL "Adicionar/+/−" buttons ===== */
+    leftCol.addEventListener('click', (e)=>{
+      const btn=e.target.closest('button[data-action]');
+      if(!btn) return;
+
+      const action=btn.getAttribute('data-action');
+      const id=btn.getAttribute('data-id');
+      const card = btn.closest('.card');
+      const qtyInput = card ? card.querySelector(`input[data-qty="${CSS.escape(id)}"]`) : null;
+      let q=Math.max(1, Number(qtyInput && qtyInput.value || 1) || 1);
+
+      if(action==='minus'){ q=Math.max(1,q-1); if(qtyInput) qtyInput.value=q; return; }
+      if(action==='plus'){ q=q+1; if(qtyInput) qtyInput.value=q; return; }
+      if(action==='add'){
+        const item = ITEM_INDEX[id];
+        if(!item) return;
+        addToCart(item, q);
+        toast('Adicionado: ' + item.name);
+        return;
+      }
+    });
 
     /* ===== CART ===== */
     let cart={};
-    function addToCart(item,qty){
-      qty = Math.max(1, Number(qty) || 1);
-      const ex = cart[item.id];
-      const pn = (Number(item.priceNum)||0) > 0 ? Number(item.priceNum) : parseCVEToNum(item.price);
-      cart[item.id] = {
-        id: item.id,
-        name: item.name,
-        price: item.price || formatCVE(pn),
-        priceNum: pn,
-        qty: ex ? (ex.qty + qty) : qty
-      };
-      renderCart();
-    }
+    function addToCart(item,qty){ qty=Math.max(1,Number(qty)||1); const ex=cart[item.id]; if(ex) ex.qty+=qty; else cart[item.id]={id:item.id,name:item.name,price:item.price||formatCVE(item.priceNum),priceNum:item.priceNum,qty}; renderCart(); }
     function removeFromCart(id){ delete cart[id]; renderCart(); }
     function totalCart(){ return Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0); }
 
@@ -422,56 +515,48 @@ function parseCVEToNum(p){
     }
     function sendOrder(){
       if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
-      const keys = Object.keys(cart); 
-      if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
+      const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
-      const items = keys.map(k=>({
-        pizzaType: cart[k].name,
-        size: '',
-        qty: Number(cart[k].qty)||1,
-        notes: '',
-        priceNum: Number(cart[k].priceNum)||0
-      }));
-      const total = Object.values(cart).reduce((s,it)=> s + ((Number(it.priceNum)||0)*(Number(it.qty)||1)), 0);
+      const items=keys.map(k=>({ pizzaType:cart[k].name, size:'', qty:Number(cart[k].qty)||1, notes:'' }));
+      const total = Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0);
 
-      const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-
-      // Local storage (legacy) to keep Floor's history
-      const orders = getOrdersCompat();
+      const orders=getOrdersCompat();
       orders.push({
-        id,
+        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
         table: String(selectedTable),
         items,
-        notes: '',
-        totalCVE: Math.round(total),
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        notes: gatherNotes(),
+        confirmed: false,
+        totalCVE: total
       });
+      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
+      try {
+        if (window.Parse && Parse.applicationId) {
+          const Order = Parse.Object.extend('Order');
+          const obj = new Order();
+          obj.set('orderId', String(orders[orders.length-1].id));
+          obj.set('table', String(orders[orders.length-1].table));
+          obj.set('items', orders[orders.length-1].items || []);
+          obj.set('notes', String(orders[orders.length-1].notes || ''));
+          obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
+          obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
+          obj.set('confirmed', false);
+          const acl = new Parse.ACL();
+          acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
+          obj.setACL(acl);
+          obj.save().then(()=>{
+            try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
+          }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
+        }
+      } catch(e){ try{ console.warn('Parse not available', e); }catch(e2){} }
+
       setOrdersCompat(orders);
+      bcPost({type:'orders_updated'});
 
-      // Cloud save to Back4App so Staff/Kitchen receive it across devices
-      (async ()=>{
-        try{
-          if (window.Parse && Parse.applicationId){
-            const Order = Parse.Object.extend('Order');
-            const o = new Order();
-            o.set('orderId', id);
-            o.set('table', String(selectedTable));
-            o.set('items', items);
-            o.set('notes', '');
-            o.set('confirmed', false);
-            o.set('isReady', false);
-            o.set('createdAtMs', Date.now());
-            await o.save();
-          }
-        }catch(e){ console && console.warn && console.warn('Cloud save failed', e); }
-      })();
-
-      // Broadcast to same-device listeners
-      try{ bcPost({type:'orders_updated'}); }catch(e){}
-
-      // Clear cart and refresh UI
-      cart = {}; renderCart();
-      alert('Pedido enviado!');
+      cart={}; renderCart(); if(notesDesktop) notesDesktop.value=''; notesMobile.value='';
+      if(cartSheet.classList.contains('open')) closeSheet();
+      alert('Pedido enviado ao staff para confirmação!');
     }
 
     const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
