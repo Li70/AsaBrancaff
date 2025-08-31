@@ -82,7 +82,7 @@
 <body class="p-4">
   <!-- sound controls -->
   <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
+    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
     <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
   </div>
 
@@ -320,27 +320,17 @@
 
   /* === Actions === */
   function confirmOrder(id){
-    const all = getOrders();
-    const idx = all.findIndex(o=>String(o.id)===String(id));
-    if (idx<0) return;
-    all[idx].confirmed = true; all[idx].confirmedAt = Date.now();
+    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
+    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
     setOrders(all);
     bcPost({type:'orders_updated'});
-    // Only stop alarm if no unconfirmed orders remain
-    try{
-      const stillPending = getOrders().some(o=>!o.confirmed && !o.rejectedAt && !o.servedAt);
-      if (!stillPending) stopAlarm();
-    }catch(e){}
+    stopAlarm();
     render();
   }
   function rejectOrder(id){
-    var ok = true;
-    try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
-    if (!ok) return;
-    const keep = getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep);
-    bcPost({type:'orders_updated'});
-    render();
+    if(!confirm('Rejeitar este pedido?')) return;
+    const keep=getOrders().filter(o=>String(o.id)!==String(id));
+    setOrders(keep); bcPost({type:'orders_updated'}); render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
@@ -375,40 +365,17 @@
     renderHistory();
   }
 
-  
   /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
   let _knownServed = new Set();
   function snapshotServedIds(){
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch (e) {
-      return new Set();
-    }
+    } catch { return new Set(); }
   }
+ 
 
-  // Detect newly marked-as-ready orders (from Kitchen/other devices) and notify once
-  function detectNewServedAndNotify(){
-    try {
-      const latest = snapshotServedIds();
-      let hasNew = false;
-      const all = (typeof getOrders==='function') ? getOrders() : [];
-      latest.forEach(function(id){
-        id = String(id);
-        if (!_knownServed.has(id)){
-          const o = all.find(function(x){ return String(x.id)===id; });
-          if (!o || o.confirmed) hasNew = true;
-        }
-      });
-      if (hasNew){
-        showToast('Pedido pronto ✨');
-        playReadySound();
-      }
-      _knownServed = latest;
-    } catch (e) { /* no-op */ }
-  }
-
-/* === subscriptions / polling === */
+  /* === subscriptions / polling === */
   subscribeAll((evt)=>{
     render(); 
     detectNewOrdersAndMaybeAlarm(); 
@@ -647,30 +614,6 @@
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- STAFF_REJECT_GUARD_V1 -->
-<script>
-(function(){
-  try{
-    const pending = document.getElementById('pending');
-    if (!pending || pending.__wiredRejectGuardV1) return;
-    pending.__wiredRejectGuardV1 = true;
-    pending.addEventListener('click', function(ev){
-      try{
-        const btn = ev.target && ev.target.closest && ev.target.closest('[data-reject]');
-        if (!btn) return;
-        ev.preventDefault(); ev.stopPropagation();
-        const id = btn.getAttribute('data-reject');
-        let ok = true;
-        try { ok = window.confirm('Rejeitar este pedido?'); } catch(e){ ok = false; }
-        if (!ok) return; // Cancel -> keep the order; do nothing
-        try { if (typeof window.rejectOrder === 'function') window.rejectOrder(id); } catch(e){}
-      }catch(e){}
-    }, true); // capture: intercept before any bubbling listener
-  }catch(e){}
 })();
 </script>
 
