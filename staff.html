@@ -82,7 +82,7 @@
 <body class="p-4">
   <!-- sound controls -->
   <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
+    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
     <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
   </div>
 
@@ -161,20 +161,16 @@
   const alertBanner=document.getElementById('alertBanner');
   const alertEl=document.getElementById('alertSound');
   const doneEl=document.getElementById('doneSound');
-  // Unified sound UI updater
-  function updateSoundUI(){
-    try{
-      if (typeof __soundChip !== 'undefined' && __soundChip){
-        __soundChip.textContent = soundEnabled ? '🔊' : '🔇';
-        __soundChip.className = soundEnabled
-          ? 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40'
-          : 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
-      }
-      if (typeof soundBtn !== 'undefined' && soundBtn){
-        const base = 'Som';
-        soundBtn.textContent = base + ' ' + (soundEnabled ? '🔊' : '🔇');
-      }
-    }catch(e){}
+  // Ensure a label span for the button text + icon, without removing the chip
+  let __soundLabel = document.getElementById('soundLabel');
+  if (!__soundLabel){
+    __soundLabel = document.createElement('span');
+    __soundLabel.id = 'soundLabel';
+    __soundLabel.textContent = 'Som ' + (soundEnabled ? '🔊' : '🔇');
+    try{ soundBtn.prepend(__soundLabel); }catch(e){}
+  }
+  function updateSoundLabel(){
+    try{ __soundLabel.textContent = 'Som ' + (soundEnabled ? '🔊' : '🔇'); }catch(e){}
   }
 
 
@@ -182,37 +178,9 @@
   let soundEnabled=false, audioCtx, fallbackLoop=null;
   function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
   function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
-  async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); 
-  try{
-    const n = Math.min(window.__pendingDonePlays||0, 3);
-    window.__pendingDonePlays = 0;
-    for(let i=0;i<n;i++){ setTimeout(()=>{ try{ doneEl.currentTime=0; doneEl.play().catch(()=>{}); }catch{} }, i*220); }
-  }catch{}
-}catch{} }, 180);}catch{} }
+  async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
   function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
-  // Sound status chip
-  const __soundChip = document.createElement('span');
-  __soundChip.id = 'soundChip';
-  __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border';
-  function updateSoundChip(){
-      if (soundEnabled){
-        __soundChip.textContent = '🔊';
-        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40';
-      }else{
-        __soundChip.textContent = '🔇';
-        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
-      }
-    }else{
-      __soundChip.textContent = '🔇 bloqueado';
-      __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
-    }
-  }
-  try{ soundBtn.appendChild(__soundChip); }catch{}
-  const __oldEnableSound = enableSound;
-  enableSound = async function(){ await __oldEnableSound(); try{ updateSoundChip(); }catch(e){} try{ updateSoundUI(); }catch(e){} };
-  updateSoundChip();
-
   ackBtn.addEventListener('click', stopAlarm);
   document.addEventListener('DOMContentLoaded', enableSound);
   document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
@@ -234,7 +202,7 @@
   }
 
   async function playReadySound(){
-    if(!soundEnabled){ window.__pendingDonePlays = (window.__pendingDonePlays||0)+1; return; }
+    if(!soundEnabled) return;
     try { doneEl.currentTime = 0; await doneEl.play(); } catch {}
   }
 
@@ -280,7 +248,7 @@
           </div>
         </div>`;
       card.querySelector('[data-confirm]').addEventListener('click',()=>confirmOrder(o.id));
-      card.querySelector('[data-reject]').addEventListener('click',(ev)=>rejectOrder(ev,o.id));
+      card.querySelector('[data-reject]').addEventListener('click',()=>rejectOrder(o.id));
       pendingDiv.appendChild(card);
     });
 
@@ -364,27 +332,17 @@
 
   /* === Actions === */
   function confirmOrder(id){
-    const all = getOrders();
-    const idx = all.findIndex(o=>String(o.id)===String(id));
-    if (idx<0) return;
-    all[idx].confirmed = true; all[idx].confirmedAt = Date.now();
+    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
+    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
     setOrders(all);
     bcPost({type:'orders_updated'});
-    // Only stop alarm if no unconfirmed orders remain
-    try{
-      const stillPending = getOrders().some(o=>!o.confirmed && !o.rejectedAt && !o.servedAt);
-      if (!stillPending) stopAlarm();
-    }catch(e){}
+    stopAlarm();
     render();
   }
-  function rejectOrder(ev,id){ try{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } }catch{}
-    var ok = true;
-    try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
-    if (!ok) return;
-    const keep = getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep);
-    bcPost({type:'orders_updated'});
-    render();
+  function rejectOrder(id){
+    if(!confirm('Rejeitar este pedido?')) return;
+    const keep=getOrders().filter(o=>String(o.id)!==String(id));
+    setOrders(keep); bcPost({type:'orders_updated'}); render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
@@ -419,40 +377,17 @@
     renderHistory();
   }
 
-  
   /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
   let _knownServed = new Set();
   function snapshotServedIds(){
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch (e) {
-      return new Set();
-    }
+    } catch { return new Set(); }
   }
+ 
 
-  // Detect newly marked-as-ready orders (from Kitchen/other devices) and notify once
-  function detectNewServedAndNotify(){
-    try {
-      const latest = snapshotServedIds();
-      let hasNew = false;
-      const all = (typeof getOrders==='function') ? getOrders() : [];
-      latest.forEach(function(id){
-        id = String(id);
-        if (!_knownServed.has(id)){
-          const o = all.find(function(x){ return String(x.id)===id; });
-          if (!o || o.confirmed) hasNew = true;
-        }
-      });
-      if (hasNew){
-        showToast('Pedido pronto ✨');
-        playReadySound();
-      }
-      _knownServed = latest;
-    } catch (e) { /* no-op */ }
-  }
-
-/* === subscriptions / polling === */
+  /* === subscriptions / polling === */
   subscribeAll((evt)=>{
     render(); 
     detectNewOrdersAndMaybeAlarm(); 
@@ -533,12 +468,11 @@
   (function(){
     const _get = localStorage.getItem.bind(localStorage);
     window.__cloudList = []; window.__cloudVer = Date.now();
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
+    localStorage.getItem = function(k){ if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList||[]);
       if (k===VERSION_KEY) return String(window.__cloudVer);
       return _get(k);
     };
-    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
+    window.__applyCloudList=function(list){ try{ if (window.__applyCloudListV3) return window.__applyCloudListV3(list); }catch(e){} };
   })();
 
   function pickBetter(a,b){
@@ -695,23 +629,20 @@
 </script>
 
 
-<!-- STAFF_CLOUD_LIST_FIX_V2 -->
+<!-- STAFF_CLOUD_LIST_FIX_V3 -->
 <script>
 (function(){
   try{
-    // Use a plain-object list for localStorage shadowing
     const _get = localStorage.getItem.bind(localStorage);
-    window.__cloudPlainList = [];
-    window.__cloudVer = Date.now();
+    window.__cloudPlainList = window.__cloudPlainList || [];
+    window.__cloudVer = window.__cloudVer || Date.now();
 
-    // Shadow getItem so getOrders() reads from cloud
     localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList);
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudPlainList||[]);
       if (k===VERSION_KEY) return String(window.__cloudVer);
       return _get(k);
     };
 
-    // Helper: pick newer/confirmed/ready variants across duplicates
     function pickBetter(a,b){
       try{
         if (!!a.confirmed !== !!b.confirmed) return a.confirmed ? a : b;
@@ -722,21 +653,21 @@
       }catch(e){}
       return a;
     }
-
     function coalesceByIdPlain(list){
-      const m = new Map();
+      const m=new Map();
       (list||[]).forEach(o=>{
-        const id=String((o && (o.orderId||o.id))||'');
-        if(!id) return;
-        const cur=m.get(id);
-        m.set(id, cur ? pickBetter(cur,o) : o);
+        try{
+          const id = String((o && (o.orderId||o.id))||'');
+          if(!id) return;
+          const cur=m.get(id);
+          m.set(id, cur ? pickBetter(cur,o) : o);
+        }catch(e){}
       });
       return Array.from(m.values());
     }
 
-    window.__applyCloudList = function(list){
+    window.__applyCloudListV3 = function(list){
       try{
-        // map Parse.Object -> plain objects
         const plain = (list||[]).map(function(o){
           try{
             if (o && typeof o.get === 'function'){
@@ -755,16 +686,21 @@
               };
             }
           }catch(e){}
-          // already plain
           return o || {};
         });
-
         window.__cloudPlainList = coalesceByIdPlain(plain);
         window.__cloudVer = Date.now();
         try{ if (typeof render==='function') render(); }catch(e){}
         try{ if (typeof renderHistory==='function') renderHistory(); }catch(e){}
       }catch(e){}
     };
+
+    // If an earlier fetch already placed raw objects, re-apply now:
+    try{
+      if (Array.isArray(window.__cloudList) && window.__cloudList.length){
+        window.__applyCloudListV3(window.__cloudList);
+      }
+    }catch(e){}
   }catch(e){}
 })();
 </script>
@@ -835,52 +771,6 @@
     });
   }
   
-})();
-</script>
-
-
-
-<!-- STAFF_CLOUD_ACTIONS_V2 -->
-<script>
-(function(){
-  try{
-    if (!(window.Parse && Parse.applicationId)) return;
-    const Order = Parse.Object.extend('Order');
-    async function updateFamily(id, mut){
-      try{
-        const q=new Parse.Query(Order);
-        q.equalTo('orderId', String(id));
-        q.limit(20);
-        const res=await q.find();
-        for (const o of res){ try{ mut(o); await o.save(); }catch(e){} }
-      }catch(e){}
-    }
-
-    const _confirm = window.confirmOrder;
-    window.confirmOrder = function(id){
-      try{ updateFamily(id, o=>{ o.set('confirmed', true); if(!o.get('confirmedAt')) o.set('confirmedAt', new Date()); }); }catch(e){}
-      if (typeof _confirm==='function') return _confirm.apply(this, arguments);
-    };
-
-    const _reject = window.rejectOrder;
-    window.rejectOrder = function(ev, id){
-      let before=new Set();
-      try{ before = new Set((typeof getOrders==='function' ? getOrders() : []).map(o=>String(o.id))); }catch(e){}
-      const ret = (typeof _reject==='function') ? _reject.apply(this, arguments) : undefined;
-      try{
-        const after = new Set((typeof getOrders==='function' ? getOrders() : []).map(o=>String(o.id)));
-        const removed = before.has(String(id)) && !after.has(String(id));
-        if (removed){ updateFamily(id, o=>{ o.set('rejectedAt', new Date()); }); }
-      }catch(e){}
-      return ret;
-    };
-
-    const _served = window.markServedAndClear;
-    window.markServedAndClear = function(id){
-      try{ updateFamily(id, o=>{ o.set('servedAt', new Date()); o.set('isReady', true); }); }catch(e){}
-      if (typeof _served==='function') return _served.apply(this, arguments);
-    };
-  }catch(e){}
 })();
 </script>
 

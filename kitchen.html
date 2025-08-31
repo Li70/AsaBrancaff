@@ -35,7 +35,7 @@
           <input id="hideServedChk" type="checkbox" /> Ocultar servidos
         </label>
         <button id="clearServedBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar servidos</button>
-        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som</button>
+        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
       </div>
     </div>
 
@@ -48,7 +48,7 @@
    
 
   <!-- coloque cash.mp3 na mesma pasta ou troque por um URL -->
-  <audio id="cashSound" preload="auto" playsinline src="cash.mp3"></audio>
+  <audio id="cashSound" preload="auto" src="cash.mp3"></audio>
 
   <script>
     "use strict";
@@ -177,51 +177,19 @@
       }
     }
 
-    
-    /* ====== Som (armed-by-default with queue) — KITCHEN_SOUND_V2 ====== */
-    let soundEnabled = false;
-    const cashEl = document.getElementById('cashSound');
-    let __pendingCashPlays = 0;
-
+    /* ====== Som (auto-ativado) ====== */
+    let soundEnabled = false, audioCtx;
     async function enableSound(){
-      try{
-        cashEl.muted = false;
-        cashEl.volume = 1;
-        cashEl.currentTime = 0;
-        // one tiny play/pause to unlock on mobile
-        await cashEl.play();
-        setTimeout(()=>{ try{ cashEl.pause(); cashEl.currentTime = 0; }catch{} }, 120);
-        soundEnabled = true;
-        // flush any queued plays
-        const toPlay = Math.min(__pendingCashPlays, 3);
-        __pendingCashPlays = 0;
-        for (let i=0;i<toPlay;i++){
-          setTimeout(()=>{ try{ playSoundCore(); }catch{} }, i*220);
-        }
-      }catch(e){
-        soundEnabled = false;
-      }
+      soundEnabled = true;
+      try { cashEl.volume = 1; cashEl.muted = false; cashEl.currentTime = 0; await cashEl.play(); cashEl.pause(); cashEl.currentTime = 0; } catch {}
+      // teste curto silencioso
+      try { await cashEl.play(); setTimeout(()=>{ try{ cashEl.pause(); }catch{} }, 200); } catch {}
     }
-
-    function playSound(){
-      if (!soundEnabled){ __pendingCashPlays++; return; }
-      playSoundCore();
+    async function playSound(){
+      if (!soundEnabled) return;
+      try { cashEl.currentTime = 0; await cashEl.play(); return; } catch {}
+      playFallback();
     }
-
-    function playSoundCore(){
-      try{
-        if (cashEl.networkState === 3 /* NETWORK_NO_SOURCE */){
-          playFallback();
-          return;
-        }
-        cashEl.currentTime = 0;
-        const p = cashEl.play();
-        if (p && typeof p.catch==='function') p.catch(()=>{});
-      }catch{}
-    }
-
-    // simple oscillator fallback (rare)
-    let audioCtx;
     function playFallback(){
       if (!soundEnabled) return;
       const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -236,59 +204,15 @@
       g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
       o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
     }
+    soundBtn.addEventListener('click', enableSound);
 
-    const soundBtn = document.getElementById('soundBtn');
-    // Unified sound UI updater
-    function updateSoundUI(){
-      try{
-        if (typeof __soundChip !== 'undefined' && __soundChip){
-          __soundChip.textContent = soundEnabled ? '🔊' : '🔇';
-          __soundChip.className = soundEnabled
-            ? 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40'
-            : 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
-        }
-        if (typeof soundBtn !== 'undefined' && soundBtn){
-          const base = 'Som';
-          soundBtn.textContent = base + ' ' + (soundEnabled ? '🔊' : '🔇');
-        }
-      }catch(e){}
-    }
+    // tentar ativar som por omissão
+    document.addEventListener('DOMContentLoaded', enableSound);
+    document.addEventListener('pointerdown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
+    document.addEventListener('keydown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
+    document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible' && !soundEnabled) enableSound(); });
 
-    if (soundBtn) soundBtn.addEventListener('click', enableSound);
-    // Armed-by-default: first gesture anywhere unlocks and flushes queue
-    document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
-    document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
-    // Sound status chip
-    const __soundChip = document.createElement('span');
-    __soundChip.id = 'soundChip';
-    __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border';
-    function updateSoundChip(){
-      if (soundEnabled){
-        __soundChip.textContent = '🔊';
-        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40';
-      }else{
-        __soundChip.textContent = '🔇';
-        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
-      }
-    }else{
-        __soundChip.textContent = '🔇 bloqueado';
-        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
-      }
-    }
-    if (soundBtn){ try{ soundBtn.appendChild(__soundChip); }catch{} }
-    // call after changes
-    const __oldEnableSound = enableSound;
-    enableSound = async function(){ await __oldEnableSound(); updateSoundChip(); updateSoundUI(); };
-    // initialize chip
-    updateSoundChip();
-
-    // Desktop-only auto-unlock on load (mobile browsers still require a gesture)
-    document.addEventListener('DOMContentLoaded', ()=>{
-      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent||'');
-      if(!isMobile && !soundEnabled) enableSound();
-    });
-
-/* ====== Utils ====== */
+    /* ====== Utils ====== */
     function escapeHtml(str){
       return String(str||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
     }
@@ -406,8 +330,21 @@
     setInterval(()=>render({withAlerts:true}), 1000);
     render({withAlerts:false});
 
-    /* sound handler consolidated above */
+    /* ====== Som ====== */
+    function playSound(){
+      if (!soundEnabled) return;
+      cashEl.currentTime = 0;
+      cashEl.play().catch(playFallback);
+    }
   </script>
+
+
+
+
+
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
 </script>
 
 
