@@ -242,6 +242,26 @@
     // Armed-by-default: first gesture anywhere unlocks and flushes queue
     document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
     document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
+    // Sound status chip
+    const __soundChip = document.createElement('span');
+    __soundChip.id = 'soundChip';
+    __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border';
+    function updateSoundChip(){
+      if (soundEnabled){
+        __soundChip.textContent = '✅ ativo';
+        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40';
+      }else{
+        __soundChip.textContent = '🔇 bloqueado';
+        __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
+      }
+    }
+    if (soundBtn){ try{ soundBtn.appendChild(__soundChip); }catch{} }
+    // call after changes
+    const __oldEnableSound = enableSound;
+    enableSound = async function(){ await __oldEnableSound(); updateSoundChip(); };
+    // initialize chip
+    updateSoundChip();
+
     // Desktop-only auto-unlock on load (mobile browsers still require a gesture)
     document.addEventListener('DOMContentLoaded', ()=>{
       const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent||'');

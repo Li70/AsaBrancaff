@@ -175,6 +175,24 @@
 }catch{} }, 180);}catch{} }
   function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
+  // Sound status chip
+  const __soundChip = document.createElement('span');
+  __soundChip.id = 'soundChip';
+  __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border';
+  function updateSoundChip(){
+    if (soundEnabled){
+      __soundChip.textContent = '✅ ativo';
+      __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-emerald-700 bg-emerald-900/40';
+    }else{
+      __soundChip.textContent = '🔇 bloqueado';
+      __soundChip.className = 'ml-2 px-2 py-0.5 rounded-full text-xs border border-slate-600 bg-slate-800/60';
+    }
+  }
+  try{ soundBtn.appendChild(__soundChip); }catch{}
+  const __oldEnableSound = enableSound;
+  enableSound = async function(){ await __oldEnableSound(); updateSoundChip(); };
+  updateSoundChip();
+
   ackBtn.addEventListener('click', stopAlarm);
   document.addEventListener('DOMContentLoaded', enableSound);
   document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
@@ -242,7 +260,7 @@
           </div>
         </div>`;
       card.querySelector('[data-confirm]').addEventListener('click',()=>confirmOrder(o.id));
-      card.querySelector('[data-reject]').addEventListener('click',()=>rejectOrder(o.id));
+      card.querySelector('[data-reject]').addEventListener('click',(ev)=>rejectOrder(ev,o.id));
       pendingDiv.appendChild(card);
     });
 
@@ -339,7 +357,7 @@
     }catch(e){}
     render();
   }
-  function rejectOrder(id){
+  function rejectOrder(ev,id){ try{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } }catch{}
     var ok = true;
     try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
     if (!ok) return;
@@ -722,6 +740,52 @@
     });
   }
   
+})();
+</script>
+
+
+
+<!-- STAFF_CLOUD_ACTIONS_V2 -->
+<script>
+(function(){
+  try{
+    if (!(window.Parse && Parse.applicationId)) return;
+    const Order = Parse.Object.extend('Order');
+    async function updateFamily(id, mut){
+      try{
+        const q=new Parse.Query(Order);
+        q.equalTo('orderId', String(id));
+        q.limit(20);
+        const res=await q.find();
+        for (const o of res){ try{ mut(o); await o.save(); }catch(e){} }
+      }catch(e){}
+    }
+
+    const _confirm = window.confirmOrder;
+    window.confirmOrder = function(id){
+      try{ updateFamily(id, o=>{ o.set('confirmed', true); if(!o.get('confirmedAt')) o.set('confirmedAt', new Date()); }); }catch(e){}
+      if (typeof _confirm==='function') return _confirm.apply(this, arguments);
+    };
+
+    const _reject = window.rejectOrder;
+    window.rejectOrder = function(ev, id){
+      let before=new Set();
+      try{ before = new Set((typeof getOrders==='function' ? getOrders() : []).map(o=>String(o.id))); }catch(e){}
+      const ret = (typeof _reject==='function') ? _reject.apply(this, arguments) : undefined;
+      try{
+        const after = new Set((typeof getOrders==='function' ? getOrders() : []).map(o=>String(o.id)));
+        const removed = before.has(String(id)) && !after.has(String(id));
+        if (removed){ updateFamily(id, o=>{ o.set('rejectedAt', new Date()); }); }
+      }catch(e){}
+      return ret;
+    };
+
+    const _served = window.markServedAndClear;
+    window.markServedAndClear = function(id){
+      try{ updateFamily(id, o=>{ o.set('servedAt', new Date()); o.set('isReady', true); }); }catch(e){}
+      if (typeof _served==='function') return _served.apply(this, arguments);
+    };
+  }catch(e){}
 })();
 </script>
 
