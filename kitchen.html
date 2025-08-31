@@ -177,44 +177,51 @@
       }
     }
 
-    /* ====== Som (auto-ativado) ====== */
-    let soundEnabled = false, audioCtx;
     
+    /* ====== Som (armed-by-default with queue) — KITCHEN_SOUND_V2 ====== */
+    let soundEnabled = false;
+    const cashEl = document.getElementById('cashSound');
+    let __pendingCashPlays = 0;
+
     async function enableSound(){
-      // Unlock audio only on explicit user gesture; avoid autoplay rejections
-      try {
+      try{
         cashEl.muted = false;
         cashEl.volume = 1;
         cashEl.currentTime = 0;
+        // one tiny play/pause to unlock on mobile
         await cashEl.play();
-        setTimeout(()=>{ try{ cashEl.pause(); cashEl.currentTime = 0; }catch{} }, 100);
+        setTimeout(()=>{ try{ cashEl.pause(); cashEl.currentTime = 0; }catch{} }, 120);
         soundEnabled = true;
-      } catch(e){
-        // If user interaction still fails, keep disabled; ask them to tap again
+        // flush any queued plays
+        const toPlay = Math.min(__pendingCashPlays, 3);
+        __pendingCashPlays = 0;
+        for (let i=0;i<toPlay;i++){
+          setTimeout(()=>{ try{ playSoundCore(); }catch{} }, i*220);
+        }
+      }catch(e){
         soundEnabled = false;
       }
     }
-    
-      // teste curto silencioso
-      try { await cashEl.play(); setTimeout(()=>{ try{ cashEl.pause(); }catch{} }, 200); } catch {}
-    }
-    
+
     function playSound(){
-      if (!soundEnabled) return;
-      try {
-        // Prefer the cash.mp3 sound; only fallback if there is no source
-        if (cashEl.networkState === 3 /* NETWORK_NO_SOURCE */) {
+      if (!soundEnabled){ __pendingCashPlays++; return; }
+      playSoundCore();
+    }
+
+    function playSoundCore(){
+      try{
+        if (cashEl.networkState === 3 /* NETWORK_NO_SOURCE */){
           playFallback();
           return;
         }
         cashEl.currentTime = 0;
         const p = cashEl.play();
-        if (p && typeof p.catch === 'function') p.catch(()=>{});
-      } catch { /* ignore */ }
+        if (p && typeof p.catch==='function') p.catch(()=>{});
+      }catch{}
     }
-    
-      playFallback();
-    }
+
+    // simple oscillator fallback (rare)
+    let audioCtx;
     function playFallback(){
       if (!soundEnabled) return;
       const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -229,15 +236,13 @@
       g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
       o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
     }
-    soundBtn.addEventListener('click', enableSound);
 
-    // tentar ativar som por omissão
-    // document.addEventListener('DOMContentLoaded', enableSound);
-    document.addEventListener('pointerdown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
-    document.addEventListener('keydown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
-    document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible' && !soundEnabled) enableSound(); });
-
-    /* ====== Utils ====== */
+    const soundBtn = document.getElementById('soundBtn');
+    if (soundBtn) soundBtn.addEventListener('click', enableSound);
+    // Armed-by-default: first gesture anywhere unlocks and flushes queue
+    document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
+    document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, { once:true });
+/* ====== Utils ====== */
     function escapeHtml(str){
       return String(str||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
     }

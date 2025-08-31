@@ -166,7 +166,13 @@
   let soundEnabled=false, audioCtx, fallbackLoop=null;
   function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
   function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
-  async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
+  async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); 
+  try{
+    const n = Math.min(window.__pendingDonePlays||0, 3);
+    window.__pendingDonePlays = 0;
+    for(let i=0;i<n;i++){ setTimeout(()=>{ try{ doneEl.currentTime=0; doneEl.play().catch(()=>{}); }catch{} }, i*220); }
+  }catch{}
+}catch{} }, 180);}catch{} }
   function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
   ackBtn.addEventListener('click', stopAlarm);
@@ -190,7 +196,7 @@
   }
 
   async function playReadySound(){
-    if(!soundEnabled) return;
+    if(!soundEnabled){ window.__pendingDonePlays = (window.__pendingDonePlays||0)+1; return; }
     try { doneEl.currentTime = 0; await doneEl.play(); } catch {}
   }
 
