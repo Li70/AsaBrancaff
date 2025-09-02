@@ -33,6 +33,23 @@
     const ordersCol = collection(db, "orders");
     window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
   </script>
+<script type="module">
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  if (window.__fb?.app) {
+    const auth = getAuth(window.__fb.app);
+    // Promise that resolves when a user is available
+    let resolved = false;
+    window.__authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => {
+        if (user && !resolved) { resolved = true; resolve(user); }
+      });
+    });
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(console.error);
+    }
+  }
+</script>
+
 
 </head>
 <body class="p-4">

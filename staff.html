@@ -86,6 +86,23 @@
     const ordersCol = collection(db, "orders");
     window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
   </script>
+<script type="module">
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  if (window.__fb?.app) {
+    const auth = getAuth(window.__fb.app);
+    // Promise that resolves when a user is available
+    let resolved = false;
+    window.__authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => {
+        if (user && !resolved) { resolved = true; resolve(user); }
+      });
+    });
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(console.error);
+    }
+  }
+</script>
+
 
 </head>
 <body class="p-4">
@@ -640,13 +657,15 @@ function computeOrderTotal(order){
   });
 
   // Cloud-write actions
-  window.confirmOrder = function(id){
+  window.confirmOrder = async function(id){
+    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
     try{
       const ref = fb.doc(fb.db, 'orders', String(id));
       fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
     }catch(e){ console.warn('confirmOrder cloud error', e); }
   };
-  window.rejectOrder = function(id){
+  window.rejectOrder = async function(id){
+    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
     try{
       const ref = fb.doc(fb.db, 'orders', String(id));
       const ok = window.confirm('Rejeitar este pedido?');
@@ -654,7 +673,8 @@ function computeOrderTotal(order){
       fb.deleteDoc(ref);
     }catch(e){ console.warn('rejectOrder cloud error', e); }
   };
-  window.markServedAndClear = function(id){
+  window.markServedAndClear = async function(id){
+    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
     try{
       const ref = fb.doc(fb.db, 'orders', String(id));
       fb.updateDoc(ref, { isReady: true, readyAtMs: Date.now() });
