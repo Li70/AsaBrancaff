@@ -732,34 +732,99 @@ return sum;
 
 
   
+<!-- FIREBASE BOOTSTRAP (STAFF) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, doc, updateDoc,
-    serverTimestamp, onSnapshot, query, where, orderBy
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, setDoc, updateDoc, deleteDoc,
+    onSnapshot, serverTimestamp, query, where, orderBy
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-  // --- Your project config ---
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
     authDomain: "asabrancaff-faebe.firebaseapp.com",
     projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com", // <-- fixed
+    storageBucket: "asabrancaff-faebe.appspot.com",
     messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
   };
 
-  // --- Initialize ---
   const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-
-  // Optional auth (matches rules above)
   const auth = getAuth(app);
-  signInAnonymously(auth).catch(console.error);
+  try { await signInAnonymously(auth); } catch (e) { console.warn('Anon auth failed', e); }
 
-  // Expose helpers so each page can use them
-  window.firebaseDB = { db, collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, query, where, orderBy };
+  const db = getFirestore(app);
+  const ordersCol = collection(db, "orders");
+  window.__fb = { app, db, ordersCol, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
+</script>
+
+<!-- STAFF — CLOUD ONLY glue (stream orders + actions) -->
+<script>
+(function(){
+  const fb = window.__fb;
+  if (!fb) { console.warn('Firebase not ready on Staff'); return; }
+
+  // Render helpers already in your file reuse getOrders()/render() – we’ll make getOrders() cloud-backed
+  window.__cloudList = [];
+
+  // getOrders() becomes cloud source of truth
+  window.getOrders = function(){ return Array.isArray(window.__cloudList) ? window.__cloudList : []; };
+  window.setOrders = function(){ /* no local writes; cloud only */ };
+
+  // Live query: we show all non-served orders, oldest first
+  const qAll = fb.query(fb.ordersCol, fb.where('served','==', false), fb.orderBy('createdAtMs','asc'));
+  fb.onSnapshot(qAll, (snap)=>{
+    const list = [];
+    snap.forEach(docSnap => {
+      const d = docSnap.data()||{};
+      list.push({
+        id: d.id || docSnap.id,
+        table: d.table,
+        items: d.items || [],
+        notes: d.notes || '',
+        totalCVE: d.totalCVE,
+        createdAt: d.createdAtMs || Date.now(),
+        confirmed: !!d.confirmed,
+        confirmedAt: d.confirmedAtMs || null,
+        isReady: !!d.isReady,
+        readyAt: d.readyAtMs || null,
+        served: !!d.served,
+        servedAt: d.servedAtMs || null
+      });
+    });
+    window.__cloudList = list;
+    try { if (typeof render === 'function') render(); } catch {}
+  });
+
+  // Cloud-write actions used by your buttons
+  window.confirmOrder = async function(id){
+    try{
+      const ref = fb.doc(fb.db, 'orders', String(id));
+      await fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
+    }catch(e){ console.warn('confirmOrder cloud error', e); }
+  };
+
+  window.rejectOrder = async function(id){
+    try{
+      const ok = window.confirm('Rejeitar este pedido?'); if (!ok) return;
+      const ref = fb.doc(fb.db, 'orders', String(id));
+      await fb.deleteDoc(ref);
+    }catch(e){ console.warn('rejectOrder cloud error', e); }
+  };
+
+  // Staff marks Served (kitchen marks Ready)
+  window.markServedAndClear = async function(id){
+    try{
+      const ref = fb.doc(fb.db, 'orders', String(id));
+      await fb.updateDoc(ref, { served: true, servedAtMs: Date.now() });
+      // your UI already removes served from the Confirmed list once it’s not returned by getOrders()
+    }catch(e){ console.warn('markServed cloud error', e); }
+  };
+
+  // OPTIONAL: if your render() was checking a local "readyMap", switch it to use o.isReady
+  // (If your existing render uses getServedMap, you can leave it; Cloud will still drive the lists.)
+})();
 </script>
 
   
