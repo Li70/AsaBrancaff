@@ -333,7 +333,7 @@
     if (!pend.length){ pendingDiv.innerHTML='<p class="muted">Sem pendentes.</p>'; }
     else pend.forEach(o=>{
       const when=o.createdAt? new Date(o.createdAt).toLocaleTimeString() : '';
-      const items=(o.items||[]).map(i=>`${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`).join('<br>') || '(sem itens)';
+      const items=(o.items||[]).map(i=>`\${i.qty||1} × \${esc(i.pizzaType||'')} \${(typeof getCategoryByName==='function' && getCategoryByName(i.pizzaType||''))?('('+getCategoryByName(i.pizzaType||'')+')'):''}\${i.notes?` <span class=\"muted\">(\${esc(i.notes)})</span>`:''}`).join('<br>') || '(sem itens)';
       const total=computeOrderTotal(o);
       const card=document.createElement('div'); card.className='card p-3 rounded-xl';
       card.innerHTML=`
@@ -364,7 +364,7 @@
         const when=o.confirmedAt? new Date(o.confirmedAt).toLocaleTimeString()
                   : (o.createdAt? new Date(o.createdAt).toLocaleTimeString():'');
         const items=(o.items||[]).map(i=>
-          `${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`
+          `\${i.qty||1} × \${esc(i.pizzaType||'')} \${(typeof getCategoryByName==='function' && getCategoryByName(i.pizzaType||''))?('('+getCategoryByName(i.pizzaType||'')+')'):''}\${i.notes?` <span class=\"muted\">(\${esc(i.notes)})</span>`:''}`
         ).join('<br>') || '(sem itens)';
         const total=computeOrderTotal(o);
         const isReady = !!readyMap[String(o.id)];
@@ -491,43 +491,41 @@
  
 
   /* === subscriptions / polling === */
-  subscribeAll((evt)=>{
-    render(); 
-    detectNewOrdersAndMaybeAlarm(); 
-    renderHistory();
+  
+subscribeAll((evt)=>{
+  try { render(); } catch(e){}
+  try { detectNewOrdersAndMaybeAlarm(); } catch(e){}
+  try { renderHistory(); } catch(e){}
 
-    // Direct broadcast from Kitchen
-    if (evt && evt.type==='served_update') {
-      /*PRONTO_TOGGLE_PATCH*/ if (!!evt.served) { showToast('Pedido pronto ✨');
-      playReadySound();
-      if (evt.id != null) _knownServed.add(String(evt.id)); // avoid double notify next tick
-          try {
-            const _map = (typeof getServedMap==='function') ? getServedMap() : {};
-            if (evt && evt.id != null) { _map[String(evt.id)] = true; }
-            if (typeof setServedMap==='function') setServedMap(_map);
-            try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; window.__staffServedMem.map = _map; window.__staffServedMem.ver = Date.now(); }catch(e){}
-          } catch(e) {}
-        } else {
-          try {
-            const _map2 = (typeof getServedMap==='function') ? getServedMap() : {};
-            if (evt && evt.id != null) { _map2[String(evt.id)] = false; }
-            if (typeof setServedMap==='function') setServedMap(_map2);
-            try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; window.__staffServedMem.map = _map2; window.__staffServedMem.ver = Date.now(); }catch(e){}
-          } catch(e) {}
-          
-    
-        try {
-          // update served map instantly so the ✔️ Pronto icon shows right away
-          const _map = (typeof getServedMap==='function') ? getServedMap() : {};
-          if (evt && evt.id != null) { _map[String(evt.id)] = !!evt.served; }
-          if (typeof setServedMap==='function') setServedMap(_map);
-          try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; window.__staffServedMem.map = _map; window.__staffServedMem.ver = Date.now(); }catch(e){}
-          if (typeof render==='function') render();
-        } catch(e) {}
-      } // end served_update
-        // Fallback for storage/poll-only
-    detectNewServedAndNotify(); try{ if (typeof render==='function') render(); }catch(e){}
-  }, {pollMs: 900});
+  // Kitchen → Staff realtime sync
+  if (evt && evt.type==='served_update'){
+    try{
+      const id = (evt.id!=null)? String(evt.id) : null;
+      const served = !!evt.served;
+      // Notify when turning ON only
+      if (served){
+        try { showToast('Pedido pronto ✨'); } catch(e){}
+        try { playReadySound(); } catch(e){}
+        if (id) { try{ _knownServed.add(id); }catch(e){} }
+      }
+      // Update served map + in-memory cache
+      const map = (typeof getServedMap==='function') ? (getServedMap()||{}) : {};
+      if (id) map[id] = served;
+      try { if (typeof setServedMap==='function') setServedMap(map); } catch(e){}
+      try {
+        window.__staffServedMem = window.__staffServedMem || {map:{}, ver: Date.now()};
+        window.__staffServedMem.map = map;
+        window.__staffServedMem.ver = Date.now();
+      } catch(e){}
+      try { render(); } catch(e){}
+    }catch(e){}
+  }
+
+  // Fallback: legacy storage polling notifier (safe no-op if absent)
+  try { if (typeof detectNewServedAndNotify==='function') detectNewServedAndNotify(); } catch(e){}
+
+}, {pollMs: 900});
+
 
   // initial
   render(); renderHistory();
@@ -693,11 +691,6 @@
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
 })();
-
-<script>
-// Minimal fallback: we now handle Pronto via served_update; keep this to avoid reference errors.
-function detectNewServedAndNotify(){ /* handled via served_update */ }
-</script>
 </script>
 
 
