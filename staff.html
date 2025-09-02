@@ -16,7 +16,8 @@
     button{background:#2d6cdf; color:#fff; border:0; padding:8px 10px; border-radius:8px; cursor:pointer}
     button.secondary{background:#444}
     .muted{opacity:.7; font-size:12px}
-  </style>
+  .readyPill{background:#11a34a;color:#fff;padding:2px 8px;border-radius:999px;font-size:12px;margin-left:8px}
+</style>
   <script>
     // Safe no-op guards (some older code references these)
     window.render = window.render || function(){};
@@ -27,6 +28,8 @@
   <header>
     <div class="badge">Staff</div>
     <div id="counts" class="badge">—</div>
+    <label class="badge" style="cursor:pointer;display:flex;align-items:center;gap:6px;">      <input id="soundToggle" type="checkbox" checked style="accent-color:#2d6cdf"/> Som ativo    </label>
+    <button id="clearAllBtn" class="secondary" style="margin-left:auto;">Limpar tudo</button>
     <div id="banner">Pronto!</div>
     <audio id="readySound" preload="auto" loop>
       <source src="/ready.mp3" type="audio/mpeg">
@@ -80,6 +83,7 @@
       readyEl.volume = 1; doneEl.volume = 1;
     }
     function startReadyLoop() {
+      try{ readyEl.loop = true; }catch{}
       primeSound();
       try { readyEl.currentTime = 0; readyEl.play().catch(()=>{}); } catch{}
     }
@@ -119,6 +123,9 @@
               ${o.confirmed ? '' : `<button data-action="confirm" data-id="${o.id}">Confirmar</button>`}
               <button class="secondary" data-action="served" data-id="${o.id}">Servido</button>
             </div>
+          </div>
+          <div class="row" style="justify-content:flex-start;gap:8px;">
+            ${o.isReady ? `<span class="readyPill">PRONTO</span>` : ''}
           </div>
           <ul class="items">${items}</ul>
           ${o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : ''}
@@ -193,6 +200,20 @@
 
     // Kick off anon auth
     signInAnonymously(auth).catch(()=>{});
+    /*SOUND_WIRING*/
+    const soundToggle = document.getElementById('soundToggle');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    function applySoundState(){ try{ readyEl.muted = soundToggle && !soundToggle.checked; doneEl.muted = soundToggle && !soundToggle.checked ? true : false; }catch{} }
+    if (soundToggle){ soundToggle.addEventListener('change', ()=>{ applySoundState(); if (soundToggle.checked){ primeSound(); if (prevPendingCount>0) startReadyLoop(); } else { stopReadyLoop(); } }); }
+    if (clearAllBtn){ clearAllBtn.addEventListener('click', ()=>{ stopReadyLoop(); bannerEl.style.display='none'; }); }
+    // Autoprime on first user gesture and when tab becomes visible
+    const __primeOnce = ()=>{ primeSound(); if (prevPendingCount>0 && (!soundToggle || soundToggle.checked)) startReadyLoop(); window.removeEventListener('pointerdown', __primeOnce); window.removeEventListener('keydown', __primeOnce); };
+    window.addEventListener('pointerdown', __primeOnce, {once:true});
+    window.addEventListener('keydown', __primeOnce, {once:true});
+    document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible') { primeSound(); if (prevPendingCount>0 && (!soundToggle || soundToggle.checked)) startReadyLoop(); } }, {once:true});
+    setTimeout(()=>{ primeSound(); if (prevPendingCount>0 && (!soundToggle || soundToggle.checked)) startReadyLoop(); }, 300);
+    applySoundState();
+
   </script>
 </body>
 </html>

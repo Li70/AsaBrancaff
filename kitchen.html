@@ -5,26 +5,51 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cozinha — Pedidos</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; margin:0; background:#101010; color:#eee}
-    header{padding:12px 16px; background:#1b1b1b; position:sticky; top:0; z-index:10; display:flex; gap:12px; align-items:center}
-    .badge{background:#2a2a2a; padding:6px 10px; border-radius:999px; font-size:12px}
-    main{padding:16px; display:grid; gap:12px}
-    .card{background:#1b1b1b; border:1px solid #2a2a2a; border-radius:12px; padding:12px}
+    :root{
+      --bg:#101010; --panel:#181818; --line:#2a2a2a; --text:#eee; --muted:#9aa3ab;
+      --accent:#2d6cdf; --green:#11a34a;
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; margin:0; background:var(--bg); color:var(--text)}
+    header{
+      padding:12px 16px; background:#121212; position:sticky; top:0; z-index:10;
+      display:flex; gap:12px; align-items:center; border-bottom:1px solid var(--line);
+    }
+    .badge{background:#1f1f1f; padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid var(--line)}
+    .right{margin-left:auto; display:flex; align-items:center; gap:12px}
+    label.switch{display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px}
+    label.switch input{accent-color:var(--accent)}
+    main{
+      padding:16px;
+      display:grid; gap:12px;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+    .card{
+      background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px;
+      display:flex; flex-direction:column; gap:8px; box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
+    }
     .row{display:flex; justify-content:space-between; align-items:center; gap:12px}
-    .items{margin:8px 0 0 16px}
-    label{display:flex; align-items:center; gap:8px}
-    .muted{opacity:.7; font-size:12px}
+    .title{font-weight:700; font-size:18px}
+    .items{margin:6px 0 0 16px}
+    .items li{margin:2px 0}
+    .muted{color:var(--muted); font-size:12px}
+    .pill{background:var(--green); color:#fff; padding:2px 8px; border-radius:999px; font-size:12px}
+    button{background:var(--accent); color:#fff; border:0; padding:8px 10px; border-radius:10px; cursor:pointer}
   </style>
 </head>
 <body>
   <header>
     <div class="badge">Cozinha</div>
-    <div id="counts" class="badge">—</div>
+    <div id="counts" class="badge">Ativos: —</div>
+    <div class="right">
+      <label class="switch"><input id="soundToggle" type="checkbox" checked/> Som ativo</label>
+    </div>
     <audio id="cashSound" preload="auto">
       <source src="/cash.mp3" type="audio/mpeg">
       <source src="cash.mp3" type="audio/mpeg">
     </audio>
   </header>
+
   <main id="list"></main>
 
   <script type="module">
@@ -32,6 +57,7 @@
     import { getFirestore, collection, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
+    // Firebase (project config)
     const firebaseConfig = {
       apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
       authDomain: "asabrancaff-faebe.firebaseapp.com",
@@ -41,46 +67,68 @@
       appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
     };
 
+    // Init
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
     const auth = getAuth(app);
     const ordersRef = collection(db, "orders");
 
+    // UI refs
     const listEl = document.getElementById("list");
     const countsEl = document.getElementById("counts");
     const cashEl = document.getElementById("cashSound");
+    const soundToggle = document.getElementById("soundToggle");
 
-    // Prime sound (best effort)
+    // Sound helpers
     let primed = false;
     function primeSound(){
       if (primed) return; primed = true;
-      cashEl.volume = 0;
-      cashEl.play().then(()=>cashEl.pause()).catch(()=>{});
-      cashEl.volume = 1;
+      try{
+        cashEl.volume = 0;
+        cashEl.play().then(()=>cashEl.pause()).catch(()=>{});
+        cashEl.volume = 1;
+      }catch{}
     }
-    async function playCash(){ primeSound(); try{ cashEl.currentTime = 0; await cashEl.play(); }catch{} }
+    function applySoundState(){ try{ cashEl.muted = soundToggle && !soundToggle.checked; }catch{} }
+    async function playCash(){
+      if (soundToggle && !soundToggle.checked) return;
+      primeSound();
+      try{ cashEl.currentTime = 0; await cashEl.play(); }catch{}
+    }
+    if (soundToggle){
+      soundToggle.addEventListener("change", ()=>{
+        applySoundState();
+        if (soundToggle.checked) primeSound();
+      });
+      applySoundState();
+    }
+    window.addEventListener("pointerdown", primeSound, {once:true});
+    window.addEventListener("keydown", primeSound, {once:true});
 
+    // Render helpers
     function esc(s){ const d=document.createElement("div"); d.textContent=String(s??""); return d.innerHTML; }
     function renderList(orders){
       listEl.innerHTML = "";
       if (!orders.length){
         listEl.innerHTML = '<div class="card muted">Sem pedidos confirmados.</div>';
+        countsEl.textContent = "Ativos: 0";
         return;
       }
       for (const o of orders){
-        const el = document.createElement("div");
-        el.className = "card";
+        const card = document.createElement("div");
+        card.className = "card";
         const items = (Array.isArray(o.items)?o.items:[]).map(i=>`<li>${esc(i.qty??1)} × ${esc(i.name||i.item||i.pizzaType||"")}</li>`).join("") || '<li class="muted">—</li>';
-        el.innerHTML = `
+        card.innerHTML = `
           <div class="row">
-            <strong>Mesa ${esc(o.table??"?")}</strong>
-            <label><input type="checkbox" data-action="ready" data-id="${o.id}" ${o.isReady?'checked':''}/> Pronto</label>
+            <div class="title">Mesa ${esc(o.table??"?")}</div>
+            <label class="switch"><input type="checkbox" data-action="ready" data-id="${o.id}" ${o.isReady?'checked':''}/> Pronto</label>
           </div>
           <ul class="items">${items}</ul>
           ${o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : ''}
         `;
-        listEl.appendChild(el);
+        listEl.appendChild(card);
       }
+      countsEl.textContent = "Ativos: " + orders.length;
     }
 
     // Checkbox handler
@@ -95,15 +143,14 @@
       }catch(e){ console.error(e); }
     });
 
+    // Realtime
     let prevIds = new Set();
-
     onAuthStateChanged(auth, (u)=>{
       if (!u) return;
       onSnapshot(ordersRef, (snap)=>{
         const orders = [];
-        let newCount = 0;
         const curIds = new Set();
-
+        let newCount = 0;
         snap.forEach(docSnap=>{
           const d = docSnap.data()||{};
           const o = {
@@ -116,23 +163,18 @@
             isReady: !!d.isReady,
             served: !!d.served
           };
-          // Kitchen lists only confirmed & not served
           if (o.confirmed && !o.served){
             orders.push(o);
             curIds.add(o.id);
             if (!prevIds.has(o.id)) newCount++;
           }
         });
-
         orders.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0) || a.id.localeCompare(b.id));
         renderList(orders);
-        countsEl.textContent = `Ativos: ${orders.length}`;
-
         if (newCount > 0) playCash();
         prevIds = curIds;
       });
     });
-
     signInAnonymously(auth).catch(()=>{});
   </script>
 </body>
