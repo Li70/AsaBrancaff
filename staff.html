@@ -21,8 +21,7 @@
     /* Ready styling */
     .card.ready { border-color: rgba(16,185,129,.6) !important; box-shadow: 0 0 0 2px rgba(16,185,129,.15); }
     .pill-ready { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#052e2b; border:1px solid rgba(16,185,129,.6); color:#a7f3d0; }
-  .danger{background:#b00020 !important}
-</style>
+  </style>
 
   <script>
   // --- Tiny UI helpers
@@ -69,9 +68,15 @@
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
 
-
-  
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL="https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
 
 </head>
 <body class="p-4">
@@ -158,7 +163,7 @@
   const doneEl=document.getElementById('doneSound');
 
   /* === Sound / alarm === */
-  let soundEnabled=true, audioCtx, fallbackLoop=null;
+  let soundEnabled=false, audioCtx, fallbackLoop=null;
   function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
   function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
   async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
@@ -170,7 +175,7 @@
   document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
 
   function startAlarm(msg){
-    if(!soundEnabled){ showBanner(msg); }
+    if(!soundEnabled){ showBanner(msg); return; }
     showBanner(msg);
     alertEl.play().catch(()=>{
       const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
@@ -193,33 +198,10 @@
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
   function priceForName(name){ const k=String(name||'').trim(); return (k in PRICE_INDEX)? Number(PRICE_INDEX[k]):0; }
-  
-function computeOrderTotal(order){
-  if (order && typeof order.totalCVE === 'number' && isFinite(order.totalCVE)) {
-    return Number(order.totalCVE)||0;
+  function computeOrderTotal(order){
+    if (typeof order.totalCVE==='number') return Number(order.totalCVE)||0;
+    let sum=0; for(const it of (order.items||[])){ sum += priceForName(it.pizzaType) * Number(it.qty||1); } return sum;
   }
-  function parseCVEFromText(txt){
-    try{
-      const digits = String(txt||'').replace(/\D/g,'');
-      if (!digits) return 0;
-      if (digits.length >= 4) return Math.round(Number(digits)/100);
-      return Number(digits);
-    }catch(e){ return 0; }
-  }
-  let sum = 0;
-  const items = Array.isArray(order && order.items) ? order.items : [];
-  for (const it of items){
-    const qty = Number(it && it.qty || 1) || 1;
-    let pn = 0;
-    if (it && typeof it.priceNum === 'number' && isFinite(it.priceNum) && it.priceNum > 0){
-      pn = Number(it.priceNum);
-    } else {
-      pn = parseCVEFromText(it && (it.price || it.pizzaType || it.name || it.label || it.desc));
-    }
-    sum += (Number(pn)||0) * qty;
-  }
-  return sum;
-}
 
   /* === render lists === */
   function render(){
@@ -338,27 +320,17 @@ function computeOrderTotal(order){
 
   /* === Actions === */
   function confirmOrder(id){
-    const all = getOrders();
-    const idx = all.findIndex(o=>String(o.id)===String(id));
-    if (idx<0) return;
-    all[idx].confirmed = true; all[idx].confirmedAt = Date.now();
+    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
+    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
     setOrders(all);
     bcPost({type:'orders_updated'});
-    // Only stop alarm if no unconfirmed orders remain
-    try{
-      const stillPending = getOrders().some(o=>!o.confirmed && !o.rejectedAt && !o.servedAt);
-      if (!stillPending) stopAlarm();
-    }catch(e){}
+    stopAlarm();
     render();
   }
   function rejectOrder(id){
-    var ok = true;
-    try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
-    if (!ok) return;
-    const keep = getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep);
-    bcPost({type:'orders_updated'});
-    render();
+    if(!confirm('Rejeitar este pedido?')) return;
+    const keep=getOrders().filter(o=>String(o.id)!==String(id));
+    setOrders(keep); bcPost({type:'orders_updated'}); render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
@@ -393,40 +365,17 @@ function computeOrderTotal(order){
     renderHistory();
   }
 
-  
   /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
   let _knownServed = new Set();
   function snapshotServedIds(){
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch (e) {
-      return new Set();
-    }
+    } catch { return new Set(); }
   }
+ 
 
-  // Detect newly marked-as-ready orders (from Kitchen/other devices) and notify once
-  function detectNewServedAndNotify(){
-    try {
-      const latest = snapshotServedIds();
-      let hasNew = false;
-      const all = (typeof getOrders==='function') ? getOrders() : [];
-      latest.forEach(function(id){
-        id = String(id);
-        if (!_knownServed.has(id)){
-          const o = all.find(function(x){ return String(x.id)===id; });
-          if (!o || o.confirmed) hasNew = true;
-        }
-      });
-      if (hasNew){
-        showToast('Pedido pronto ✨');
-        playReadySound();
-      }
-      _knownServed = latest;
-    } catch (e) { /* no-op */ }
-  }
-
-/* === subscriptions / polling === */
+  /* === subscriptions / polling === */
   subscribeAll((evt)=>{
     render(); 
     detectNewOrdersAndMaybeAlarm(); 
@@ -475,11 +424,6 @@ function computeOrderTotal(order){
     }catch(e){}
     return _get ? _get(k) : null;
   };
-    return true;
-  }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
-  }
 })();
 </script>
 
@@ -497,11 +441,89 @@ function computeOrderTotal(order){
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();
-    return true;
+})();
+</script>
+
+
+<!-- STAFF_CLOUD_ONLY_V3B -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    window.__cloudList = []; window.__cloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
+      if (k===VERSION_KEY) return String(window.__cloudVer);
+      return _get(k);
+    };
+    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
+  })();
+
+  function pickBetter(a,b){
+    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
+         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
+         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
+    return a;
   }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+  const cache=new Map(); const confirmedLatch=new Map();
+
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
+    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
+
+  function controlAlarm(list){
+    try{
+      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+      var prev = window.__prevHasUnconf || false;
+      window.__prevHasUnconf = hasUnconfirmed;
+      var el = document.getElementById('alertSound') || document.getElementById('readySound');
+      if (!el) return;
+      if (hasUnconfirmed && !prev){
+        try{
+          el.loop = true;
+          if (window.soundEnabled !== false){
+            var p = el.play();
+            if (p && typeof p.catch==='function'){ p.catch(function(){}); }
+          }
+        }catch(e){}
+      } else if (!hasUnconfirmed && prev){
+        try{ el.pause(); el.currentTime = 0; }catch(e){}
+      }
+    }catch(e){}
   }
+
+  function flush(){
+    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
+    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){};
+    window.__applyCloudList(list);
+    controlAlarm(list);
+  }
+
+  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
+
+  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
+    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
+
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
+  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
+      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
+
+  (function(){
+    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
+    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
+    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
+    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
+  })();
+
+  initial(); live(); poll();
 })();
 </script>
 
@@ -527,11 +549,6 @@ function computeOrderTotal(order){
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
-    return true;
-  }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
-  }
 })();
 </script>
 
@@ -572,11 +589,6 @@ function computeOrderTotal(order){
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
-    return true;
-  }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
-  }
 })();
 </script>
 
@@ -602,82 +614,6 @@ function computeOrderTotal(order){
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
-    return true;
-  }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
-  }
-})();
-</script>
-
-
-
-<!-- STAFF_FIREBASE_CLOUD_ONLY_V2 -->
-<script>
-(function(){
-  function init(){
-    const fb = window.__fb;
-    if (!fb) return false;
-
-  // Source of truth: Firestore
-  window.__cloudList = [];
-
-  // Make getOrders() return cloud list everywhere in the page
-  window.getOrders = function(){
-    return Array.isArray(window.__cloudList) ? window.__cloudList : [];
-  };
-  // setOrders becomes a no-op (we never write local)
-  window.setOrders = function(){ /* cloud only */ };
-
-  // Subscribe to all orders, oldest first
-  const qAll = fb.query(fb.ordersCol, fb.orderBy('createdAtMs','asc'));
-  fb.onSnapshot(qAll, (snap)=>{
-    const list = [];
-    snap.forEach(doc => {
-      const d = doc.data()||{};
-      list.push({
-        id: d.id || doc.id,
-        table: d.table,
-        items: d.items || [],
-        notes: d.notes || '',
-        totalCVE: d.totalCVE,
-        createdAt: d.createdAtMs || Date.now(),
-        confirmed: !!d.confirmed,
-        confirmedAt: d.confirmedAtMs || null,
-        isReady: !!d.isReady,
-        readyAt: d.readyAtMs || null
-      });
-    });
-    window.__cloudList = list;
-    try{ if (typeof render==='function') render(); }catch(e){}
-  });
-
-  // Cloud-write actions
-  window.confirmOrder = function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
-    }catch(e){ console.warn('confirmOrder cloud error', e); }
-  };
-  window.rejectOrder = function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      const ok = window.confirm('Rejeitar este pedido?');
-      if (!ok) return;
-      fb.deleteDoc(ref);
-    }catch(e){ console.warn('rejectOrder cloud error', e); }
-  };
-  window.markServedAndClear = function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      fb.updateDoc(ref, { isReady: true, readyAtMs: Date.now() });
-    }catch(e){ console.warn('markServed cloud error', e); }
-  };
-    return true;
-  }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
-  }
 })();
 </script>
 
@@ -708,11 +644,6 @@ function computeOrderTotal(order){
   }
   function run(){ removeLimparMesa(); removeMesaField(); }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
-    return true;
-  }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
-  }
 })();
 </script>
 
@@ -752,41 +683,6 @@ function computeOrderTotal(order){
     });
   }
   
-    return true;
-  }
-  if (!init()){
-    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
-  }
 })();
 </script>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-  const firebaseConfig = {
-  apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-  authDomain: "asabrancaff-faebe.firebaseapp.com",
-  projectId: "asabrancaff-faebe",
-  storageBucket: "asabrancaff-faebe.appspot.com",
-  messagingSenderId: "326390762122",
-  appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-};
-window.firebaseConfig = firebaseConfig;
-
-  const app = initializeApp(window.firebaseConfig);
-const db  = getFirestore(app);
-const auth = getAuth(app);
-
-window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
-        ordersCol: collection(db, "orders")
-      };
-window.__fbReady = false;
-onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
-signInAnonymously(auth).catch(()=>{});
-</script>
-
-
-</body>
-</html>
