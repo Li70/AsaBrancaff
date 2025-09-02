@@ -158,6 +158,41 @@
 
   <!-- sounds -->
   <audio id="alertSound" preload="auto" src="ready.mp3" loop></audio>
+<script>
+(function(){
+  const alertEl = document.getElementById('alertSound');
+  const candidatePaths = [
+    "/ready.mp3",
+    "ready.mp3",
+    "/assets/ready.mp3",
+    "/sounds/ready.mp3"
+  ];
+  async function findAudio() {
+    for (const path of candidatePaths) {
+      try {
+        const res = await fetch(path, { method: "HEAD", cache: "no-store" });
+        if (res.ok) {
+          alertEl.src = path;
+          return true;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    console.warn("ready.mp3 not found in any of:", candidatePaths);
+    return false;
+  }
+  alertEl.addEventListener('error', ()=>{
+    console.warn("Audio failed to load:", alertEl.currentSrc || alertEl.src);
+  });
+  try { findAudio(); } catch {}
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', findAudio, { once: true });
+  } else {
+    findAudio();
+  }
+  window.__resolveReadyMp3 = findAudio;
+})();
+</script>
+
   <audio id="doneSound" preload="auto" src="done.mp3"></audio>
 
   <script>
