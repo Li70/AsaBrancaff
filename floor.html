@@ -77,34 +77,6 @@
     window.bcPost = (msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
   })();
   </script>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc,
-    onSnapshot, serverTimestamp, query, where, orderBy
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const ordersCol = collection(db, "orders");
-  window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
-</script>
-<script type="module">
-  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  if (window.__fb?.app) {
-    signInAnonymously(getAuth(window.__fb.app)).catch(console.error);
-  }
-</script>
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
@@ -532,7 +504,9 @@
     }
     
 
-function sendOrder(){
+async function waitForFbReady(){ for(let i=0;i<50;i++){ if(window.__fbReady && window.__fb) return true; await new Promise(r=>setTimeout(r,200)); } return !!window.__fb; }
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function sendOrder(){
   if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
   const keys = Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
@@ -550,7 +524,8 @@ function sendOrder(){
   // Cloud only: Firestore write
   try{
     const fb = window.__fb;
-    if (fb){
+    if (!(await waitForFbReady())) { console.warn('Firebase not ready yet, retrying write'); await delay(300); }
+    if (window.__fb){
       const data = { id, table:String(selectedTable), items, notes:(notesDesktop?.value||notesMobile?.value||''), totalCVE:Math.round(total), createdAtMs:Date.now(), confirmed:false, isReady:false };
       fb.setDoc(fb.doc(fb.db, 'orders', id), data);
     } else {
@@ -594,5 +569,31 @@ function sendOrder(){
 
 
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  window.firebaseConfig = firebaseConfig;
+
+  const app = initializeApp(window.firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+
+  window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
+        ordersCol: collection(db, "orders")
+      };
+  window.__fbReady = false;
+  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
+  signInAnonymously(auth).catch(()=>{});
+</script>
 </body>
 </html>
