@@ -462,10 +462,22 @@ function computeOrderTotal(order){
     } catch (e) { /* no-op */ }
   }
 
+let __lastPendingCount = 0;
 /* === subscriptions / polling === */
   subscribeAll((evt)=>{
     render(); 
-    detectNewOrdersAndMaybeAlarm(); 
+    // Alarm behavior based on pending count
+try {
+  const pendingCount = (typeof getOrders==='function')
+    ? getOrders().filter(o => !o.confirmed).length : 0;
+  if (pendingCount > 0 && __lastPendingCount === 0) {
+    startAlarm(pendingCount === 1 ? 'Novo pedido recebido!' : pendingCount + ' novos pedidos recebidos!');
+  } else if (pendingCount === 0 && __lastPendingCount !== 0) {
+    stopAlarm();
+  }
+  __lastPendingCount = pendingCount;
+} catch (e) { /* no-op */ }
+detectNewOrdersAndMaybeAlarm(); 
     renderHistory();
 
     // Direct broadcast from Kitchen
@@ -679,12 +691,17 @@ function computeOrderTotal(order){
     }catch(e){ console.warn('rejectOrder cloud error', e); }
   };
   window.markServedAndClear = async function(id){
+  try {
     if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      await fb.updateDoc(ref, { served: true, servedAtMs: Date.now() });
-    }catch(e){ console.warn('markServed cloud error', e); }
-  };
+    const fb = window.__fb;
+    if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
+    const ref = fb.doc(fb.db, 'orders', String(id));
+    await fb.deleteDoc(ref);
+  } catch (e) {
+    console.warn('Erro ao marcar servido/remover:', e);
+    try{ alert('Falha ao remover pedido. Ver consola.'); }catch(_){}
+  }
+};
 }
   if (window.__fb) init(); else {
     const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
@@ -783,3 +800,16 @@ function computeOrderTotal(order){
 
 </body>
 </html>
+
+<script>
+(function(){
+  function maybeStopAlarmWhenNoPending(){
+    try{
+      const hasPending = (typeof getOrders==='function') && getOrders().some(o=>!o.confirmed);
+      if (!hasPending && typeof stopAlarm==='function') stopAlarm();
+    }catch(e){}
+  }
+  document.addEventListener('orders:rendered', maybeStopAlarmWhenNoPending);
+  setInterval(maybeStopAlarmWhenNoPending, 2000);
+})();
+</script>

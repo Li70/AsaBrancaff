@@ -487,7 +487,7 @@ const ordersDiv = document.getElementById('orders');
   const hideServedChk = document.getElementById('hideServedChk');
 
   function formatCVE(n){ return `${Math.floor(Number(n)||0)}$00`; }
-  function esc(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;'); }
+  function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
   async function playSound(){ try{ cashEl.currentTime=0; await cashEl.play(); }catch{} }
 
   let knownIds = new Set();
