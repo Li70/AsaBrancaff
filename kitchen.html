@@ -353,6 +353,11 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -431,6 +436,11 @@
   })();
 
   refreshAll(false); live(); poll();
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -499,12 +509,17 @@
     if (novos>0){ try{ banner.classList.remove('hidden'); setTimeout(()=>banner.classList.add('hidden'), 2000); }catch{}; playSound(); }
     knownIds = new Set(list.map(o=>String(o.id)));
   });
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
   const firebaseConfig = {
@@ -521,9 +536,9 @@ window.firebaseConfig = firebaseConfig;
 const db  = getFirestore(app);
 const auth = getAuth(app);
 
-window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot,
-  ordersCol: collection(db, "orders")
-};
+window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
+        ordersCol: collection(db, "orders")
+      };
 window.__fbReady = false;
 onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
 signInAnonymously(auth).catch(()=>{});

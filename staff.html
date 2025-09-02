@@ -474,6 +474,11 @@ function computeOrderTotal(order){
     }catch(e){}
     return _get ? _get(k) : null;
   };
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -491,6 +496,11 @@ function computeOrderTotal(order){
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -516,6 +526,11 @@ function computeOrderTotal(order){
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -556,6 +571,11 @@ function computeOrderTotal(order){
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -581,6 +601,11 @@ function computeOrderTotal(order){
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -589,8 +614,9 @@ function computeOrderTotal(order){
 <!-- STAFF_FIREBASE_CLOUD_ONLY_V2 -->
 <script>
 (function(){
-  const fb = window.__fb;
-  if (!fb) { /* fb not ready (suppressed) */; return; }
+  function init(){
+    const fb = window.__fb;
+    if (!fb) return false;
 
   // Source of truth: Firestore
   window.__cloudList = [];
@@ -646,6 +672,11 @@ function computeOrderTotal(order){
       fb.updateDoc(ref, { isReady: true, readyAtMs: Date.now() });
     }catch(e){ console.warn('markServed cloud error', e); }
   };
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -676,6 +707,11 @@ function computeOrderTotal(order){
   }
   function run(){ removeLimparMesa(); removeMesaField(); }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
@@ -715,12 +751,17 @@ function computeOrderTotal(order){
     });
   }
   
+    return true;
+  }
+  if (!init()){
+    let tries=0; const t=setInterval(()=>{ if(init()){clearInterval(t);} else if(++tries>50){clearInterval(t); console.warn('Firebase still not ready; gave up starting listeners.');}}, 200);
+  }
 })();
 </script>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
   const firebaseConfig = {
@@ -737,9 +778,9 @@ window.firebaseConfig = firebaseConfig;
 const db  = getFirestore(app);
 const auth = getAuth(app);
 
-window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot,
-  ordersCol: collection(db, "orders")
-};
+window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
+        ordersCol: collection(db, "orders")
+      };
 window.__fbReady = false;
 onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
 signInAnonymously(auth).catch(()=>{});
