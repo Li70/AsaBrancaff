@@ -449,8 +449,9 @@
 <!-- KITCHEN_FIREBASE_CLOUD_ONLY_V2 -->
 <script>
 (function(){
-  const fb = window.__fb; if (!fb) { console.warn('Firebase not ready on Kitchen.'); return; }
-  const ordersDiv = document.getElementById('orders');
+  function init(){
+    const fb = window.__fb;
+const ordersDiv = document.getElementById('orders');
   const banner = document.getElementById('banner');
   const cashEl = document.getElementById('cashSound');
   const hideServedChk = document.getElementById('hideServedChk');
@@ -509,7 +510,13 @@
     if (novos>0){ try{ banner.classList.remove('hidden'); setTimeout(()=>banner.classList.add('hidden'), 2000); }catch{}; playSound(); }
     knownIds = new Set(list.map(o=>String(o.id)));
   });
+}}
+  if (window.__fb) init(); else {
+    const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
+    setTimeout(()=> clearInterval(t), 8000);
+  }
 })();
+
 </script>
 
 <script type="module">
