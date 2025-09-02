@@ -513,26 +513,27 @@ function computeOrderTotal(order){
 let __lastPendingCount = 0;
 /* === subscriptions / polling === */
   let __lastReadySet = new Set();
-  subscribeAll((evt)=>{
-    render(); 
-    // Alarm behavior based on pending count
-try {
-  const pendingCount = (typeof getOrders==='function')
-    ? getOrders().filter(o => !o.confirmed).length : 0;
-  if (pendingCount > 0 && __lastPendingCount === 0) {
-    startAlarm(pendingCount === 1 ? 'Novo pedido recebido!' : pendingCount + ' novos pedidos recebidos!');
-  } else if (pendingCount === 0 && __lastPendingCount !== 0) {
-    stopAlarm();
-  }
-  __lastPendingCount = pendingCount;/* READY-DETECT */
-try {
-  const readyNow = new Set(
-    (typeof getOrders==='function')
-      ? getOrders().filter(o => o.confirmed && !o.served && (o.isReady === true)).map(o => String(o.id))
-      : []
-  );
-  let newReadyIds = [];
-  readyNow.forEach(id => { if (!__lastReadySet.has(id)) newReadyIds.push(id); });
+  function __evaluateAlarmsAndReady(){
+  try {
+    const orders = (typeof getOrders==='function') ? getOrders() : [];
+    const pendingCount = orders.filter(o => !o.confirmed).length;
+    if (pendingCount > 0 && __lastPendingCount === 0) {
+      startAlarm(pendingCount === 1 ? 'Novo pedido recebido!' : pendingCount + ' novos pedidos recebidos!');
+    } else if (pendingCount === 0 && __lastPendingCount !== 0) {
+      stopAlarm();
+    }
+    __lastPendingCount = pendingCount;
+    const readyNow = new Set(orders.filter(o => o.confirmed && !o.served && (o.isReady === true)).map(o => String(o.id)));
+    let newReadyIds = [];
+    readyNow.forEach(id => { if (!__lastReadySet.has(id)) newReadyIds.push(id); });
+    if (newReadyIds.length > 0) {
+      playDone(newReadyIds.length === 1 ? 'Pronto!' : (newReadyIds.length + ' pedidos prontos!'));
+    }
+    __lastReadySet = readyNow;
+  } catch (e) { /* ignore */ }
+}
+  let __lastReadySet = new Set();
+  subscribeAll((evt)=>{ render(); __evaluateAlarmsAndReady(); });
   if (newReadyIds.length > 0) {
     playDone(newReadyIds.length === 1 ? 'Pronto!' : (newReadyIds.length + ' pedidos prontos!'));
   }
@@ -733,6 +734,7 @@ detectNewOrdersAndMaybeAlarm();
     });
     window.__cloudList = list;
     try{ if (typeof render==='function') render(); }catch(e){}
+    try{ __evaluateAlarmsAndReady(); }catch(e){}
   });
 
   // Cloud-write actions

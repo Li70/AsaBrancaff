@@ -547,39 +547,32 @@ const ordersDiv = document.getElementById('orders');
   }
 
   const qConf = fb.ordersCol;
-  fb.onSnapshot(qConf, (snap)=>{
-    const list=[]; let novos=0;
-    snap.forEach(doc=>{
-      const d = doc.data() || {};
-      if (d && d.confirmed===true && d.served!==true){
-        list.push({
-          id: String(doc.id),
-          table: d.table ?? null,
-          items: Array.isArray(d.items) ? d.items : [],
-          notes: d.notes || '',
-          createdAtMs: d.createdAtMs || 0,
-          confirmed: !!d.confirmed,
-          isReady: !!d.isReady,
-          readyAtMs: d.readyAtMs || null,
-          served: !!d.served
-        });
-      }
-      if (!knownIds.has(String(doc.id))) novos++;
-    });
-
-    });
-    list.sort((a,b)=> (a.createdAtMs||0) - (b.createdAtMs||0));
-    window.__cloudList = list; window.__cloudList = list; renderList(list);
-    if (novos>0){ try{ banner.classList.remove('hidden'); setTimeout(()=>banner.classList.add('hidden'), 2000); }catch{}; playSound(); }
-    knownIds = new Set(list.map(o=>String(o.id)));
+fb.onSnapshot(qConf, (snap)=>{
+  const list = [];
+  let novos = 0;
+  snap.forEach(doc=>{
+    const d = doc.data() || {};
+    if (d && d.confirmed===true && d.served!==true){
+      list.push({
+        id: String(doc.id),
+        table: d.table ?? null,
+        items: Array.isArray(d.items) ? d.items : [],
+        notes: d.notes || '',
+        createdAtMs: d.createdAtMs || 0,
+        confirmed: !!d.confirmed,
+        isReady: !!d.isReady,
+        readyAtMs: d.readyAtMs || null,
+        served: !!d.served
+      });
+    }
+    if (!knownIds.has(String(doc.id))) novos++;
   });
-}
-  if (window.__fb) init(); else {
-    const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
-    setTimeout(()=> clearInterval(t), 8000);
-  }
-})();
-
+  list.sort((a,b)=> (a.createdAtMs||0) - (b.createdAtMs||0));
+  window.__cloudList = list;
+  renderList(list);
+  if (novos > 0) { try{ playSound(); }catch(e){} }
+  knownIds = new Set(list.map(o=>String(o.id)));
+});
 </script>
 
 <script type="module">
