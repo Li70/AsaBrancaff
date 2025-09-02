@@ -756,61 +756,63 @@
 })();
 </script>
 
-
-<!-- CLOUD_ONLY_V1 (staff) -->
+<!-- CLOUD_ONLY_V2 (staff) -->
 <script>
 (function(){
-  // In-memory state fed by Firestore
+  // In-memory cloud state
   window.__cloudOrders = window.__cloudOrders || [];
   window.__readyMap    = window.__readyMap || {};
 
-  // Override local getters/setters so UI code never touches localStorage
+  // Always ignore localStorage for data
+  try { window.getOrders = function(){ return Array.from(window.__cloudOrders||[]); }; } catch(e){}
+  try { window.getAllOrders = function(){ return Array.from(window.__cloudOrders||[]); }; } catch(e){}
+  try { window.setOrders = function(_){ /* no-op in cloud mode */ }; } catch(e){}
   try {
-    window.getOrders = function(){ try{ return Array.from(window.__cloudOrders||[]); }catch{ return []; } };
-  } catch(e) {}
-  try {
-    // Some pages use getAllOrders(); mirror to getOrders()
-    window.getAllOrders = function(){ try{ return Array.from(window.__cloudOrders||[]); }catch{ return []; } };
-  } catch(e) {}
-  try {
-    window.setOrders = function(_arr){ /* ignored in cloud-only mode */ };
-  } catch(e) {}
-  try {
-    window.getServedMap = function(){ try{ return Object.assign({}, window.__readyMap||{}); }catch{ return {}; } };
+    window.getServedMap = function(){ try{ return Object.assign({}, window.__readyMap||{}); }catch(e){ return {}; } };
     window.setServedMap = function(m){ try{ window.__readyMap = Object.assign({}, m||{}); window.__staffServedMem = {map: window.__readyMap, ver: Date.now()}; }catch(e){} };
-  } catch(e) {}
+  } catch(e){}
 
-  // Live subscription from Firestore via Parse shim
+  function _renderAll(){
+    try { if (typeof render==='function') render(); } catch(e){}
+    try { if (typeof renderHistory==='function') renderHistory(); } catch(e){}
+  }
+
+  function _applySnapshot(rows){
+    try {
+      const arr = rows.map(r => (r._data || r || {}));
+      arr.forEach(o => { if (!('orderId' in o)) o.orderId = String(o.id||''); if (!('id' in o)) o.id = Number(o.orderId||0); });
+      window.__cloudOrders = arr;
+      const map = {};
+      arr.forEach(o => { map[String(o.orderId||o.id||'')] = !!o.isReady; });
+      window.__readyMap = map;
+      window.__staffServedMem = { map, ver: Date.now() };
+      _renderAll();
+    } catch(e){}
+  }
+
   function startCloudFeed(){
     try { if (!window.Parse) return; } catch(e) { return; }
     try {
       const Order = Parse.Object.extend('Order');
       const q = new Parse.Query(Order);
       q.limit(1000);
-      async function apply() {
-        try {
-          const rows = await q.find();
-          const arr  = rows.map(r => (r._data || {}));
-          // normalize id/orderId for UI
-          arr.forEach(o => { if (!('orderId' in o)) o.orderId = String(o.id||''); if (!('id' in o)) o.id = Number(o.orderId||0); });
-          window.__cloudOrders = arr;
-          // ready map
-          const map = {};
-          arr.forEach(o => { map[String(o.orderId||o.id||'')] = !!o.isReady; });
-          window.__readyMap = map;
-          try { window.__staffServedMem = { map: map, ver: Date.now() }; } catch(e){}
-          try { if (typeof render==='function') render(); } catch(e){}
-          try { if (typeof renderHistory==='function') renderHistory(); } catch(e){}
-        } catch(e){}
-      }
+      // Initial fetch
+      q.find().then(_applySnapshot).catch(()=>{});
+      // Live subscription
       const sub = q.subscribe();
-      sub.on('create', apply); sub.on('update', apply); sub.on('delete', apply);
-      apply();
+      const onchg = () => q.find().then(_applySnapshot).catch(()=>{});
+      try { sub.on('create', onchg); sub.on('update', onchg); sub.on('delete', onchg); } catch(e){}
     } catch(e) { }
   }
 
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', startCloudFeed, {once:true});
-  else startCloudFeed();
+  // Wait for Firebase Auth before subscribing
+  (function ensureAuthThenStart(){
+    try {
+      const fb = window.__fb || {}, auth = fb.auth;
+      if (!auth || typeof auth.onAuthStateChanged !== 'function') { startCloudFeed(); return; }
+      auth.onAuthStateChanged(function(u){ if (u) startCloudFeed(); });
+    } catch(e) { startCloudFeed(); }
+  })();
 })();
 </script>
 
