@@ -15,6 +15,130 @@
     .items li { list-style: disc; margin-left: 1.25rem; }
     details summary { cursor: pointer; }
   </style>
+
+<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app);
+  signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  // === Minimal Parse compatibility shim (Firestore-backed) ===
+  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
+
+  class _ParseObject {
+    constructor(className){
+      this.className = className;
+      this._data = {};
+      this.id = null;
+    }
+    set(k,v){ this._data[k]=v; }
+    get(k){ return this._data[k]; }
+    async save(){
+      // ensure defaults so `doesNotExist` can be emulated via `== null`
+      if (this.className==='Order'){
+        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
+        if (!('servedAt' in this._data)) this._data.servedAt = null;
+        if (!('confirmed' in this._data)) this._data.confirmed = false;
+      }
+      const cname = colNameFromClass(this.className);
+      const id = String(this._data.orderId || this.id || Date.now());
+      this.id = id;
+      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
+      return this;
+    }
+    async destroy(){
+      const cname = colNameFromClass(this.className);
+      if (!this.id) return;
+      await deleteDoc(doc(collection(db, cname), this.id));
+    }
+  }
+
+  const Parse = {};
+  Parse.applicationId = "firebase-shim";
+  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  Parse.serverURL = "";
+  Parse.liveQueryServerURL = "";
+  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
+
+  Parse.Object = {
+    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
+  };
+
+  Parse.Query = class {
+    constructor(Cls){
+      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
+      this._w = [];
+      this._order = null;
+      this._limit = 1000;
+    }
+    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    limit(n){ this._limit = n; return this; }
+    ascending(f){ this._order = ['asc', f]; return this; }
+    descending(f){ this._order = ['desc', f]; return this; }
+    _build(){
+      const cname = colNameFromClass(this.className);
+      let ref = collection(db, cname);
+      const terms = this._w.map(([f,op,v])=> where(f, op, v));
+      let qref = terms.length ? query(ref, ...terms) : ref;
+      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
+      return qref;
+    }
+    async find(){
+      const qref = this._build();
+      const snap = await getDocs(qref);
+      const arr = [];
+      snap.forEach(d=>{
+        const Obj = Parse.Object.extend(this.className);
+        const o = new Obj();
+        o.id = d.id; o._data = d.data() || {};
+        arr.push(o);
+      });
+      return arr.slice(0, this._limit);
+    }
+    async first(){
+      this.limit(1);
+      const a = await this.find();
+      return a[0]||null;
+    }
+    subscribe(){
+      const listeners = { create:[], update:[], delete:[] };
+      const unsub = onSnapshot(this._build(), (snap)=>{
+        snap.docChanges().forEach(ch=>{
+          const Obj = Parse.Object.extend(this.className);
+          const o = new Obj();
+          o.id = ch.doc.id; o._data = ch.doc.data() || {};
+          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+        });
+      });
+      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
+    }
+  };
+
+  // Expose for the rest of the page
+  window.Parse = Parse;
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
+</script>
+
 </head>
 <body class="p-4">
   <div class="max-w-5xl mx-auto">
@@ -327,52 +451,132 @@
       cashEl.play().catch(playFallback);
     }
   </script>
+</script>
 
-<!-- === Remote sync: Firebase Realtime Database (REST) === -->
+
+
+
+
+<!-- KITCHEN_SERVED_VIRTUAL_RO_V1 -->
 <script>
-  const FB_URL = 'https://console.firebase.google.com/project/asabranca-orders/database/asabranca-orders-default-rtdb/data/~2F';
-  const ORDERS_KEY = 'orders_simple_v4';
-  const VERSION_KEY = 'orders_simple_v4_ver';
-  function arr(v){ return Array.isArray(v)?v:(v?Object.values(v):[]); }
+(function(){
+  var SERVED_KEY = 'orders_served';
+  var SERVED_VERSION = 'orders_served_version';
+  var _get = null;
+  try{ _get = localStorage.getItem.bind(localStorage); }catch(e){}
+  function servedMapFromCloud(){
+    try{
+      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
+      var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
+      return m;
+    }catch(e){ return {}; }
+  }
+  localStorage.getItem = function(k){
+    try{
+      if (k===SERVED_KEY){ return JSON.stringify(servedMapFromCloud()); }
+      if (k===SERVED_VERSION){ return String(Date.now()); }
+    }catch(e){}
+    return _get ? _get(k) : null;
+  };
+})();
+</script>
 
-  async function remotePull(){
-    try {
-      const r = await fetch(FB_URL + '/orders.json');
-      const data = await r.json();
-      const list = arr(data);
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(list));
-      localStorage.setItem(VERSION_KEY, String(Date.now()));
-      if (typeof bcPost === 'function') bcPost({type:'orders_updated'});
-    } catch(e) { console.warn('remotePull failed', e); }
+
+
+
+
+<!-- REMOVE_FILTERTABLE_V2 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
   }
-  function remotePut(order){
-    try {
-      fetch(FB_URL + '/orders/' + encodeURIComponent(order.id) + '.json', {
-        method: 'PUT',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(order)
-      });
-    } catch(e) { console.warn('remotePut failed', e); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- KITCHEN_CLOUD_ONLY_V3B -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    window.__kCloudList = []; window.__kCloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList);
+      if (k===VERSION_KEY) return String(window.__kCloudVer);
+      return _get(k);
+    };
+    window.__kApply = function(list,withAlerts){ try{ list = (list||[]).map(function(x){ return (x && x.id && x.items) ? x : toPlain(x); }); }catch(e){}
+      window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
+  })();
+
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+      createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
+  function pickBetter(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
+  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+
+  async function refreshAll(playAlerts){
+    try{
+      const q=new Parse.Query(Order);
+      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+      q.limit(1000);
+      const res=await q.find();
+      const best = coalesceById(res).map(toPlain);
+      window.__kApply(best, !!playAlerts);
+}catch(e){}
   }
-  function remotePatch(id, patch){
-    try {
-      fetch(FB_URL + '/orders/' + encodeURIComponent(id) + '.json', {
-        method: 'PATCH',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(patch)
-      });
-    } catch(e) { console.warn('remotePatch failed', e); }
-  }
-  function remoteDelete(id){
-    try {
-      fetch(FB_URL + '/orders/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
-    } catch(e) { console.warn('remoteDelete failed', e); }
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
+  function poll(){ setInterval(()=>refreshAll(false), 5000); }
+
+  function updateLocalReadyFromMap(map){
+    try{
+      const arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
+      arr.forEach(function(o){ if (Object.prototype.hasOwnProperty.call(map, String(o.id))) o.isReady = !!map[String(o.id)]; });
+      window.__kApply(arr, false);
+    }catch(e){}
   }
 
-  // Poll the shared database to keep localStorage in sync across devices
-  setInterval(remotePull, 1000);
-  // Also pull once on load
-  remotePull();
+  (function(){
+    const orig = window.saveServed;
+    if (!orig) return;
+    window.saveServed = function(map){
+      (async ()=>{
+        try{
+          for (const id in (map||{})){
+            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+            const ready = !!map[id];
+            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
+            const res=await q.find();
+            if (res && res.length){
+              for (const obj of res){
+                if (!!obj.get('isReady') !== ready){
+                  obj.set('isReady', ready);
+                  await obj.save();
+                }
+              }
+            }
+          }
+          updateLocalReadyFromMap(map); // instant checkbox sync locally
+        }catch(e){}
+      })();
+      return orig.apply(this, arguments);
+    };
+  })();
+
+  refreshAll(false); live(); poll();
+})();
 </script>
 
 </body>

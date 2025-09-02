@@ -68,6 +68,130 @@
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
+
+<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app);
+  signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  // === Minimal Parse compatibility shim (Firestore-backed) ===
+  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
+
+  class _ParseObject {
+    constructor(className){
+      this.className = className;
+      this._data = {};
+      this.id = null;
+    }
+    set(k,v){ this._data[k]=v; }
+    get(k){ return this._data[k]; }
+    async save(){
+      // ensure defaults so `doesNotExist` can be emulated via `== null`
+      if (this.className==='Order'){
+        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
+        if (!('servedAt' in this._data)) this._data.servedAt = null;
+        if (!('confirmed' in this._data)) this._data.confirmed = false;
+      }
+      const cname = colNameFromClass(this.className);
+      const id = String(this._data.orderId || this.id || Date.now());
+      this.id = id;
+      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
+      return this;
+    }
+    async destroy(){
+      const cname = colNameFromClass(this.className);
+      if (!this.id) return;
+      await deleteDoc(doc(collection(db, cname), this.id));
+    }
+  }
+
+  const Parse = {};
+  Parse.applicationId = "firebase-shim";
+  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  Parse.serverURL = "";
+  Parse.liveQueryServerURL = "";
+  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
+
+  Parse.Object = {
+    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
+  };
+
+  Parse.Query = class {
+    constructor(Cls){
+      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
+      this._w = [];
+      this._order = null;
+      this._limit = 1000;
+    }
+    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    limit(n){ this._limit = n; return this; }
+    ascending(f){ this._order = ['asc', f]; return this; }
+    descending(f){ this._order = ['desc', f]; return this; }
+    _build(){
+      const cname = colNameFromClass(this.className);
+      let ref = collection(db, cname);
+      const terms = this._w.map(([f,op,v])=> where(f, op, v));
+      let qref = terms.length ? query(ref, ...terms) : ref;
+      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
+      return qref;
+    }
+    async find(){
+      const qref = this._build();
+      const snap = await getDocs(qref);
+      const arr = [];
+      snap.forEach(d=>{
+        const Obj = Parse.Object.extend(this.className);
+        const o = new Obj();
+        o.id = d.id; o._data = d.data() || {};
+        arr.push(o);
+      });
+      return arr.slice(0, this._limit);
+    }
+    async first(){
+      this.limit(1);
+      const a = await this.find();
+      return a[0]||null;
+    }
+    subscribe(){
+      const listeners = { create:[], update:[], delete:[] };
+      const unsub = onSnapshot(this._build(), (snap)=>{
+        snap.docChanges().forEach(ch=>{
+          const Obj = Parse.Object.extend(this.className);
+          const o = new Obj();
+          o.id = ch.doc.id; o._data = ch.doc.data() || {};
+          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+        });
+      });
+      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
+    }
+  };
+
+  // Expose for the rest of the page
+  window.Parse = Parse;
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
+</script>
+
 </head>
 <body class="p-4">
   <!-- sound controls -->
@@ -313,7 +437,6 @@
     const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
     all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
     setOrders(all);
-    try{ remotePatch(id,{ confirmed:true, confirmedAt: Date.now() }); }catch(e){}
     bcPost({type:'orders_updated'});
     stopAlarm();
     render();
@@ -321,8 +444,7 @@
   function rejectOrder(id){
     if(!confirm('Rejeitar este pedido?')) return;
     const keep=getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep);
-    try{ remoteDelete(id); }catch(e){} bcPost({type:'orders_updated'}); render();
+    setOrders(keep); bcPost({type:'orders_updated'}); render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
@@ -390,52 +512,291 @@
   _knownServed = snapshotServedIds();
   </script>
 
-<!-- === Remote sync: Firebase Realtime Database (REST) === -->
+
+
+
+
+
+
+<!-- STAFF_SERVED_VIRTUAL_V2 -->
 <script>
-  const FB_URL = 'https://console.firebase.google.com/project/asabranca-orders/database/asabranca-orders-default-rtdb/data/~2F';
-  const ORDERS_KEY = 'orders_simple_v4';
-  const VERSION_KEY = 'orders_simple_v4_ver';
-  function arr(v){ return Array.isArray(v)?v:(v?Object.values(v):[]); }
+(function(){
+  var SERVED_KEY = 'orders_served';
+  var SERVED_VERSION = 'orders_served_version';
+  var _get = null;
+  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
+  localStorage.getItem = function(k){
+    try{
+      if (k===SERVED_KEY){
+        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
+        return JSON.stringify(m);
+      }
+      if (k===SERVED_VERSION){
+        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
+        return String(v);
+      }
+    }catch(e){}
+    return _get ? _get(k) : null;
+  };
+})();
+</script>
 
-  async function remotePull(){
-    try {
-      const r = await fetch(FB_URL + '/orders.json');
-      const data = await r.json();
-      const list = arr(data);
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(list));
-      localStorage.setItem(VERSION_KEY, String(Date.now()));
-      if (typeof bcPost === 'function') bcPost({type:'orders_updated'});
-    } catch(e) { console.warn('remotePull failed', e); }
+
+<!-- REMOVE_FILTERTABLE_V2 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
   }
-  function remotePut(order){
-    try {
-      fetch(FB_URL + '/orders/' + encodeURIComponent(order.id) + '.json', {
-        method: 'PUT',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(order)
-      });
-    } catch(e) { console.warn('remotePut failed', e); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- STAFF_CLOUD_ONLY_V3B -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    window.__cloudList = []; window.__cloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
+      if (k===VERSION_KEY) return String(window.__cloudVer);
+      return _get(k);
+    };
+    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
+  })();
+
+  function pickBetter(a,b){
+    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
+         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
+         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
+    return a;
   }
-  function remotePatch(id, patch){
-    try {
-      fetch(FB_URL + '/orders/' + encodeURIComponent(id) + '.json', {
-        method: 'PATCH',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(patch)
-      });
-    } catch(e) { console.warn('remotePatch failed', e); }
-  }
-  function remoteDelete(id){
-    try {
-      fetch(FB_URL + '/orders/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
-    } catch(e) { console.warn('remoteDelete failed', e); }
+  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+  const cache=new Map(); const confirmedLatch=new Map();
+
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
+    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
+
+  function controlAlarm(list){
+    try{
+      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+      var prev = window.__prevHasUnconf || false;
+      window.__prevHasUnconf = hasUnconfirmed;
+      var el = document.getElementById('alertSound') || document.getElementById('readySound');
+      if (!el) return;
+      if (hasUnconfirmed && !prev){
+        try{
+          el.loop = true;
+          if (window.soundEnabled !== false){
+            var p = el.play();
+            if (p && typeof p.catch==='function'){ p.catch(function(){}); }
+          }
+        }catch(e){}
+      } else if (!hasUnconfirmed && prev){
+        try{ el.pause(); el.currentTime = 0; }catch(e){}
+      }
+    }catch(e){}
   }
 
-  // Poll the shared database to keep localStorage in sync across devices
-  setInterval(remotePull, 1000);
-  // Also pull once on load
-  remotePull();
+  function flush(){
+    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
+    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){};
+    window.__applyCloudList(list);
+    controlAlarm(list);
+  }
+
+  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
+
+  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
+    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
+
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
+  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
+      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
+
+  (function(){
+    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
+    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
+    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
+    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
+  })();
+
+  initial(); live(); poll();
+})();
+</script>
+
+
+<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
+<script>
+(function() {
+  function attach() {
+    try {
+      var btn = document.getElementById('clearAllBtn');
+      if (!btn || btn.__wiredClearAllRemoveV1) return;
+      btn.__wiredClearAllRemoveV1 = true;
+      btn.addEventListener('click', function(ev) {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
+        try { 
+          if (typeof setOrders === 'function') setOrders([]);
+          if (typeof setServedMap === 'function') setServedMap({});
+          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
+          if (typeof render === 'function') render();
+        } catch(e){}
+      }, true);
+    } catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
+<script>
+(function(){
+  function attach(){
+    try{
+      var btn = document.getElementById('clearAllBtn');
+      if (!btn || btn.__wiredClearAllV2) return;
+      btn.__wiredClearAllV2 = true;
+      btn.addEventListener('click', function(ev){
+        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+        var ok = true;
+        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
+        if (!ok) return false;
+        (async function(){
+          // Optional: Cloud reject so they don't come back after refresh
+          if (window.Parse && Parse.applicationId) {
+            try{
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
+          }
+          // Local UI clear (always)
+          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
+          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
+          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
+          try{ if (typeof render==='function') render(); }catch(e){}
+        })();
+      }, true);
+    }catch(e){}
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- STAFF_ATUALIZAR_RELOAD_V1 -->
+<script>
+(function(){
+  function attach(){
+    try{
+      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+      nodes.forEach(function(n){
+        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+        if (t==='atualizar' || t==='actualizar' || n.id==='refreshBtn') {
+          if (n.__wiredRefreshV1) return;
+          n.__wiredRefreshV1 = true;
+          n.addEventListener('click', function(ev){
+            try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+            try{ location.reload(); }catch(e){}
+          }, true);
+        }
+      });
+    }catch(e){}
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
 </script>
 
 </body>
 </html>
+
+
+
+
+
+
+<!-- STAFF_DOM_TWEAKS_V2 -->
+<script>
+(function(){
+  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+  function removeLimparMesa(){
+    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
+  }
+  function removeMesaField(){
+    try{
+      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
+        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
+        if (ph==='mesa'){ el.remove(); return; }
+        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
+        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
+      });
+    }catch(e){}
+  }
+  function run(){ removeLimparMesa(); removeMesaField(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
+</script>
+
+
+
+<!-- STAFF_CLEARALL_UNIFIED_V4 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  var hooked = false;
+  function attach(){
+    if (hooked) return;
+    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+    nodes.forEach(function(n){
+      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+      if (t==='limpar tudo'){
+        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
+        n.addEventListener('click', function(ev){
+          try{
+            var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
+            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
+          }catch(e){}
+          (async function(){
+            try{
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
+              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
+            }catch(e){}
+          })();
+        }, true);
+      }
+    });
+  }
+  
+})();
+</script>
+
