@@ -93,18 +93,11 @@ window.renderHistory = window.renderHistory || function(){};</script>
     import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-      authDomain: "asabrancaff-faebe.firebaseapp.com",
-      projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.appspot.com",
-      messagingSenderId: "326390762122",
-      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-    };
-    const app = initializeApp(firebaseConfig);
+  
+    const app = 
     const db = getFirestore(app);
     const ordersCol = collection(db, "orders");
-    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy , getDocs };
+    
   </script>
 <script type="module">
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -420,23 +413,6 @@ function startAlarm(msg){
 
   // Subscribe to all orders, oldest first
   const qAll = fb.query(fb.ordersCol, fb.orderBy('createdAtMs','asc'));
-  fb.onSnapshot(qAll, (snap)=>{
-  const list = [];
-  snap.forEach(doc => {
-    const d = doc.data()||{};
-    list.push({
-      id: String(doc.id),
-      table: d.table ?? null,
-      items: Array.isArray(d.items) ? d.items : [],
-      notes: d.notes || '',
-      totalCVE: d.totalCVE || null,
-      createdAtMs: d.createdAtMs || 0,
-      confirmed: !!d.confirmed,
-      confirmedAtMs: d.confirmedAtMs || null,
-      isReady: !!d.isReady,
-      readyAtMs: d.readyAtMs || null,
-      served: !!d.served
-    });
   });
   window.__cloudList = list;
   try{ if (typeof render==='function') render(); }catch(e){}
@@ -480,6 +456,64 @@ function startAlarm(msg){
 })();
 </script>
 
+<!-- FIREBASE_BOOT_START -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  window.__fb = {
+    app, db, auth,
+    collection, onSnapshot, doc, setDoc, updateDoc, addDoc,
+    ordersCol: collection(db, "orders")
+  };
+
+  function startListeners() {
+    const col = collection(db, "orders");
+    onSnapshot(col, (snap) => {
+      const list = [];
+      snap.forEach(doc => {
+        const d = doc.data() || {};
+        list.push({
+          id: String(doc.id),
+          table: d.table ?? null,
+          items: Array.isArray(d.items) ? d.items : [],
+          notes: d.notes || "",
+          totalCVE: d.totalCVE || null,
+          createdAtMs: d.createdAtMs || 0,
+          confirmed: !!d.confirmed,
+          confirmedAtMs: d.confirmedAtMs || null,
+          isReady: !!d.isReady,
+          readyAtMs: d.readyAtMs || null,
+          served: !!d.served
+        });
+      });
+      list.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0) || a.id.localeCompare(b.id));
+      window.__cloudList = list;
+      try { if (typeof window.render === 'function') window.render(); } catch(e) { }
+      try { if (typeof window.__evaluateAlarmsAndReady === 'function') window.__evaluateAlarmsAndReady(); } catch(e) {}
+    });
+  }
+
+  onAuthStateChanged(auth, (u)=>{
+    if (u) { startListeners(); }
+  });
+  signInAnonymously(auth).catch(()=>{});
+</script>
+<!-- FIREBASE_BOOT_END -->
 </body>
 </html>
 
@@ -552,18 +586,69 @@ function startAlarm(msg){
   // add other product imports if needed:
   // import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
+  
+
+  const app = </script>
+
+
+<!-- FIREBASE_BOOT_START -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
     authDomain: "asabrancaff-faebe.firebaseapp.com",
     projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",  // <-- fix
+    storageBucket: "asabrancaff-faebe.appspot.com",
     messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
 
-  const app = initializeApp(firebaseConfig);</script>
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
 
+  window.__fb = {
+    app, db, auth,
+    collection, onSnapshot, doc, setDoc, updateDoc, addDoc,
+    ordersCol: collection(db, "orders")
+  };
 
+  function startListeners() {
+    const col = collection(db, "orders");
+    onSnapshot(col, (snap) => {
+      const list = [];
+      snap.forEach(doc => {
+        const d = doc.data() || {};
+        list.push({
+          id: String(doc.id),
+          table: d.table ?? null,
+          items: Array.isArray(d.items) ? d.items : [],
+          notes: d.notes || "",
+          totalCVE: d.totalCVE || null,
+          createdAtMs: d.createdAtMs || 0,
+          confirmed: !!d.confirmed,
+          confirmedAtMs: d.confirmedAtMs || null,
+          isReady: !!d.isReady,
+          readyAtMs: d.readyAtMs || null,
+          served: !!d.served
+        });
+      });
+      list.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0) || a.id.localeCompare(b.id));
+      window.__cloudList = list;
+      try { if (typeof window.render === 'function') window.render(); } catch(e) { }
+      try { if (typeof window.__evaluateAlarmsAndReady === 'function') window.__evaluateAlarmsAndReady(); } catch(e) {}
+    });
+  }
+
+  onAuthStateChanged(auth, (u)=>{
+    if (u) { startListeners(); }
+  });
+  signInAnonymously(auth).catch(()=>{});
+</script>
+<!-- FIREBASE_BOOT_END -->
 </body>
 </html>
 
