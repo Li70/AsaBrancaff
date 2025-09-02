@@ -318,10 +318,21 @@
       return out;
     }
     function buildIndex(){
-      const idx={};
-      flattenItems([PIZZAS]).concat(flattenItems([MENU])).forEach(it=>{ idx[it.id]=it; });
-      return idx;
-    }
+  const idx = {};
+  // Attach category from PIZZAS
+  (PIZZAS||[]).forEach(cat => {
+    (cat.items||[]).forEach(it => {
+      idx[it.id] = Object.assign({}, it, { category: cat.category });
+    });
+  });
+  // Attach/override from MENU (MENU wins if duplicate id)
+  (MENU||[]).forEach(cat => {
+    (cat.items||[]).forEach(it => {
+      idx[it.id] = Object.assign({}, (idx[it.id]||it), { category: cat.category });
+    });
+  });
+  return idx;
+}
     let ITEM_INDEX = buildIndex();
 
     function itemRowHtml(item){
@@ -457,7 +468,14 @@
 
     /* ===== CART ===== */
     let cart={};
-    function addToCart(item,qty){ qty=Math.max(1,Number(qty)||1); const ex=cart[item.id]; if(ex) ex.qty+=qty; else cart[item.id]={id:item.id,name:item.name,price:item.price||formatCVE(item.priceNum),priceNum:item.priceNum,qty}; renderCart(); }
+    function addToCart(item, qty){
+  qty = Math.max(1, Number(qty) || 1);
+  const ex = cart[item.id];
+  const base = { id:item.id, name:item.name, category: (item.category||ITEM_INDEX[item.id]?.category||''), price:item.price||formatCVE(item.priceNum), priceNum:item.priceNum, qty };
+  if (ex){ ex.qty += qty; }
+  else { cart[item.id] = base; }
+  renderCart();
+}; renderCart(); }
     function removeFromCart(id){ delete cart[id]; renderCart(); }
     function totalCart(){ return Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0); }
 
@@ -530,6 +548,34 @@
         confirmed: false,
         totalCVE: total
       });
+  // FIREBASE SAVE
+  (async ()=>{
+    try{
+      if (!(window.__fb && window.__fbReady)) {
+        for (let i=0;i<50 && !(window.__fb && window.__fbReady); i++) {
+          await new Promise(r=>setTimeout(r,200));
+        }
+      }
+      if (window.__fb){
+        const fb = window.__fb;
+        const payload = {
+          table: Number(selectedTable) || selectedTable || null,
+          items,
+          notes: gatherNotes(),
+          totalCVE: total,
+          createdAtMs: Date.now(),
+          confirmed: false,
+          confirmedAtMs: null,
+          isReady: false,
+          readyAtMs: null,
+          served: false,
+          servedAtMs: null
+        };
+        await fb.addDoc(fb.ordersCol, payload);
+      }
+    }catch(e){ try{ console.warn('Firestore save failed', e); }catch(e2){} }
+  })();
+
       // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
       try {
         if (window.Parse && Parse.applicationId) {
@@ -585,119 +631,30 @@
 
 
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, doc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-      authDomain: "asabrancaff-faebe.firebaseapp.com",
-      projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.appspot.com",
-      messagingSenderId: "326390762122",
-      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  window.firebaseConfig = firebaseConfig;
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
-    const auth = getAuth(app);
-    const ordersRef = collection(db, "orders");
+  const app = initializeApp(window.firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
 
-    const listEl = document.getElementById("list");
-    const countsEl = document.getElementById("counts");
-    const cashEl = document.getElementById("cashSound");
-
-    // Prime sound (best effort)
-    let primed = false;
-    function primeSound(){
-      if (primed) return; primed = true;
-      cashEl.volume = 0;
-      cashEl.play().then(()=>cashEl.pause()).catch(()=>{});
-      cashEl.volume = 1;
-    }
-    async function playCash(){ primeSound(); try{ cashEl.currentTime = 0; await cashEl.play(); }catch{} }
-
-    function esc(s){ const d=document.createElement("div"); d.textContent=String(s??""); return d.innerHTML; }
-    function renderList(orders){
-      listEl.innerHTML = "";
-      if (!orders.length){
-        listEl.innerHTML = '<div class="card muted">Sem pedidos confirmados.</div>';
-        return;
-      }
-      for (const o of orders){
-        const el = document.createElement("div");
-        el.className = "card";
-        const items = (Array.isArray(o.items)?o.items:[]).map(i=>`<li>${esc(i.qty??1)} × ${esc(i.name||i.item||i.pizzaType||"")}${i.category? ` <span class=\"muted\">(${esc(i.category)})</span>` : ""}</li>`).join("") || '<li class="muted">—</li>';
-        el.innerHTML = `
-          <div class="row">
-            <strong>Mesa ${esc(o.table??"?")}</strong>
-            <label><input type="checkbox" data-action="ready" data-id="${o.id}" ${o.isReady?'checked':''}/> Pronto</label>
-          </div>
-          <ul class="items">${items}</ul>
-          ${o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : ''}
-        `;
-        listEl.appendChild(el);
-      }
-    }
-
-    // Checkbox handler
-    listEl.addEventListener("change", async (ev)=>{
-      const cb = ev.target.closest("input[type=checkbox][data-action=ready]");
-      if (!cb) return;
-      const id = cb.getAttribute("data-id");
-      const ref = doc(ordersRef, id);
-      const isReady = cb.checked;
-      try{
-        await updateDoc(ref, { isReady, readyAtMs: isReady ? Date.now() : null });
-      }catch(e){ console.error(e); }
-    });
-
-    let prevIds = new Set();
-
-    onAuthStateChanged(auth, (u)=>{
-      if (!u) return;
-      onSnapshot(ordersRef, (snap)=>{
-        const orders = [];
-        let newCount = 0;
-        const curIds = new Set();
-
-        snap.forEach(docSnap=>{
-          const d = docSnap.data()||{};
-          const o = {
-            id: String(docSnap.id),
-            table: d.table ?? null,
-            items: Array.isArray(d.items) ? d.items : [],
-            notes: d.notes || "",
-            createdAtMs: d.createdAtMs || 0,
-            confirmed: !!d.confirmed,
-            isReady: !!d.isReady,
-            served: !!d.served
-          };
-          // Kitchen lists only confirmed & not served
-          if (o.confirmed && !o.served){
-            orders.push(o);
-            curIds.add(o.id);
-            if (!prevIds.has(o.id)) newCount++;
-          }
-        });
-
-        orders.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0) || a.id.localeCompare(b.id));
-        renderList(orders);
-        countsEl.textContent = `Ativos: ${orders.length}`;
-
-        if (newCount > 0) playCash();
-        prevIds = curIds;
-      });
-    });
-
-    signInAnonymously(auth).catch(()=>{});
-  </script>
-
-
-
-
-
-
-
+  window.__fb = { app, db, auth, collection, addDoc, doc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
+    ordersCol: collection(db, "orders")
+  };
+  window.__fbReady = false;
+  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
+  signInAnonymously(auth).catch(()=>{});
+</script>
 </body>
 </html>
