@@ -16,126 +16,40 @@
     details summary { cursor: pointer; }
   </style>
 
-<!-- Firebase (app/auth/firestore/storage) + Parse shim (Firestore-backed) -->
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+      authDomain: "asabrancaff-faebe.firebaseapp.com",
+      projectId: "asabrancaff-faebe",
+      storageBucket: "asabrancaff-faebe.appspot.com",
+      messagingSenderId: "326390762122",
+      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const ordersCol = collection(db, "orders");
+    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
+  </script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const auth = getAuth(app);
-  const storage = getStorage(app);
-  signInAnonymously(auth).catch(()=>{});
-  onAuthStateChanged(auth, ()=>{});
-
-  // === Minimal Parse compatibility shim (Firestore-backed) ===
-  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
-
-  class _ParseObject {
-    constructor(className){
-      this.className = className;
-      this._data = {};
-      this.id = null;
-    }
-    set(k,v){ this._data[k]=v; }
-    get(k){ return this._data[k]; }
-    async save(){
-      if (this.className==='Order'){
-        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
-        if (!('servedAt' in this._data)) this._data.servedAt = null;
-        if (!('confirmed' in this._data)) this._data.confirmed = false;
-      }
-      const cname = colNameFromClass(this.className);
-      const id = String(this._data.orderId || this.id || Date.now());
-      this.id = id;
-      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
-      return this;
-    }
-    async destroy(){
-      const cname = colNameFromClass(this.className);
-      if (!this.id) return;
-      await deleteDoc(doc(collection(db, cname), this.id));
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  if (window.__fb?.app) {
+    const auth = getAuth(window.__fb.app);
+    // Promise that resolves when a user is available
+    let resolved = false;
+    window.__authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => {
+        if (user && !resolved) { resolved = true; resolve(user); }
+      });
+    });
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(console.error);
     }
   }
-
-  const Parse = {};
-  Parse.initialize = function(){}; // no-op
-  Parse.serverURL = ""; // ignored
-  Parse.liveQueryServerURL = ""; // ignored
-  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
-
-  Parse.Object = {
-    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
-  };
-
-  Parse.Query = class {
-    constructor(Cls){
-      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
-      this._w = [];
-      this._order = null;
-      this._limit = 1000;
-    }
-    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; }
-    limit(n){ this._limit = n; return this; }
-    ascending(f){ this._order = ['asc', f]; return this; }
-    descending(f){ this._order = ['desc', f]; return this; }
-    _build(){
-      const cname = colNameFromClass(this.className);
-      let ref = collection(db, cname);
-      const terms = this._w.map(([f,op,v])=> where(f, op, v));
-      let qref = terms.length ? query(ref, ...terms) : ref;
-      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
-      return qref;
-    }
-    async find(){
-      const qref = this._build();
-      const snap = await getDocs(qref);
-      const arr = [];
-      snap.forEach(d=>{
-        const Obj = Parse.Object.extend(this.className);
-        const o = new Obj();
-        o.id = d.id; o._data = d.data() || {};
-        arr.push(o);
-      });
-      return arr.slice(0, this._limit);
-    }
-    async first(){
-      this.limit(1);
-      const a = await this.find();
-      return a[0]||null;
-    }
-    subscribe(){
-      const listeners = { create:[], update:[], delete:[] };
-      const unsub = onSnapshot(this._build(), (snap)=>{
-        snap.docChanges().forEach(ch=>{
-          const Obj = Parse.Object.extend(this.className);
-          const o = new Obj();
-          o.id = ch.doc.id; o._data = ch.doc.data() || {};
-          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-        });
-      });
-      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
-    }
-  };
-
-  // Expose
-  window.Parse = Parse;
-  window.__fb = { app, db, auth, storage, sRef, getDownloadURL };
 </script>
+
 
 </head>
 <body class="p-4">
@@ -155,12 +69,39 @@
       Novo pedido recebido!
     </div>
 
-    <div id="orders" class="space-y-3 mb-6"></div>
+    
+
+<!-- Histórico do dia -->
+<section id="historySection" class="card p-3 rounded-2xl mb-3">
+  <div class="flex items-center justify-between">
+    <h2 class="font-semibold">Histórico (Hoje)</h2>
+    <div class="text-sm">Total do dia: <strong id="histTotal">0$00</strong></div>
+  </div>
+  <div id="histList" class="mt-2"></div>
+</section>
+<div id="orders" class="space-y-3 mb-6"></div>
 
    
 
   <!-- coloque cash.mp3 na mesma pasta ou troque por um URL -->
   <audio id="cashSound" preload="auto" src="cash.mp3"></audio>
+<script>
+(function(){
+  const el = document.getElementById('cashSound');
+  const candidates = ["/cashe.mp3","cashe.mp3","/cash.mp3","cash.mp3","/sounds/cashe.mp3","/sounds/cash.mp3","/assets/cashe.mp3","/assets/cash.mp3"];
+  async function resolveCash(){
+    for (const path of candidates){
+      try{ const r = await fetch(path, {method:'HEAD', cache:'no-store'}); if (r.ok){ el.src = path; return true; } }catch(e){}
+    }
+    console.warn("cashe/cash mp3 not found in:", candidates);
+    return false;
+  }
+  window.__resolveCash = resolveCash;
+  try{ resolveCash(); }catch{}
+  if (document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', resolveCash, {once:true}); } else { resolveCash(); }
+})();
+</script>
+
 
   <script>
     "use strict";
@@ -264,6 +205,9 @@
     }
 
     function renderHistory(){
+      const histList = document.getElementById('histList');
+      const histTotalEl = document.getElementById('histTotal');
+      if (!histList || !histTotalEl) return;
       const hist = getHistory().filter(h => isToday(h.servedAt || h.createdAt));
       histList.innerHTML = '';
       if (!hist.length){
@@ -297,7 +241,7 @@
       // teste curto silencioso
       try { await cashEl.play(); setTimeout(()=>{ try{ cashEl.pause(); }catch{} }, 200); } catch {}
     }
-    async function playSound(){
+    async async function playSound(){
       if (!soundEnabled) return;
       try { cashEl.currentTime = 0; await cashEl.play(); return; } catch {}
       playFallback();
@@ -317,6 +261,7 @@
       o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
     }
     soundBtn.addEventListener('click', enableSound);
+  let autoUnlockTimerKitchen = setInterval(()=>{ if(!soundEnabled) enableSound(); else clearInterval(autoUnlockTimerKitchen); }, 1500);
 
     // tentar ativar som por omissão
     document.addEventListener('DOMContentLoaded', enableSound);
@@ -443,42 +388,12 @@
     render({withAlerts:false});
 
     /* ====== Som ====== */
-    function playSound(){
+    async function playSound(){
       if (!soundEnabled) return;
       cashEl.currentTime = 0;
       cashEl.play().catch(playFallback);
     }
   </script>
-</script>
-
-
-
-
-
-<!-- KITCHEN_SERVED_VIRTUAL_RO_V1 -->
-<script>
-(function(){
-  var SERVED_KEY = 'orders_served';
-  var SERVED_VERSION = 'orders_served_version';
-  var _get = null;
-  try{ _get = localStorage.getItem.bind(localStorage); }catch(e){}
-  function servedMapFromCloud(){
-    try{
-      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
-      var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
-      return m;
-    }catch(e){ return {}; }
-  }
-  localStorage.getItem = function(k){
-    try{
-      if (k===SERVED_KEY){ return JSON.stringify(servedMapFromCloud()); }
-      if (k===SERVED_VERSION){ return String(Date.now()); }
-    }catch(e){}
-    return _get ? _get(k) : null;
-  };
-})();
-</script>
-
 
 
 
@@ -577,65 +492,113 @@
 })();
 </script>
 
-<!-- CLOUD_ONLY_V2 (kitchen) -->
+
+
+<!-- KITCHEN_FIREBASE_CLOUD_ONLY_V2 -->
 <script>
 (function(){
-  // In-memory cloud state
-  window.__cloudOrders = window.__cloudOrders || [];
-  window.__readyMap    = window.__readyMap || {};
+  function init(){
+    const fb = window.__fb;
+const ordersDiv = document.getElementById('orders');
+  const banner = document.getElementById('banner');
+  const cashEl = document.getElementById('cashSound');
+  const hideServedChk = document.getElementById('hideServedChk');
 
-  // Always ignore localStorage for data
-  try { window.getOrders = function(){ return Array.from(window.__cloudOrders||[]); }; } catch(e){}
-  try { window.getAllOrders = function(){ return Array.from(window.__cloudOrders||[]); }; } catch(e){}
-  try { window.setOrders = function(_){ /* no-op in cloud mode */ }; } catch(e){}
-  try {
-    window.getServedMap = function(){ try{ return Object.assign({}, window.__readyMap||{}); }catch(e){ return {}; } };
-    window.setServedMap = function(m){ try{ window.__readyMap = Object.assign({}, m||{}); window.__staffServedMem = {map: window.__readyMap, ver: Date.now()}; }catch(e){} };
-  } catch(e){}
+  function formatCVE(n){ return `${Math.floor(Number(n)||0)}$00`; }
+  function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
+  async async function playSound(){ try{ cashEl.currentTime=0; await cashEl.play(); }catch{} }
 
-  function _renderAll(){
-    try { if (typeof render==='function') render(); } catch(e){}
-    try { if (typeof renderHistory==='function') renderHistory(); } catch(e){}
+  let knownIds = new Set();
+  function renderList(list){
+    const hideServed = hideServedChk && hideServedChk.checked;
+    ordersDiv.innerHTML='';
+    if (!list.length){ ordersDiv.innerHTML = '<p class="muted">Sem pedidos ainda.</p>'; return; }
+    list.forEach(o=>{
+      const isServed = !!o.isReady;
+      if (hideServed && isServed) return;
+      const div=document.createElement('div'); div.className='card p-3 rounded-xl';
+      const items=(o.items||[]).map(i=>`<li>${Number(i.qty||1)} × ${esc(i.pizzaType||'')}</li>`).join('') || '<li class="muted">—</li>';
+      const t = (typeof o.totalCVE === 'number') ? formatCVE(o.totalCVE) : '';
+      div.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-semibold">Mesa ${esc(o.table ?? '?')}</div>
+            <ul class="items mt-2">${items}</ul>
+            ${o.notes ? `<div class='text-sm mt-2'>✍️ ${esc(o.notes)}</div>` : ''}
+            ${t ? `<div class="mt-2"><span class="muted text-xs">Total:</span> <b>${t}</b></div>` : ''}
+          </div>
+          <div class="flex flex-col items-end gap-2">
+            <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input type="checkbox" data-ready="${esc(o.id)}" ${o.isReady ? "checked" : ""} /> Pronto
+            </label>
+          </div>
+        </div>`;
+      ordersDiv.appendChild(div);
+    });
+    ordersDiv.querySelectorAll('[data-ready]').forEach(cb=>{
+      cb.addEventListener('change', (ev)=>{
+        const id = ev.target.getAttribute('data-ready');
+        try{
+          const ref = fb.doc(fb.db, 'orders', String(id));
+          fb.updateDoc(ref, { isReady: ev.target.checked, readyAtMs: Date.now() });
+        }catch(e){ console.warn('Kitchen update error', e); }
+      });
+    });
   }
 
-  function _applySnapshot(rows){
-    try {
-      const arr = rows.map(r => (r._data || r || {}));
-      arr.forEach(o => { if (!('orderId' in o)) o.orderId = String(o.id||''); if (!('id' in o)) o.id = Number(o.orderId||0); });
-      window.__cloudOrders = arr;
-      const map = {};
-      arr.forEach(o => { map[String(o.orderId||o.id||'')] = !!o.isReady; });
-      window.__readyMap = map;
-      window.__staffServedMem = { map, ver: Date.now() };
-      _renderAll();
-    } catch(e){}
-  }
+  const qConf = fb.ordersCol;
+  fb.onSnapshot(qConf, (snap)=>{
+    const list=[]; let novos=0;
+    snap.forEach(doc=>{
+      const d = doc.data() || {};
+      if (d && d.confirmed===true && d.served!==true){
+        list.push({
+          id: String(doc.id),
+          table: d.table ?? null,
+          items: Array.isArray(d.items) ? d.items : [],
+          notes: d.notes || '',
+          createdAtMs: d.createdAtMs || 0,
+          confirmed: !!d.confirmed,
+          isReady: !!d.isReady,
+          readyAtMs: d.readyAtMs || null,
+          served: !!d.served
+        });
+      }
+      if (!knownIds.has(String(doc.id))) novos++;
+    });
 
-  function startCloudFeed(){
-    try { if (!window.Parse) return; } catch(e) { return; }
-    try {
-      const Order = Parse.Object.extend('Order');
-      const q = new Parse.Query(Order);
-      q.limit(1000);
-      // Initial fetch
-      q.find().then(_applySnapshot).catch(()=>{});
-      // Live subscription
-      const sub = q.subscribe();
-      const onchg = () => q.find().then(_applySnapshot).catch(()=>{});
-      try { sub.on('create', onchg); sub.on('update', onchg); sub.on('delete', onchg); } catch(e){}
-    } catch(e) { }
+    });
+    list.sort((a,b)=> (a.createdAtMs||0) - (b.createdAtMs||0));
+    window.__cloudList = list; window.__cloudList = list; renderList(list);
+    if (novos>0){ try{ banner.classList.remove('hidden'); setTimeout(()=>banner.classList.add('hidden'), 2000); }catch{}; playSound(); }
+    knownIds = new Set(list.map(o=>String(o.id)));
+  });
+}
+  if (window.__fb) init(); else {
+    const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
+    setTimeout(()=> clearInterval(t), 8000);
   }
-
-  // Wait for Firebase Auth before subscribing
-  (function ensureAuthThenStart(){
-    try {
-      const fb = window.__fb || {}, auth = fb.auth;
-      if (!auth || typeof auth.onAuthStateChanged !== 'function') { startCloudFeed(); return; }
-      auth.onAuthStateChanged(function(u){ if (u) startCloudFeed(); });
-    } catch(e) { startCloudFeed(); }
-  })();
 })();
+
 </script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  // add other product imports if needed:
+  // import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",  // <-- fix
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
+  };
+
+  const app = initializeApp(firebaseConfig);
+</script>
+
 
 </body>
 </html>

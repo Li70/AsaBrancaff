@@ -78,8 +78,33 @@
   })();
   </script>
 
-  <!-- CLOUD_PARSE_INIT_V1 -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc,
+    onSnapshot, serverTimestamp, query, where, orderBy
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const ordersCol = collection(db, "orders");
+  window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
+</script>
+<script type="module">
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  if (window.__fb?.app) {
+    signInAnonymously(getAuth(window.__fb.app)).catch(console.error);
+  }
+</script>
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
@@ -505,51 +530,40 @@
       const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
       if(sheetOpen) return m || d; return d || m;
     }
-    function sendOrder(){
-      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
-      const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
+    
 
-      const items=keys.map(k=>({ pizzaType:cart[k].name, size:'', qty:Number(cart[k].qty)||1, notes:'' }));
-      const total = Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0);
+function sendOrder(){
+  if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+  const keys = Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
-      const orders=getOrdersCompat();
-      orders.push({
-        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-        table: String(selectedTable),
-        items,
-        createdAt: Date.now(),
-        notes: gatherNotes(),
-        confirmed: false,
-        totalCVE: total
-      });
-      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
-      try {
-        if (window.Parse && Parse.applicationId) {
-          const Order = Parse.Object.extend('Order');
-          const obj = new Order();
-          obj.set('orderId', String(orders[orders.length-1].id));
-          obj.set('table', String(orders[orders.length-1].table));
-          obj.set('items', orders[orders.length-1].items || []);
-          obj.set('notes', String(orders[orders.length-1].notes || ''));
-          obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
-          obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
-          obj.set('confirmed', false);
-          const acl = new Parse.ACL();
-          acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
-          obj.setACL(acl);
-          obj.save().then(()=>{
-            try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
-          }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
-        }
-      } catch(e){ try{ console.warn('Parse not available', e); }catch(e2){} }
+  const items = keys.map(k=>({
+    pizzaType: cart[k].name,
+    size: '',
+    qty: Number(cart[k].qty)||1,
+    notes: '',
+    priceNum: Number(cart[k].priceNum)||0
+  }));
 
-      setOrdersCompat(orders);
-      bcPost({type:'orders_updated'});
+  const total = Object.values(cart).reduce((s,it)=> s + ((Number(it.priceNum)||0)*(Number(it.qty)||1)), 0);
+  const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
-      cart={}; renderCart(); if(notesDesktop) notesDesktop.value=''; notesMobile.value='';
-      if(cartSheet.classList.contains('open')) closeSheet();
-      alert('Pedido enviado ao staff para confirmação!');
+  // Cloud only: Firestore write
+  try{
+    const fb = window.__fb;
+    if (fb){
+      const data = { id, table:String(selectedTable), items, notes:(notesDesktop?.value||notesMobile?.value||''), totalCVE:Math.round(total), createdAtMs:Date.now(), confirmed:false, isReady:false };
+      fb.setDoc(fb.doc(fb.db, 'orders', id), data);
+    } else {
+      console.warn('Firebase not initialized.');
     }
+  }catch(e){ console && console.warn && console.warn('Firebase save failed', e); }
+
+  cart = {}; renderCart();
+  try{ if(cartSheet?.classList?.contains('open')) cartSheet.classList.remove('open'); }catch{}
+  alert('Pedido enviado!');
+}
+
+
 
     const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
     const closeSheet=()=>{ cartSheet.classList.remove('open'); cartSheet.setAttribute('aria-hidden','true'); };
@@ -573,30 +587,8 @@
 
     // Init
     renderCart();
+
   </script>
-
-
-
-
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
-    authDomain: "asabrancaff-aa13d.firebaseapp.com",
-    projectId: "asabrancaff-aa13d",
-    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
-    messagingSenderId: "1031914620871",
-    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
 
 
 

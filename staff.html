@@ -69,126 +69,42 @@
   })();
   </script>
 
-<!-- Firebase (app/auth/firestore/storage) + Parse shim (Firestore-backed) -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const auth = getAuth(app);
-  const storage = getStorage(app);
-  signInAnonymously(auth).catch(()=>{});
-  onAuthStateChanged(auth, ()=>{});
-
-  // === Minimal Parse compatibility shim (Firestore-backed) ===
-  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
-
-  class _ParseObject {
-    constructor(className){
-      this.className = className;
-      this._data = {};
-      this.id = null;
-    }
-    set(k,v){ this._data[k]=v; }
-    get(k){ return this._data[k]; }
-    async save(){
-      if (this.className==='Order'){
-        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
-        if (!('servedAt' in this._data)) this._data.servedAt = null;
-        if (!('confirmed' in this._data)) this._data.confirmed = false;
-      }
-      const cname = colNameFromClass(this.className);
-      const id = String(this._data.orderId || this.id || Date.now());
-      this.id = id;
-      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
-      return this;
-    }
-    async destroy(){
-      const cname = colNameFromClass(this.className);
-      if (!this.id) return;
-      await deleteDoc(doc(collection(db, cname), this.id));
+      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+      authDomain: "asabrancaff-faebe.firebaseapp.com",
+      projectId: "asabrancaff-faebe",
+      storageBucket: "asabrancaff-faebe.appspot.com",
+      messagingSenderId: "326390762122",
+      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const ordersCol = collection(db, "orders");
+    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy , getDocs };
+  </script>
+<script type="module">
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  if (window.__fb?.app) {
+    const auth = getAuth(window.__fb.app);
+    // Promise that resolves when a user is available
+    let resolved = false;
+    window.__authReady = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => {
+        if (user && !resolved) { resolved = true; resolve(user); }
+      });
+    });
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(console.error);
     }
   }
-
-  const Parse = {};
-  Parse.initialize = function(){}; // no-op
-  Parse.serverURL = ""; // ignored
-  Parse.liveQueryServerURL = ""; // ignored
-  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
-
-  Parse.Object = {
-    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
-  };
-
-  Parse.Query = class {
-    constructor(Cls){
-      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
-      this._w = [];
-      this._order = null;
-      this._limit = 1000;
-    }
-    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; }
-    limit(n){ this._limit = n; return this; }
-    ascending(f){ this._order = ['asc', f]; return this; }
-    descending(f){ this._order = ['desc', f]; return this; }
-    _build(){
-      const cname = colNameFromClass(this.className);
-      let ref = collection(db, cname);
-      const terms = this._w.map(([f,op,v])=> where(f, op, v));
-      let qref = terms.length ? query(ref, ...terms) : ref;
-      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
-      return qref;
-    }
-    async find(){
-      const qref = this._build();
-      const snap = await getDocs(qref);
-      const arr = [];
-      snap.forEach(d=>{
-        const Obj = Parse.Object.extend(this.className);
-        const o = new Obj();
-        o.id = d.id; o._data = d.data() || {};
-        arr.push(o);
-      });
-      return arr.slice(0, this._limit);
-    }
-    async first(){
-      this.limit(1);
-      const a = await this.find();
-      return a[0]||null;
-    }
-    subscribe(){
-      const listeners = { create:[], update:[], delete:[] };
-      const unsub = onSnapshot(this._build(), (snap)=>{
-        snap.docChanges().forEach(ch=>{
-          const Obj = Parse.Object.extend(this.className);
-          const o = new Obj();
-          o.id = ch.doc.id; o._data = ch.doc.data() || {};
-          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-        });
-      });
-      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
-    }
-  };
-
-  // Expose
-  window.Parse = Parse;
-  window.__fb = { app, db, auth, storage, sRef, getDownloadURL };
 </script>
+
 
 </head>
 <body class="p-4">
@@ -241,8 +157,20 @@
   </div>
 
   <!-- sounds -->
-  <audio id="alertSound" preload="auto" src="ready.mp3" loop></audio>
-  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
+  <audio id="alertSound" preload="auto" loop>
+  <source src="/ready.mp3" type="audio/mpeg">
+  <source src="ready.mp3" type="audio/mpeg">
+  <source src="/assets/ready.mp3" type="audio/mpeg">
+  <source src="/sounds/ready.mp3" type="audio/mpeg">
+</audio>
+
+
+  <audio id="doneSound" preload="auto">
+  <source src="/done.mp3" type="audio/mpeg">
+  <source src="done.mp3" type="audio/mpeg">
+  <source src="/assets/done.mp3" type="audio/mpeg">
+  <source src="/sounds/done.mp3" type="audio/mpeg">
+</audio>
 
   <script>
   "use strict";
@@ -275,31 +203,70 @@
   const doneEl=document.getElementById('doneSound');
 
   /* === Sound / alarm === */
+function playDone(msg){
+  try{ if(!soundEnabled) enableSound(); }catch(e){}
+  try {
+    if (msg) showBanner(msg);
+    if (doneEl) {
+      try { doneEl.currentTime = 0; if (typeof doneEl.load==='function') doneEl.load(); } catch(e){}
+      doneEl.play().catch(()=>{});
+    }
+  } catch(e){}
+  try { setTimeout(()=> hideBanner(), 3000); } catch(e){}
+}
+
   let soundEnabled=false, audioCtx, fallbackLoop=null;
   function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
   function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
   async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
-  function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
+  function stopAlarm(){
+  try{
+    alertEl.pause();
+    alertEl.currentTime = 0;
+  }catch(e){}
+  hideBanner();
+}catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
-  ackBtn.addEventListener('click', stopAlarm);
+  ackBtn.addEventListener('click', ()=>{ try{ hideBanner(); }catch{} });
   document.addEventListener('DOMContentLoaded', enableSound);
   document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
   document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
 
+  // keep trying to enable sound until it succeeds
+  let autoUnlockTimer = setInterval(()=>{ if(!soundEnabled) enableSound(); else clearInterval(autoUnlockTimer); }, 1500);
+
   function startAlarm(msg){
-    if(!soundEnabled){ showBanner(msg); return; }
-    showBanner(msg);
+  try{ if(!soundEnabled) enableSound(); }catch(e){}
+  showBanner(msg);
+  try {
+    alertEl.loop = true;
+    alertEl.currentTime = 0;
+    if (typeof alertEl.load === 'function') alertEl.load();
+  } catch(e){}
+  try {
+    alertEl.play().catch(()=>{});
+  } catch(e){}
+}catch(e){}
+  showBanner(msg);
+  try {
     alertEl.play().catch(()=>{
-      const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
-      fallbackLoop=setInterval(()=>{
-        const now=audioCtx.currentTime, g=audioCtx.createGain(), o1=audioCtx.createOscillator(), o2=audioCtx.createOscillator();
-        o1.type='square'; o2.type='square'; o1.frequency.value=800; o2.frequency.value=1600;
-        o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.45, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
-        o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
-      },1100);
+      const Ctx=window.AudioContext||window.webkitAudioContext;
+      if(!audioCtx && Ctx) audioCtx=new Ctx();
+      if(!audioCtx) return;
+      // simple fallback beep loop
+      fallbackLoop = setInterval(()=>{
+        const now=audioCtx.currentTime;
+        const g=audioCtx.createGain(), o=audioCtx.createOscillator();
+        o.type='square'; o.frequency.value=880;
+        o.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.exponentialRampToValueAtTime(0.6, now+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now+0.4);
+        o.start(now); o.stop(now+0.42);
+      }, 600);
     });
-  }
+  } catch(e){ /* ignore */ }
+}
 
   async function playReadySound(){
     if(!soundEnabled) return;
@@ -310,10 +277,33 @@
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
   function priceForName(name){ const k=String(name||'').trim(); return (k in PRICE_INDEX)? Number(PRICE_INDEX[k]):0; }
-  function computeOrderTotal(order){
-    if (typeof order.totalCVE==='number') return Number(order.totalCVE)||0;
-    let sum=0; for(const it of (order.items||[])){ sum += priceForName(it.pizzaType) * Number(it.qty||1); } return sum;
+  
+function computeOrderTotal(order){
+  if (order && typeof order.totalCVE === 'number' && isFinite(order.totalCVE)) {
+    return Number(order.totalCVE)||0;
   }
+  function parseCVEFromText(txt){
+    try{
+      const digits = String(txt||'').replace(/\D/g,'');
+      if (!digits) return 0;
+      if (digits.length >= 4) return Math.round(Number(digits)/100);
+      return Number(digits);
+    }catch(e){ return 0; }
+  }
+  let sum = 0;
+  const items = Array.isArray(order && order.items) ? order.items : [];
+  for (const it of items){
+    const qty = Number(it && it.qty || 1) || 1;
+    let pn = 0;
+    if (it && typeof it.priceNum === 'number' && isFinite(it.priceNum) && it.priceNum > 0){
+      pn = Number(it.priceNum);
+    } else {
+      pn = parseCVEFromText(it && (it.price || it.pizzaType || it.name || it.label || it.desc));
+    }
+    sum += (Number(pn)||0) * qty;
+  }
+  return sum;
+}
 
   /* === render lists === */
   function render(){
@@ -321,7 +311,7 @@
     const all = getOrders().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 
     const pend = all.filter(o=>!o.confirmed && (!tableFilter || Number(o.table)===tableFilter));
-    const conf = all.filter(o=> o.confirmed && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
+    const conf = all.filter(o=> o.confirmed && !o.served && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
 
     pendingDiv.innerHTML=''; confirmedDiv.innerHTML='';
     countPend.textContent=pend.length; countConf.textContent=conf.length;
@@ -330,7 +320,7 @@
     if (!pend.length){ pendingDiv.innerHTML='<p class="muted">Sem pendentes.</p>'; }
     else pend.forEach(o=>{
       const when=o.createdAt? new Date(o.createdAt).toLocaleTimeString() : '';
-      const items=(o.items||[]).map(i=>`${i.qty||1} × ${esc(i.pizzaType||i.name||i.item||"")}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:""}`).join('<br>') || '(sem itens)';
+      const items=(o.items||[]).map(i=>`${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`).join('<br>') || '(sem itens)';
       const total=computeOrderTotal(o);
       const card=document.createElement('div'); card.className='card p-3 rounded-xl';
       card.innerHTML=`
@@ -364,7 +354,7 @@
           `${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`
         ).join('<br>') || '(sem itens)';
         const total=computeOrderTotal(o);
-        const isReady = !!readyMap[String(o.id)];
+        const isReady = (o.isReady === true) || !!readyMap[String(o.id)];
 
         const card=document.createElement('div');
         card.className='card p-3 rounded-xl' + (isReady ? ' ready' : '');
@@ -432,17 +422,27 @@
 
   /* === Actions === */
   function confirmOrder(id){
-    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
-    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
+    const all = getOrders();
+    const idx = all.findIndex(o=>String(o.id)===String(id));
+    if (idx<0) return;
+    all[idx].confirmed = true; all[idx].confirmedAt = Date.now();
     setOrders(all);
     bcPost({type:'orders_updated'});
-    stopAlarm();
+    // Only stop alarm if no unconfirmed orders remain
+    try{
+      const stillPending = getOrders().some(o=>!o.confirmed && !o.rejectedAt && !o.servedAt);
+      if (!stillPending) stopAlarm();
+    }catch(e){}
     render();
   }
   function rejectOrder(id){
-    if(!confirm('Rejeitar este pedido?')) return;
-    const keep=getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep); bcPost({type:'orders_updated'}); render();
+    var ok = true;
+    try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
+    if (!ok) return;
+    const keep = getOrders().filter(o=>String(o.id)!==String(id));
+    setOrders(keep);
+    bcPost({type:'orders_updated'});
+    render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
@@ -477,20 +477,69 @@
     renderHistory();
   }
 
+  
   /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
   let _knownServed = new Set();
   function snapshotServedIds(){
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch { return new Set(); }
+    } catch (e) {
+      return new Set();
+    }
   }
- 
 
-  /* === subscriptions / polling === */
+  // Detect newly marked-as-ready orders (from Kitchen/other devices) and notify once
+  function detectNewServedAndNotify(){
+    try {
+      const latest = snapshotServedIds();
+      let hasNew = false;
+      const all = (typeof getOrders==='function') ? getOrders() : [];
+      latest.forEach(function(id){
+        id = String(id);
+        if (!_knownServed.has(id)){
+          const o = all.find(function(x){ return String(x.id)===id; });
+          if (!o || o.confirmed) hasNew = true;
+        }
+      });
+      if (hasNew){
+        showToast('Pedido pronto ✨');
+        playReadySound();
+      }
+      _knownServed = latest;
+    } catch (e) { /* no-op */ }
+  }
+
+let __lastPendingCount = 0;
+/* === subscriptions / polling === */
+  let __lastReadySet = new Set();
   subscribeAll((evt)=>{
     render(); 
-    detectNewOrdersAndMaybeAlarm(); 
+    // Alarm behavior based on pending count
+try {
+  const pendingCount = (typeof getOrders==='function')
+    ? getOrders().filter(o => !o.confirmed).length : 0;
+  if (pendingCount > 0 && __lastPendingCount === 0) {
+    startAlarm(pendingCount === 1 ? 'Novo pedido recebido!' : pendingCount + ' novos pedidos recebidos!');
+  } else if (pendingCount === 0 && __lastPendingCount !== 0) {
+    stopAlarm();
+  }
+  __lastPendingCount = pendingCount;/* READY-DETECT */
+try {
+  const readyNow = new Set(
+    (typeof getOrders==='function')
+      ? getOrders().filter(o => o.confirmed && !o.served && (o.isReady === true)).map(o => String(o.id))
+      : []
+  );
+  let newReadyIds = [];
+  readyNow.forEach(id => { if (!__lastReadySet.has(id)) newReadyIds.push(id); });
+  if (newReadyIds.length > 0) {
+    playDone(newReadyIds.length === 1 ? 'Pronto!' : (newReadyIds.length + ' pedidos prontos!'));
+  }
+  __lastReadySet = readyNow;
+} catch(e) { /* no-op */ }
+} catch (e) { /* no-op */ }
+detectNewOrdersAndMaybeAlarm(); 
     renderHistory();
 
     // Direct broadcast from Kitchen
@@ -557,89 +606,6 @@
 </script>
 
 
-<!-- STAFF_CLOUD_ONLY_V3B -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  (function(){
-    const _get = localStorage.getItem.bind(localStorage);
-    window.__cloudList = []; window.__cloudVer = Date.now();
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
-      if (k===VERSION_KEY) return String(window.__cloudVer);
-      return _get(k);
-    };
-    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
-  })();
-
-  function pickBetter(a,b){
-    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
-         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
-         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
-    return a;
-  }
-  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
-  const cache=new Map(); const confirmedLatch=new Map();
-
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
-    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-
-  function controlAlarm(list){
-    try{
-      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
-      var prev = window.__prevHasUnconf || false;
-      window.__prevHasUnconf = hasUnconfirmed;
-      var el = document.getElementById('alertSound') || document.getElementById('readySound');
-      if (!el) return;
-      if (hasUnconfirmed && !prev){
-        try{
-          el.loop = true;
-          if (window.soundEnabled !== false){
-            var p = el.play();
-            if (p && typeof p.catch==='function'){ p.catch(function(){}); }
-          }
-        }catch(e){}
-      } else if (!hasUnconfirmed && prev){
-        try{ el.pause(); el.currentTime = 0; }catch(e){}
-      }
-    }catch(e){}
-  }
-
-  function flush(){
-    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
-    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){};
-    window.__applyCloudList(list);
-    controlAlarm(list);
-  }
-
-  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
-
-  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
-    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
-
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
-  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
-      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
-
-  (function(){
-    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
-    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
-    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
-    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
-  })();
-
-  initial(); live(); poll();
-})();
-</script>
-
-
 <!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
 <script>
 (function() {
@@ -673,29 +639,29 @@
       var btn = document.getElementById('clearAllBtn');
       if (!btn || btn.__wiredClearAllV2) return;
       btn.__wiredClearAllV2 = true;
-      btn.addEventListener('click', function(ev){
+      btn.addEventListener('click', async function(ev){
         try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
         var ok = true;
-        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
+        try{ ok = window.confirm('Quer mesmo apagar TODAS as encomendas? Esta ação não pode ser desfeita.'); }catch(e){ ok = true; }
         if (!ok) return false;
-        (async function(){
-          // Optional: Cloud reject so they don't come back after refresh
-          if (window.Parse && Parse.applicationId) {
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
-          }
-          // Local UI clear (always)
-          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
-          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
-          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-          try{ if (typeof render==='function') render(); }catch(e){}
-        })();
+        try{
+          // Wait for auth, then delete all docs in 'orders'
+          if (window.__authReady) { try { await window.__authReady; } catch(e){} }
+          var fb = window.__fb;
+          if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
+          const snap = await fb.getDocs(fb.query(fb.ordersCol));
+          const deletions = [];
+          snap.forEach(function(docSnap){
+            deletions.push(fb.deleteDoc(fb.doc(fb.db, 'orders', docSnap.id)));
+          });
+          await Promise.allSettled(deletions);
+          try{ alert('Todas as encomendas foram removidas.'); try{ stopAlarm(); }catch{} }
+            catch(e){}
+        }catch(e){
+          console.warn('Falha ao limpar encomendas: ', e);
+          try{ alert('Falha ao limpar encomendas. Ver console.'); }catch(_){}
+        }
+        return false;
       }, true);
     }catch(e){}
   }
@@ -730,90 +696,81 @@
 </script>
 
 
+
+<!-- STAFF_FIREBASE_CLOUD_ONLY_V2 -->
 <script>
 (function(){
-  try{ window._knownServed = window._knownServed || new Set(); }catch(e){}
-  function snapshotServedIdsSafe(){
-    try{
-      if (typeof snapshotServedIds==='function') return snapshotServedIds();
-      const map = (window.__staffServedMem && window.__staffServedMem.map) || {};
-      return Object.keys(map).filter(k => !!map[k]);
-    }catch(e){ return []; }
-  }
-  window.detectNewServedAndNotify = function(){
-    try{
-      const ids = snapshotServedIdsSafe();
-      ids.forEach((id)=>{
-        const k = String(id);
-        if (!_knownServed.has(k)){
-          try { if (typeof showToast==='function') showToast('Pedido pronto ✨'); } catch(e){}
-          try { if (typeof playReadySound==='function') playReadySound(); } catch(e){}
-          _knownServed.add(k);
-        }
-      });
-    }catch(e){}
+  function init(){
+    const fb = window.__fb;
+// Source of truth: Firestore
+  window.__cloudList = [];
+
+  // Make getOrders() return cloud list everywhere in the page
+  window.getOrders = function(){
+    return Array.isArray(window.__cloudList) ? window.__cloudList : [];
   };
-})();
-</script>
+  // setOrders becomes a no-op (we never write local)
+  window.setOrders = function(){ /* cloud only */ };
 
-<!-- CLOUD_ONLY_V2 (staff) -->
-<script>
-(function(){
-  // In-memory cloud state
-  window.__cloudOrders = window.__cloudOrders || [];
-  window.__readyMap    = window.__readyMap || {};
+  // Subscribe to all orders, oldest first
+  const qAll = fb.query(fb.ordersCol, fb.orderBy('createdAtMs','asc'));
+  fb.onSnapshot(qAll, (snap)=>{
+    const list = [];
+    snap.forEach(doc => {
+      const d = doc.data()||{};
+      list.push({
+        id: d.id || doc.id,
+        table: d.table,
+        items: d.items || [],
+        notes: d.notes || '',
+        totalCVE: d.totalCVE,
+        createdAt: d.createdAtMs || Date.now(),
+        confirmed: !!d.confirmed,
+        confirmedAt: d.confirmedAtMs || null,
+        isReady: !!d.isReady,
+        readyAt: d.readyAtMs || null
+      });
+    });
+    window.__cloudList = list;
+    try{ if (typeof render==='function') render(); }catch(e){}
+  });
 
-  // Always ignore localStorage for data
-  try { window.getOrders = function(){ return Array.from(window.__cloudOrders||[]); }; } catch(e){}
-  try { window.getAllOrders = function(){ return Array.from(window.__cloudOrders||[]); }; } catch(e){}
-  try { window.setOrders = function(_){ /* no-op in cloud mode */ }; } catch(e){}
+  // Cloud-write actions
+  window.confirmOrder = async function(id){
+    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
+    try{
+      const ref = fb.doc(fb.db, 'orders', String(id));
+      fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
+    }catch(e){ console.warn('confirmOrder cloud error', e); }
+  };
+  window.rejectOrder = async function(id){
+    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
+    try{
+      const ref = fb.doc(fb.db, 'orders', String(id));
+      const ok = window.confirm('Rejeitar este pedido?');
+      if (!ok) return;
+      fb.deleteDoc(ref);
+    }catch(e){ console.warn('rejectOrder cloud error', e); }
+  };
+  window.markServedAndClear = async function(id){
   try {
-    window.getServedMap = function(){ try{ return Object.assign({}, window.__readyMap||{}); }catch(e){ return {}; } };
-    window.setServedMap = function(m){ try{ window.__readyMap = Object.assign({}, m||{}); window.__staffServedMem = {map: window.__readyMap, ver: Date.now()}; }catch(e){} };
-  } catch(e){}
-
-  function _renderAll(){
-    try { if (typeof render==='function') render(); } catch(e){}
-    try { if (typeof renderHistory==='function') renderHistory(); } catch(e){}
+    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
+    const fb = window.__fb;
+    if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
+    const ref = fb.doc(fb.db, 'orders', String(id));
+    await fb.deleteDoc(ref);
+  } catch (e) {
+    console.warn('Erro ao marcar servido/remover:', e);
+    try{ alert('Falha ao remover pedido. Ver consola.'); }catch(_){}
   }
-
-  function _applySnapshot(rows){
-    try {
-      const arr = rows.map(r => (r._data || r || {}));
-      arr.forEach(o => { if (!('orderId' in o)) o.orderId = String(o.id||''); if (!('id' in o)) o.id = Number(o.orderId||0); });
-      window.__cloudOrders = arr;
-      const map = {};
-      arr.forEach(o => { map[String(o.orderId||o.id||'')] = !!o.isReady; });
-      window.__readyMap = map;
-      window.__staffServedMem = { map, ver: Date.now() };
-      _renderAll();
-    } catch(e){}
+};
+}
+  if (window.__fb) init(); else {
+    const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
+    setTimeout(()=> clearInterval(t), 8000);
   }
-
-  function startCloudFeed(){
-    try { if (!window.Parse) return; } catch(e) { return; }
-    try {
-      const Order = Parse.Object.extend('Order');
-      const q = new Parse.Query(Order);
-      q.limit(1000);
-      // Initial fetch
-      q.find().then(_applySnapshot).catch(()=>{});
-      // Live subscription
-      const sub = q.subscribe();
-      const onchg = () => q.find().then(_applySnapshot).catch(()=>{});
-      try { sub.on('create', onchg); sub.on('update', onchg); sub.on('delete', onchg); } catch(e){}
-    } catch(e) { }
-  }
-
-  // Wait for Firebase Auth before subscribing
-  (function ensureAuthThenStart(){
-    try {
-      const fb = window.__fb || {}, auth = fb.auth;
-      if (!auth || typeof auth.onAuthStateChanged !== 'function') { startCloudFeed(); return; }
-      auth.onAuthStateChanged(function(u){ if (u) startCloudFeed(); });
-    } catch(e) { startCloudFeed(); }
-  })();
 })();
+
 </script>
 
 </body>
@@ -885,3 +842,36 @@
 })();
 </script>
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  // add other product imports if needed:
+  // import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",  // <-- fix
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
+  };
+
+  const app = initializeApp(firebaseConfig);
+</script>
+
+
+</body>
+</html>
+
+<script>
+(function(){
+  function maybeStopAlarmWhenNoPending(){
+    try{
+      const hasPending = (typeof getOrders==='function') && getOrders().some(o=>!o.confirmed);
+      if (!hasPending && typeof stopAlarm==='function') stopAlarm();
+    }catch(e){}
+  }
+  document.addEventListener('orders:rendered', maybeStopAlarmWhenNoPending);
+  setInterval(maybeStopAlarmWhenNoPending, 2000);
+})();
+</script>
