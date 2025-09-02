@@ -227,18 +227,6 @@
     });
   } catch(e){ /* ignore */ }
 }
-    showBanner(msg);
-    alertEl.play().catch(()=>{
-      const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
-      fallbackLoop=setInterval(()=>{
-        const now=audioCtx.currentTime, g=audioCtx.createGain(), o1=audioCtx.createOscillator(), o2=audioCtx.createOscillator();
-        o1.type='square'; o2.type='square'; o1.frequency.value=800; o2.frequency.value=1600;
-        o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.45, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
-        o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
-      },1100);
-    });
-  }
 
   async function playReadySound(){
     if(!soundEnabled) return;
