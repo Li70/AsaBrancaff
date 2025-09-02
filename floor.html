@@ -77,6 +77,40 @@
     window.bcPost = (msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
   })();
   </script>
+
+  <!-- CLOUD_PARSE_INIT_V1 -->
+
+
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as storageRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  window.firebaseConfig = firebaseConfig;
+
+  const app = initializeApp(window.firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app);
+
+  window.__fb = { app, db, auth, storage, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, storageRef, getDownloadURL,
+        ordersCol: collection(db, "orders")
+      };
+  window.__fbReady = false;
+  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
+  signInAnonymously(auth).catch(()=>{});
+</script>
+
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
@@ -502,98 +536,23 @@
       const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
       if(sheetOpen) return m || d; return d || m;
     }
-    
+    function sendOrder(){
+      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+      const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
-async function waitForFbReady(){ for(let i=0;i<50;i++){ if(window.__fbReady && window.__fb) return true; await new Promise(r=>setTimeout(r,200)); } return !!window.__fb; }
-function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
-async function sendOrder(){
-  if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
-  const keys = Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
+      const items=keys.map(k=>({ pizzaType:cart[k].name, size:'', qty:Number(cart[k].qty)||1, notes:'' }));
+      const total = Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0);
 
-  const items = keys.map(k=>({
-    pizzaType: cart[k].name,
-    size: '',
-    qty: Number(cart[k].qty)||1,
-    notes: '',
-    priceNum: Number(cart[k].priceNum)||0
-  }));
-
-  const total = Object.values(cart).reduce((s,it)=> s + ((Number(it.priceNum)||0)*(Number(it.qty)||1)), 0);
-  const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-
-  // Cloud only: Firestore write
-  try{
-    const fb = window.__fb;
-    if (!(await waitForFbReady())) { console.warn('Firebase not ready yet, retrying write'); await delay(300); }
-    if (window.__fb){
-      const data = { id, table:String(selectedTable), items, notes:(notesDesktop?.value||notesMobile?.value||''), totalCVE:Math.round(total), createdAtMs:Date.now(), confirmed:false, isReady:false };
-      fb.setDoc(fb.doc(fb.db, 'orders', id), data);
-    } else {
-      console.warn('Firebase not initialized.');
-    }
-  }catch(e){ console && console.warn && console.warn('Firebase save failed', e); }
-
-  cart = {}; renderCart();
-  try{ if(cartSheet?.classList?.contains('open')) cartSheet.classList.remove('open'); }catch{}
-  alert('Pedido enviado!');
-}
-
-
-
-    const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
-    const closeSheet=()=>{ cartSheet.classList.remove('open'); cartSheet.setAttribute('aria-hidden','true'); };
-    document.getElementById('closeCartSheet').addEventListener('click', closeSheet);
-    openCartFab.addEventListener('click', openSheet);
-    if (sendBtnDesktop) sendBtnDesktop.addEventListener('click', sendOrder);
-    sendBtnMobile.addEventListener('click', sendOrder);
-    sendBtnSheet.addEventListener('click', sendOrder);
-
-    if (notesDesktop) notesDesktop.addEventListener('input', ()=>{ if(!cartSheet.classList.contains('open')) notesMobile.value = notesDesktop.value; });
-    notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
-
-    // Drag-to-close (mobile)
-    let startY=null, currentY=null;
-    cartSheet.addEventListener('touchstart', (e)=>{ if(e.touches.length===1){ startY=e.touches[0].clientY; }});
-    cartSheet.addEventListener('touchmove', (e)=>{ if(startY!=null){ currentY=e.touches[0].clientY; const dy=currentY-startY; if(dy>0) cartSheet.style.transform=`translateY(${Math.min(dy, window.innerHeight)}px)`; }});
-    cartSheet.addEventListener('touchend', ()=>{ if(startY!=null){ const dy=(currentY??startY)-startY; cartSheet.style.transform=''; if(dy>80) closeSheet(); startY=currentY=null; }});
-
-    // Build index
-    ITEM_INDEX = buildIndex();
-
-    // Init
-    renderCart();
-
-  </script>
-
-
-
-
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-  window.firebaseConfig = firebaseConfig;
-
-  const app = initializeApp(window.firebaseConfig);
-  const db  = getFirestore(app);
-  const auth = getAuth(app);
-
-  window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
-        ordersCol: collection(db, "orders")
-      };
-  window.__fbReady = false;
-  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
-  signInAnonymously(auth).catch(()=>{});
-</script>
+      const orders=getOrdersCompat();
+      orders.push({
+        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        table: String(selectedTable),
+        items,
+        createdAt: Date.now(),
+        notes: gatherNotes(),
+        confirmed: false,
+        totalCVE: total
+      });
+      </script>
 </body>
 </html>
