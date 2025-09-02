@@ -421,26 +421,27 @@ function startAlarm(msg){
   // Subscribe to all orders, oldest first
   const qAll = fb.query(fb.ordersCol, fb.orderBy('createdAtMs','asc'));
   fb.onSnapshot(qAll, (snap)=>{
-    const list = [];
-    snap.forEach(doc => {
-      const d = doc.data()||{};
-      list.push({
-        id: d.id || doc.id,
-        table: d.table,
-        items: d.items || [],
-        notes: d.notes || '',
-        totalCVE: d.totalCVE,
-        createdAt: d.createdAtMs || Date.now(),
-        confirmed: !!d.confirmed,
-        confirmedAt: d.confirmedAtMs || null,
-        isReady: !!d.isReady,
-        readyAt: d.readyAtMs || null
-      });
+  const list = [];
+  snap.forEach(doc => {
+    const d = doc.data()||{};
+    list.push({
+      id: String(doc.id),
+      table: d.table ?? null,
+      items: Array.isArray(d.items) ? d.items : [],
+      notes: d.notes || '',
+      totalCVE: d.totalCVE || null,
+      createdAtMs: d.createdAtMs || 0,
+      confirmed: !!d.confirmed,
+      confirmedAtMs: d.confirmedAtMs || null,
+      isReady: !!d.isReady,
+      readyAtMs: d.readyAtMs || null,
+      served: !!d.served
     });
-    window.__cloudList = list;
-    try{ if (typeof render==='function') render(); }catch(e){}
-    try{ __evaluateAlarmsAndReady(); }catch(e){}
   });
+  window.__cloudList = list;
+  try{ if (typeof render==='function') render(); }catch(e){}
+  try{ if (typeof __evaluateAlarmsAndReady==='function') __evaluateAlarmsAndReady(); }catch(e){}
+});
 
   // Cloud-write actions
   window.confirmOrder = async function(id){
