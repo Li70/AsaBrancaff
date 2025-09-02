@@ -563,7 +563,35 @@
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch { return new Set(); }
+    }
+
+  function detectNewServedAndNotify(){
+    try{
+      const ids = snapshotServedIds();
+      ids.forEach((id)=>{
+        const k = String(id);
+        if (!_knownServed.has(k)){
+          try { showToast('Pedido pronto ✨'); } catch(e){}
+          try { playReadySound(); } catch(e){}
+          _knownServed.add(k);
+        }
+      });
+    }catch(e){}
+  }
+
+  function detectNewServedAndNotify(){
+    try{
+      const next = snapshotServedIds();
+      let hasNew = false;
+      next.forEach(id => { if (!_knownServed.has(id)) hasNew = true; });
+      if (hasNew){
+        try { showToast('Pedido pronto ✨'); } catch(e){}
+        try { playReadySound(); } catch(e){}
+      }
+      _knownServed = next;
+    }catch(e){}
+  }
+ catch { return new Set(); }
   }
  
 
