@@ -757,8 +757,8 @@
         try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
         var ok = true;
         try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
-        if (!ok) return false;
-        (async function(){
+        if (!ok) return;
+        if (ok) (async function(){
           // Optional: Cloud reject so they don't come back after refresh
           if (window.Parse && Parse.applicationId) {
             try{
@@ -858,7 +858,7 @@
             var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
             if (!ok){ ev.preventDefault(); ev.stopPropagation(); return; }
           }catch(e){}
-          (async function(){
+          if (ok) (async function(){
             try{
               var Order = Parse.Object.extend('Order');
               var q = new Parse.Query(Order);
