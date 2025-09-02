@@ -85,6 +85,23 @@
 
   <!-- coloque cash.mp3 na mesma pasta ou troque por um URL -->
   <audio id="cashSound" preload="auto" src="cash.mp3"></audio>
+<script>
+(function(){
+  const el = document.getElementById('cashSound');
+  const candidates = ["/cashe.mp3","cashe.mp3","/cash.mp3","cash.mp3","/sounds/cashe.mp3","/sounds/cash.mp3","/assets/cashe.mp3","/assets/cash.mp3"];
+  async function resolveCash(){
+    for (const path of candidates){
+      try{ const r = await fetch(path, {method:'HEAD', cache:'no-store'}); if (r.ok){ el.src = path; return true; } }catch(e){}
+    }
+    console.warn("cashe/cash mp3 not found in:", candidates);
+    return false;
+  }
+  window.__resolveCash = resolveCash;
+  try{ resolveCash(); }catch{}
+  if (document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', resolveCash, {once:true}); } else { resolveCash(); }
+})();
+</script>
+
 
   <script>
     "use strict";
@@ -224,7 +241,7 @@
       // teste curto silencioso
       try { await cashEl.play(); setTimeout(()=>{ try{ cashEl.pause(); }catch{} }, 200); } catch {}
     }
-    async function playSound(){
+    async async function playSound(){
       if (!soundEnabled) return;
       try { cashEl.currentTime = 0; await cashEl.play(); return; } catch {}
       playFallback();
@@ -244,6 +261,7 @@
       o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
     }
     soundBtn.addEventListener('click', enableSound);
+  let autoUnlockTimerKitchen = setInterval(()=>{ if(!soundEnabled) enableSound(); else clearInterval(autoUnlockTimerKitchen); }, 1500);
 
     // tentar ativar som por omissão
     document.addEventListener('DOMContentLoaded', enableSound);
@@ -370,7 +388,7 @@
     render({withAlerts:false});
 
     /* ====== Som ====== */
-    function playSound(){
+    async function playSound(){
       if (!soundEnabled) return;
       cashEl.currentTime = 0;
       cashEl.play().catch(playFallback);
@@ -488,7 +506,7 @@ const ordersDiv = document.getElementById('orders');
 
   function formatCVE(n){ return `${Math.floor(Number(n)||0)}$00`; }
   function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
-  async function playSound(){ try{ cashEl.currentTime=0; await cashEl.play(); }catch{} }
+  async async function playSound(){ try{ cashEl.currentTime=0; await cashEl.play(); }catch{} }
 
   let knownIds = new Set();
   function renderList(list){
@@ -532,12 +550,26 @@ const ordersDiv = document.getElementById('orders');
   fb.onSnapshot(qConf, (snap)=>{
     const list=[]; let novos=0;
     snap.forEach(doc=>{
-      const d=doc.data()||{};
-      if (d && d.confirmed===true && d.served!==true) list.push({ id:d.id || doc.id, table:d.table, items:d.items||[], notes:d.notes||'', totalCVE:d.totalCVE, createdAt:d.createdAtMs||Date.now(), isReady:!!d.isReady, readyAt:d.readyAtMs||null });
-      if (!knownIds.has(d.id||doc.id)) novos++;
+      const d = doc.data() || {};
+      if (d && d.confirmed===true && d.served!==true){
+        list.push({
+          id: String(doc.id),
+          table: d.table ?? null,
+          items: Array.isArray(d.items) ? d.items : [],
+          notes: d.notes || '',
+          createdAtMs: d.createdAtMs || 0,
+          confirmed: !!d.confirmed,
+          isReady: !!d.isReady,
+          readyAtMs: d.readyAtMs || null,
+          served: !!d.served
+        });
+      }
+      if (!knownIds.has(String(doc.id))) novos++;
     });
-    list.sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
-    renderList(list);
+if (!knownIds.has(d.id||doc.id)) novos++;
+    });
+    list.sort((a,b)=> (a.createdAtMs||0) - (b.createdAtMs||0));
+    window.__cloudList = list; renderList(list);
     if (novos>0){ try{ banner.classList.remove('hidden'); setTimeout(()=>banner.classList.add('hidden'), 2000); }catch{}; playSound(); }
     knownIds = new Set(list.map(o=>String(o.id)));
   });
