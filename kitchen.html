@@ -509,7 +509,7 @@
 
   
 
-  const app = initializeApp(firebaseConfig);
+  const app = initializeApp(window.firebaseConfig);
   const db  = getFirestore(app);
   const auth = getAuth(app);
 
@@ -520,24 +520,6 @@
   onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
   signInAnonymously(auth).catch(()=>{});
 </script>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  // add other product imports if needed:
-  // import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",  // <-- fix
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
-  };
-
-  const app = initializeApp(firebaseConfig);
-</script>
-
 
 
 </body>
