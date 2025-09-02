@@ -37,88 +37,29 @@
   <h2>Prontos</h2>
   <div id="readyList"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import {
-      getFirestore, collection, doc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy
-    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc,
+    onSnapshot, serverTimestamp, query, where, orderBy
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    // Firebase config for asabrancaff-faebe
-    const firebaseConfig = {
-      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-      authDomain: "asabrancaff-faebe.firebaseapp.com",
-      projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.appspot.com",
-      messagingSenderId: "326390762122",
-      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
-    signInAnonymously(getAuth(app)).catch(console.error);
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const ordersCol = collection(db, "orders");
 
-    const newList = document.getElementById('newList');
-    const confirmedList = document.getElementById('confirmedList');
-    const readyList = document.getElementById('readyList');
-
-    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    function itemLine(it){ const note = it.notes ? ` <span class="muted">(${esc(it.notes)})</span>` : ""; return `${Number(it.qty||1)} × ${esc(it.name||it.pizzaType||'')}${note}`; }
-
-    function renderBucket(container, arr, actions=[]) {
-      container.innerHTML = '';
-      if (!arr.length){ container.innerHTML = '<p class="muted">—</p>'; return; }
-      arr.forEach(o=>{
-        const card = document.createElement('div');
-        card.className = 'card';
-        const items = (o.items||[]).map(itemLine).join('<br>');
-        const notes = o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : '';
-        const badge = o.isReady ? '<span class="badge ready">✔ Pronto</span>' : '';
-        card.innerHTML = `
-          <div><strong>Mesa ${esc(o.table)}</strong> ${badge}</div>
-          <div class="muted" style="font-size:12px">${new Date(o.createdAtMs||Date.now()).toLocaleTimeString()}</div>
-          <div style="margin-top:6px">${items}</div>
-          ${notes}
-          <div style="margin-top:8px"></div>
-        `;
-        const btnWrap = document.createElement('div');
-        actions.forEach(a=>{
-          const b = document.createElement('button');
-          b.textContent = a.label;
-          b.addEventListener('click', () => a.run(o));
-          btnWrap.appendChild(b);
-        });
-        card.appendChild(btnWrap);
-        container.appendChild(card);
-      });
-    }
-
-    // Live queries
-    const ordersCol = collection(db, 'orders');
-
-    // New: not confirmed
-    onSnapshot(query(ordersCol, where('confirmed','==', false), orderBy('createdAtMs','asc')), snap => {
-      const arr = [];
-      snap.forEach(d=>{ const x = d.data(); arr.push({ id:d.id, ...x }); });
-      renderBucket(newList, arr, [
-        { label: 'Confirmar', run: (o)=> updateDoc(doc(db,'orders',o.id), { confirmed:true, confirmedAtMs: Date.now() }) },
-        { label: 'Rejeitar',  run: async (o)=> { if (confirm('Rejeitar este pedido?')) await deleteDoc(doc(db,'orders',o.id)); } }
-      ]);
-    });
-
-    // Confirmed: confirmed == true (filter out served client-side to avoid composite index)
-    onSnapshot(query(ordersCol, where('confirmed','==', true), orderBy('createdAtMs','asc')), snap => {
-      const confirmedArr = []; const readyArr = [];
-      snap.forEach(d=>{
-        const x = d.data(); const o = { id:d.id, ...x };
-        if (o.served) return; // hidden from both lists
-        if (o.isReady) readyArr.push(o); else confirmedArr.push(o);
-      });
-      renderBucket(confirmedList, confirmedArr);
-      renderBucket(readyList, readyArr, [
-        { label: 'Servido', run: (o)=> updateDoc(doc(db,'orders',o.id), { served:true, servedAtMs: Date.now() }) }
-      ]);
-    });
-  </script>
+  // Expose helpers to the rest of the page scripts (your existing code already uses window.__fb)
+  window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
+</script>
 </body>
 </html>

@@ -47,74 +47,29 @@ Francesinha"></textarea>
     </div>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import {
-      getFirestore, collection, addDoc, serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc,
+    onSnapshot, serverTimestamp, query, where, orderBy
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    // Firebase config for asabrancaff-faebe
-    const firebaseConfig = {
-      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-      authDomain: "asabrancaff-faebe.firebaseapp.com",
-      projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.appspot.com",
-      messagingSenderId: "326390762122",
-      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-    };
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
 
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
-    // optional auth to satisfy stricter rules
-    signInAnonymously(getAuth(app)).catch(console.error);
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const ordersCol = collection(db, "orders");
 
-    const $ = (id) => document.getElementById(id);
-    const msg = $("msg");
-
-    function parseItems(text) {
-      return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(line => {
-        // patterns: "2 x pizza", "2x pizza", "2 * pizza"
-        const m = line.match(/^(\d+)\s*[xX\*]\s*(.+)$/);
-        if (m) return { qty: Number(m[1]), name: m[2] };
-        return { qty: 1, name: line };
-      });
-    }
-
-    async function placeOrder() {
-      msg.className = "muted"; msg.textContent = "";
-      const table = $("table").value.trim();
-      const itemsRaw = $("items").value.trim();
-      const notes = $("notes").value.trim();
-
-      if (!table || !itemsRaw) {
-        msg.className = "err"; msg.textContent = "Indique mesa e itens.";
-        return;
-      }
-
-      const items = parseItems(itemsRaw);
-      try {
-        const now = Date.now();
-        await addDoc(collection(db, "orders"), {
-          table,
-          items,
-          notes: notes || null,
-          confirmed: false,
-          isReady: false,
-          served: false,
-          createdAt: serverTimestamp(),
-          createdAtMs: now,
-          updatedAt: serverTimestamp()
-        });
-        msg.className = "ok"; msg.textContent = "Pedido enviado!";
-        $("items").value = ""; $("notes").value = "";
-      } catch (e) {
-        console.error(e);
-        msg.className = "err"; msg.textContent = "Falha ao enviar pedido.";
-      }
-    }
-
-    $("placeOrderBtn").addEventListener("click", placeOrder);
-  </script>
+  // Expose helpers to the rest of the page scripts (your existing code already uses window.__fb)
+  window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
+</script>
 </body>
 </html>
