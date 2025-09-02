@@ -660,7 +660,7 @@ function computeOrderTotal(order){
       fb.updateDoc(ref, { isReady: true, readyAtMs: Date.now() });
     }catch(e){ console.warn('markServed cloud error', e); }
   };
-}}
+}
   if (window.__fb) init(); else {
     const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
     setTimeout(()=> clearInterval(t), 8000);
