@@ -579,5 +579,35 @@
 })();
 </script>
 
+
+<script>
+// Category map generated from floor menu
+window.__CATMAP = {'PEPERONI':'Clássicas', 'HAWAII-II':'Clássicas', 'ATUM':'Clássicas', 'FRANGO':'Clássicas', 'VEGETARIANO':'Clássicas', 'S.C.P.':'Especiais', 'S.L.B':'Especiais', 'F.C.P.':'Especiais', '1 Pizza + Coca-Cola 1,5L':'Pizza Familiar Combo', '1 Pizza + Compal 1L':'Pizza Familiar Combo', 'LEGS':'Fried Chicken', 'WINGS':'Fried Chicken', 'SWEET CHILLI WINGS':'Fried Chicken', 'BARBECUE WINGS':'Fried Chicken', 'NUGGETS':'Fried Chicken', 'POP CORNS':'Fried Chicken', 'FRIED CHICKEN':'Fried Chicken', 'SANDWICH':'Fried Chicken', 'MEIA DE FRANGO':'Fried Chicken', 'COMBO 1':'Combos', 'COMBO 2':'Combos', 'COMBO 3':'Combos', 'COMBO 4':'Combos', 'PIZZA COMBO + Coca-Cola 1,5L':'Combos', 'PIZZA COMBO + Compal 1L':'Combos', 'SHAWARMA COMBO':'Combos', 'DONER KEBAB COMBO':'Combos', 'CHICAGO':'Hot Dog', 'ITALIAN':'Hot Dog', 'MICHIGAN':'Hot Dog', 'NEW YORK':'Hot Dog', 'DODGER DOG':'Hot Dog', 'CAROLINA':'Hot Dog', 'SWEET & SOUR SAUCE':'Molhos', 'ALFREDO (CREMOSO CLÁSSICO)':'Molhos', 'HONEY MUSTARD':'Molhos', 'CHEESY SAUCE':'Molhos', 'CREOLE TOMATO':'Molhos', 'COLESLAW':'Molhos', 'BUFFALO':'Molhos', 'COXINHA':'Salgados/Petiscos', 'PASTEL':'Salgados/Petiscos', 'BIFANAS À MODA DO PORTO':'Salgados/Petiscos', 'MOELAS À PORTUGUESA':'Salgados/Petiscos', 'LINGUIÇA':'Salgados/Petiscos', 'CLÁSSICO CHEESEBURGER':'Hambúrgueres', 'BIG MAC BURGER':'Hambúrgueres', 'SWEET BURGER':'Hambúrgueres', 'BURGER X TUDO MODA DA CASA':'Hambúrgueres', 'HAMBÚRGUER COMPLETO':'Hambúrgueres', 'HAMBÚRGUER CRISPY':'Hambúrgueres', 'SHAWARMA DE ATUM':'Shawarma', 'SHAWARMA DE GALINHA':'Shawarma', 'SHAWARMA DE CARNE':'Shawarma', 'SHAWARMA VEGETARIANO':'Shawarma', 'DONER KEBAB':'Shawarma', 'CENOURA':'Sumos Naturais', 'PAPAIA':'Sumos Naturais', 'MELANCIA':'Sumos Naturais', 'LARANJA':'Sumos Naturais', 'UVA':'Sumos Naturais', 'MAÇÃ':'Sumos Naturais', 'MANGA':'Sumos Naturais', 'BANANA':'Sumos Naturais', 'MARACUJÁ':'Sumos Naturais', 'KIWI':'Sumos Naturais', 'GELADO DE CONE':'Gelados', 'GELADO DE COPO':'Gelados'};
+window.getCategoryByName = function(name){
+  try{ return (window.__CATMAP && window.__CATMAP[String(name||'').trim()]) || ''; }catch(e){ return ''; }
+};
+</script>
+
+
+<script>
+(function(){
+  function hook(){
+    try{
+      var b=document.getElementById('refreshBtn');
+      if (b && !b.__reloadHook){
+        b.__reloadHook = true;
+        b.addEventListener('click', function(ev){
+          try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+          try{ location.reload(); }catch(e){}
+        }, true);
+      }
+    }catch(e){}
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', hook, {once:true});
+  else hook();
+  setInterval(hook, 1000);
+})();
+</script>
+
 </body>
 </html>
