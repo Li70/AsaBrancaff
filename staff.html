@@ -856,7 +856,7 @@
         n.addEventListener('click', function(ev){
           try{
             var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
-            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
+            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return; }
           }catch(e){}
           (async function(){
             try{
