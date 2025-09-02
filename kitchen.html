@@ -351,15 +351,6 @@
 
 
 
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
-
-
-
-
-
 <!-- REMOVE_FILTERTABLE_V2 -->
 <script>
 (function(){
@@ -522,5 +513,36 @@
 })();
 </script>
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, doc, updateDoc,
+    serverTimestamp, onSnapshot, query, where, orderBy
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+  // --- Your project config ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com", // <-- fixed
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+
+  // --- Initialize ---
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  // Optional auth (matches rules above)
+  const auth = getAuth(app);
+  signInAnonymously(auth).catch(console.error);
+
+  // Expose helpers so each page can use them
+  window.firebaseDB = { db, collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, query, where, orderBy };
+</script>
+
+    
 </body>
 </html>
