@@ -17,22 +17,7 @@
   </style>
 
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    const firebaseConfig = {
-      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-      authDomain: "asabrancaff-faebe.firebaseapp.com",
-      projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.firebasestorage.app",
-      messagingSenderId: "326390762122",
-      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const ordersCol = collection(db, "orders");
-    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
-  </script>
+  
 
 </head>
 <body class="p-4">
@@ -52,6 +37,11 @@
       Novo pedido recebido!
     </div>
 
+    
+    <details class="card p-3 mb-4">
+      <summary>Histórico de hoje — Total: <span id="histTotal" class="muted">0$00</span></summary>
+      <div id="histList" class="mt-2 muted"></div>
+    </details>
     <div id="orders" class="space-y-3 mb-6"></div>
 
    
@@ -449,7 +439,7 @@
 <!-- KITCHEN_FIREBASE_CLOUD_ONLY_V2 -->
 <script>
 (function(){
-  const fb = window.__fb; if (!fb) { console.warn('Firebase not ready on Kitchen.'); return; }
+  const fb = window.__fb; if (!fb) { /* fb not ready (suppressed) */; return; }
   const ordersDiv = document.getElementById('orders');
   const banner = document.getElementById('banner');
   const cashEl = document.getElementById('cashSound');
@@ -510,6 +500,25 @@
     knownIds = new Set(list.map(o=>String(o.id)));
   });
 })();
+</script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+  
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+
+  window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot,
+    ordersCol: collection(db, "orders")
+  };
+  window.__fbReady = false;
+  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
+  signInAnonymously(auth).catch(()=>{});
 </script>
 
 
