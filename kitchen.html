@@ -84,23 +84,13 @@
    
 
   <!-- coloque cash.mp3 na mesma pasta ou troque por um URL -->
-  <audio id="cashSound" preload="auto" src="cash.mp3"></audio>
-<script>
-(function(){
-  const el = document.getElementById('cashSound');
-  const candidates = ["/cashe.mp3","cashe.mp3","/cash.mp3","cash.mp3","/sounds/cashe.mp3","/sounds/cash.mp3","/assets/cashe.mp3","/assets/cash.mp3"];
-  async function resolveCash(){
-    for (const path of candidates){
-      try{ const r = await fetch(path, {method:'HEAD', cache:'no-store'}); if (r.ok){ el.src = path; return true; } }catch(e){}
-    }
-    console.warn("cashe/cash mp3 not found in:", candidates);
-    return false;
-  }
-  window.__resolveCash = resolveCash;
-  try{ resolveCash(); }catch{}
-  if (document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', resolveCash, {once:true}); } else { resolveCash(); }
-})();
-</script>
+  <audio id="cashSound" preload="auto">
+  <source src="/cash.mp3" type="audio/mpeg">
+  <source src="cash.mp3" type="audio/mpeg">
+  <source src="/sounds/cash.mp3" type="audio/mpeg">
+  <source src="/assets/cash.mp3" type="audio/mpeg">
+</audio>
+
 
 
   <script>
@@ -506,7 +496,7 @@ const ordersDiv = document.getElementById('orders');
 
   function formatCVE(n){ return `${Math.floor(Number(n)||0)}$00`; }
   function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
-  async async function playSound(){ try{ cashEl.currentTime=0; await cashEl.play(); }catch{} }
+  async function playSound(){ try{ cashEl.currentTime=0; await cashEl.play(); }catch{} }
 
   let knownIds = new Set();
   function renderList(list){
@@ -517,7 +507,7 @@ const ordersDiv = document.getElementById('orders');
       const isServed = !!o.isReady;
       if (hideServed && isServed) return;
       const div=document.createElement('div'); div.className='card p-3 rounded-xl';
-      const items=(o.items||[]).map(i=>`<li>${Number(i.qty||1)} × ${esc(i.pizzaType||'')}</li>`).join('') || '<li class="muted">—</li>';
+      const items = (o.items||[]).map(i=>`<li>${Number(i.qty||1)} × ${esc(i.name||i.pizzaType||i.item||'')}</li>`).join('') || '<li class="muted">—</li>';
       const t = (typeof o.totalCVE === 'number') ? formatCVE(o.totalCVE) : '';
       div.innerHTML = `
         <div class="flex items-start justify-between gap-3">
