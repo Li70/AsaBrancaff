@@ -68,44 +68,6 @@
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
-
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-      authDomain: "asabrancaff-faebe.firebaseapp.com",
-      projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.appspot.com",
-      messagingSenderId: "326390762122",
-      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-    };
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const ordersCol = collection(db, "orders");
-    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy , getDocs };
-  </script>
-<script type="module">
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  if (window.__fb?.app) {
-    const auth = getAuth(window.__fb.app);
-    // Promise that resolves when a user is available
-    let resolved = false;
-    window.__authReady = new Promise((resolve) => {
-      onAuthStateChanged(auth, (user) => {
-        if (user && !resolved) { resolved = true; resolve(user); }
-      });
-    });
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch(console.error);
-    }
-  }
-</script>
-
-
 </head>
 <body class="p-4">
   <!-- sound controls -->
@@ -157,20 +119,8 @@
   </div>
 
   <!-- sounds -->
-  <audio id="alertSound" preload="auto" loop>
-  <source src="/ready.mp3" type="audio/mpeg">
-  <source src="ready.mp3" type="audio/mpeg">
-  <source src="/assets/ready.mp3" type="audio/mpeg">
-  <source src="/sounds/ready.mp3" type="audio/mpeg">
-</audio>
-
-
-  <audio id="doneSound" preload="auto">
-  <source src="/done.mp3" type="audio/mpeg">
-  <source src="done.mp3" type="audio/mpeg">
-  <source src="/assets/done.mp3" type="audio/mpeg">
-  <source src="/sounds/done.mp3" type="audio/mpeg">
-</audio>
+  <audio id="alertSound" preload="auto" src="ready.mp3" loop></audio>
+  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
 
   <script>
   "use strict";
@@ -203,70 +153,31 @@
   const doneEl=document.getElementById('doneSound');
 
   /* === Sound / alarm === */
-function playDone(msg){
-  try{ if(!soundEnabled) enableSound(); }catch(e){}
-  try {
-    if (msg) showBanner(msg);
-    if (doneEl) {
-      try { doneEl.currentTime = 0; if (typeof doneEl.load==='function') doneEl.load(); } catch(e){}
-      doneEl.play().catch(()=>{});
-    }
-  } catch(e){}
-  try { setTimeout(()=> hideBanner(), 3000); } catch(e){}
-}
-
   let soundEnabled=false, audioCtx, fallbackLoop=null;
   function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
   function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
   async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
-  function stopAlarm(){
-  try{
-    alertEl.pause();
-    alertEl.currentTime = 0;
-  }catch(e){}
-  hideBanner();
-}catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
+  function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
-  ackBtn.addEventListener('click', ()=>{ try{ hideBanner(); }catch{} });
+  ackBtn.addEventListener('click', stopAlarm);
   document.addEventListener('DOMContentLoaded', enableSound);
   document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
   document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
 
-  // keep trying to enable sound until it succeeds
-  let autoUnlockTimer = setInterval(()=>{ if(!soundEnabled) enableSound(); else clearInterval(autoUnlockTimer); }, 1500);
-
   function startAlarm(msg){
-  try{ if(!soundEnabled) enableSound(); }catch(e){}
-  showBanner(msg);
-  try {
-    alertEl.loop = true;
-    alertEl.currentTime = 0;
-    if (typeof alertEl.load === 'function') alertEl.load();
-  } catch(e){}
-  try {
-    alertEl.play().catch(()=>{});
-  } catch(e){}
-}catch(e){}
-  showBanner(msg);
-  try {
+    if(!soundEnabled){ showBanner(msg); return; }
+    showBanner(msg);
     alertEl.play().catch(()=>{
-      const Ctx=window.AudioContext||window.webkitAudioContext;
-      if(!audioCtx && Ctx) audioCtx=new Ctx();
-      if(!audioCtx) return;
-      // simple fallback beep loop
-      fallbackLoop = setInterval(()=>{
-        const now=audioCtx.currentTime;
-        const g=audioCtx.createGain(), o=audioCtx.createOscillator();
-        o.type='square'; o.frequency.value=880;
-        o.connect(g); g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(0.0001, now);
-        g.gain.exponentialRampToValueAtTime(0.6, now+0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, now+0.4);
-        o.start(now); o.stop(now+0.42);
-      }, 600);
+      const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
+      fallbackLoop=setInterval(()=>{
+        const now=audioCtx.currentTime, g=audioCtx.createGain(), o1=audioCtx.createOscillator(), o2=audioCtx.createOscillator();
+        o1.type='square'; o2.type='square'; o1.frequency.value=800; o2.frequency.value=1600;
+        o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.45, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
+        o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
+      },1100);
     });
-  } catch(e){ /* ignore */ }
-}
+  }
 
   async function playReadySound(){
     if(!soundEnabled) return;
@@ -277,33 +188,10 @@ function playDone(msg){
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
   function priceForName(name){ const k=String(name||'').trim(); return (k in PRICE_INDEX)? Number(PRICE_INDEX[k]):0; }
-  
-function computeOrderTotal(order){
-  if (order && typeof order.totalCVE === 'number' && isFinite(order.totalCVE)) {
-    return Number(order.totalCVE)||0;
+  function computeOrderTotal(order){
+    if (typeof order.totalCVE==='number') return Number(order.totalCVE)||0;
+    let sum=0; for(const it of (order.items||[])){ sum += priceForName(it.pizzaType) * Number(it.qty||1); } return sum;
   }
-  function parseCVEFromText(txt){
-    try{
-      const digits = String(txt||'').replace(/\D/g,'');
-      if (!digits) return 0;
-      if (digits.length >= 4) return Math.round(Number(digits)/100);
-      return Number(digits);
-    }catch(e){ return 0; }
-  }
-  let sum = 0;
-  const items = Array.isArray(order && order.items) ? order.items : [];
-  for (const it of items){
-    const qty = Number(it && it.qty || 1) || 1;
-    let pn = 0;
-    if (it && typeof it.priceNum === 'number' && isFinite(it.priceNum) && it.priceNum > 0){
-      pn = Number(it.priceNum);
-    } else {
-      pn = parseCVEFromText(it && (it.price || it.pizzaType || it.name || it.label || it.desc));
-    }
-    sum += (Number(pn)||0) * qty;
-  }
-  return sum;
-}
 
   /* === render lists === */
   function render(){
@@ -311,7 +199,7 @@ function computeOrderTotal(order){
     const all = getOrders().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 
     const pend = all.filter(o=>!o.confirmed && (!tableFilter || Number(o.table)===tableFilter));
-    const conf = all.filter(o=> o.confirmed && !o.served && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
+    const conf = all.filter(o=> o.confirmed && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
 
     pendingDiv.innerHTML=''; confirmedDiv.innerHTML='';
     countPend.textContent=pend.length; countConf.textContent=conf.length;
@@ -354,7 +242,7 @@ function computeOrderTotal(order){
           `${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`
         ).join('<br>') || '(sem itens)';
         const total=computeOrderTotal(o);
-        const isReady = (o.isReady === true) || !!readyMap[String(o.id)];
+        const isReady = !!readyMap[String(o.id)];
 
         const card=document.createElement('div');
         card.className='card p-3 rounded-xl' + (isReady ? ' ready' : '');
@@ -422,27 +310,19 @@ function computeOrderTotal(order){
 
   /* === Actions === */
   function confirmOrder(id){
-    const all = getOrders();
-    const idx = all.findIndex(o=>String(o.id)===String(id));
-    if (idx<0) return;
-    all[idx].confirmed = true; all[idx].confirmedAt = Date.now();
+    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
+    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
     setOrders(all);
+    try{ remotePatch(id,{ confirmed:true, confirmedAt: Date.now() }); }catch(e){}
     bcPost({type:'orders_updated'});
-    // Only stop alarm if no unconfirmed orders remain
-    try{
-      const stillPending = getOrders().some(o=>!o.confirmed && !o.rejectedAt && !o.servedAt);
-      if (!stillPending) stopAlarm();
-    }catch(e){}
+    stopAlarm();
     render();
   }
   function rejectOrder(id){
-    var ok = true;
-    try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
-    if (!ok) return;
-    const keep = getOrders().filter(o=>String(o.id)!==String(id));
+    if(!confirm('Rejeitar este pedido?')) return;
+    const keep=getOrders().filter(o=>String(o.id)!==String(id));
     setOrders(keep);
-    bcPost({type:'orders_updated'});
-    render();
+    try{ remoteDelete(id); }catch(e){} bcPost({type:'orders_updated'}); render();
   }
 
   // SERVIDO: escreve no histórico + remove dos pedidos + notifica
@@ -477,69 +357,20 @@ function computeOrderTotal(order){
     renderHistory();
   }
 
-  
   /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
   let _knownServed = new Set();
   function snapshotServedIds(){
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch (e) {
-      return new Set();
-    }
+    } catch { return new Set(); }
   }
+ 
 
-  // Detect newly marked-as-ready orders (from Kitchen/other devices) and notify once
-  function detectNewServedAndNotify(){
-    try {
-      const latest = snapshotServedIds();
-      let hasNew = false;
-      const all = (typeof getOrders==='function') ? getOrders() : [];
-      latest.forEach(function(id){
-        id = String(id);
-        if (!_knownServed.has(id)){
-          const o = all.find(function(x){ return String(x.id)===id; });
-          if (!o || o.confirmed) hasNew = true;
-        }
-      });
-      if (hasNew){
-        showToast('Pedido pronto ✨');
-        playReadySound();
-      }
-      _knownServed = latest;
-    } catch (e) { /* no-op */ }
-  }
-
-let __lastPendingCount = 0;
-/* === subscriptions / polling === */
-  let __lastReadySet = new Set();
+  /* === subscriptions / polling === */
   subscribeAll((evt)=>{
     render(); 
-    // Alarm behavior based on pending count
-try {
-  const pendingCount = (typeof getOrders==='function')
-    ? getOrders().filter(o => !o.confirmed).length : 0;
-  if (pendingCount > 0 && __lastPendingCount === 0) {
-    startAlarm(pendingCount === 1 ? 'Novo pedido recebido!' : pendingCount + ' novos pedidos recebidos!');
-  } else if (pendingCount === 0 && __lastPendingCount !== 0) {
-    stopAlarm();
-  }
-  __lastPendingCount = pendingCount;/* READY-DETECT */
-try {
-  const readyNow = new Set(
-    (typeof getOrders==='function')
-      ? getOrders().filter(o => o.confirmed && !o.served && (o.isReady === true)).map(o => String(o.id))
-      : []
-  );
-  let newReadyIds = [];
-  readyNow.forEach(id => { if (!__lastReadySet.has(id)) newReadyIds.push(id); });
-  if (newReadyIds.length > 0) {
-    playDone(newReadyIds.length === 1 ? 'Pronto!' : (newReadyIds.length + ' pedidos prontos!'));
-  }
-  __lastReadySet = readyNow;
-} catch(e) { /* no-op */ }
-} catch (e) { /* no-op */ }
-detectNewOrdersAndMaybeAlarm(); 
+    detectNewOrdersAndMaybeAlarm(); 
     renderHistory();
 
     // Direct broadcast from Kitchen
@@ -559,319 +390,52 @@ detectNewOrdersAndMaybeAlarm();
   _knownServed = snapshotServedIds();
   </script>
 
-
-
-
-
-
-
-<!-- STAFF_SERVED_VIRTUAL_V2 -->
+<!-- === Remote sync: Firebase Realtime Database (REST) === -->
 <script>
-(function(){
-  var SERVED_KEY = 'orders_served';
-  var SERVED_VERSION = 'orders_served_version';
-  var _get = null;
-  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
-  localStorage.getItem = function(k){
-    try{
-      if (k===SERVED_KEY){
-        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
-        return JSON.stringify(m);
-      }
-      if (k===SERVED_VERSION){
-        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
-        return String(v);
-      }
-    }catch(e){}
-    return _get ? _get(k) : null;
-  };
-})();
-</script>
+  const FB_URL = 'https://console.firebase.google.com/project/asabranca-orders/database/asabranca-orders-default-rtdb/data/~2F';
+  const ORDERS_KEY = 'orders_simple_v4';
+  const VERSION_KEY = 'orders_simple_v4_ver';
+  function arr(v){ return Array.isArray(v)?v:(v?Object.values(v):[]); }
 
-
-<!-- REMOVE_FILTERTABLE_V2 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
-<script>
-(function() {
-  function attach() {
+  async function remotePull(){
     try {
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllRemoveV1) return;
-      btn.__wiredClearAllRemoveV1 = true;
-      btn.addEventListener('click', function(ev) {
-        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
-        try { 
-          if (typeof setOrders === 'function') setOrders([]);
-          if (typeof setServedMap === 'function') setServedMap({});
-          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
-          if (typeof render === 'function') render();
-        } catch(e){}
-      }, true);
-    } catch(e){}
+      const r = await fetch(FB_URL + '/orders.json');
+      const data = await r.json();
+      const list = arr(data);
+      localStorage.setItem(ORDERS_KEY, JSON.stringify(list));
+      localStorage.setItem(VERSION_KEY, String(Date.now()));
+      if (typeof bcPost === 'function') bcPost({type:'orders_updated'});
+    } catch(e) { console.warn('remotePull failed', e); }
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllV2) return;
-      btn.__wiredClearAllV2 = true;
-      btn.addEventListener('click', async function(ev){
-        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-        var ok = true;
-        try{ ok = window.confirm('Quer mesmo apagar TODAS as encomendas? Esta ação não pode ser desfeita.'); }catch(e){ ok = true; }
-        if (!ok) return false;
-        try{
-          // Wait for auth, then delete all docs in 'orders'
-          if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-          var fb = window.__fb;
-          if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
-          const snap = await fb.getDocs(fb.query(fb.ordersCol));
-          const deletions = [];
-          snap.forEach(function(docSnap){
-            deletions.push(fb.deleteDoc(fb.doc(fb.db, 'orders', docSnap.id)));
-          });
-          await Promise.allSettled(deletions);
-          try{ alert('Todas as encomendas foram removidas.'); try{ stopAlarm(); }catch{} }
-            catch(e){}
-        }catch(e){
-          console.warn('Falha ao limpar encomendas: ', e);
-          try{ alert('Falha ao limpar encomendas. Ver console.'); }catch(_){}
-        }
-        return false;
-      }, true);
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- STAFF_ATUALIZAR_RELOAD_V1 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-      nodes.forEach(function(n){
-        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-        if (t==='atualizar' || t==='actualizar' || n.id==='refreshBtn') {
-          if (n.__wiredRefreshV1) return;
-          n.__wiredRefreshV1 = true;
-          n.addEventListener('click', function(ev){
-            try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-            try{ location.reload(); }catch(e){}
-          }, true);
-        }
+  function remotePut(order){
+    try {
+      fetch(FB_URL + '/orders/' + encodeURIComponent(order.id) + '.json', {
+        method: 'PUT',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(order)
       });
-    }catch(e){}
+    } catch(e) { console.warn('remotePut failed', e); }
   }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-
-<!-- STAFF_FIREBASE_CLOUD_ONLY_V2 -->
-<script>
-(function(){
-  function init(){
-    const fb = window.__fb;
-// Source of truth: Firestore
-  window.__cloudList = [];
-
-  // Make getOrders() return cloud list everywhere in the page
-  window.getOrders = function(){
-    return Array.isArray(window.__cloudList) ? window.__cloudList : [];
-  };
-  // setOrders becomes a no-op (we never write local)
-  window.setOrders = function(){ /* cloud only */ };
-
-  // Subscribe to all orders, oldest first
-  const qAll = fb.query(fb.ordersCol, fb.orderBy('createdAtMs','asc'));
-  fb.onSnapshot(qAll, (snap)=>{
-    const list = [];
-    snap.forEach(doc => {
-      const d = doc.data()||{};
-      list.push({
-        id: d.id || doc.id,
-        table: d.table,
-        items: d.items || [],
-        notes: d.notes || '',
-        totalCVE: d.totalCVE,
-        createdAt: d.createdAtMs || Date.now(),
-        confirmed: !!d.confirmed,
-        confirmedAt: d.confirmedAtMs || null,
-        isReady: !!d.isReady,
-        readyAt: d.readyAtMs || null
+  function remotePatch(id, patch){
+    try {
+      fetch(FB_URL + '/orders/' + encodeURIComponent(id) + '.json', {
+        method: 'PATCH',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(patch)
       });
-    });
-    window.__cloudList = list;
-    try{ if (typeof render==='function') render(); }catch(e){}
-  });
-
-  // Cloud-write actions
-  window.confirmOrder = async function(id){
-    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
-    }catch(e){ console.warn('confirmOrder cloud error', e); }
-  };
-  window.rejectOrder = async function(id){
-    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      const ok = window.confirm('Rejeitar este pedido?');
-      if (!ok) return;
-      fb.deleteDoc(ref);
-    }catch(e){ console.warn('rejectOrder cloud error', e); }
-  };
-  window.markServedAndClear = async function(id){
-  try {
-    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-    const fb = window.__fb;
-    if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
-    const ref = fb.doc(fb.db, 'orders', String(id));
-    await fb.deleteDoc(ref);
-  } catch (e) {
-    console.warn('Erro ao marcar servido/remover:', e);
-    try{ alert('Falha ao remover pedido. Ver consola.'); }catch(_){}
+    } catch(e) { console.warn('remotePatch failed', e); }
   }
-};
-}
-  if (window.__fb) init(); else {
-    const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
-    setTimeout(()=> clearInterval(t), 8000);
+  function remoteDelete(id){
+    try {
+      fetch(FB_URL + '/orders/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
+    } catch(e) { console.warn('remoteDelete failed', e); }
   }
-})();
 
+  // Poll the shared database to keep localStorage in sync across devices
+  setInterval(remotePull, 1000);
+  // Also pull once on load
+  remotePull();
 </script>
 
 </body>
 </html>
-
-
-
-
-
-
-<!-- STAFF_DOM_TWEAKS_V2 -->
-<script>
-(function(){
-  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
-  function removeLimparMesa(){
-    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
-  }
-  function removeMesaField(){
-    try{
-      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
-        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
-        if (ph==='mesa'){ el.remove(); return; }
-        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
-        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
-      });
-    }catch(e){}
-  }
-  function run(){ removeLimparMesa(); removeMesaField(); }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
-})();
-</script>
-
-
-
-<!-- STAFF_CLEARALL_UNIFIED_V4 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  var hooked = false;
-  function attach(){
-    if (hooked) return;
-    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-    nodes.forEach(function(n){
-      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-      if (t==='limpar tudo'){
-        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
-        n.addEventListener('click', function(ev){
-          try{
-            var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
-            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
-          }catch(e){}
-          (async function(){
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
-              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
-            }catch(e){}
-          })();
-        }, true);
-      }
-    });
-  }
-  
-})();
-</script>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  // add other product imports if needed:
-  // import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",  // <-- fix
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
-  };
-
-  const app = initializeApp(firebaseConfig);
-</script>
-
-
-</body>
-</html>
-
-<script>
-(function(){
-  function maybeStopAlarmWhenNoPending(){
-    try{
-      const hasPending = (typeof getOrders==='function') && getOrders().some(o=>!o.confirmed);
-      if (!hasPending && typeof stopAlarm==='function') stopAlarm();
-    }catch(e){}
-  }
-  document.addEventListener('orders:rendered', maybeStopAlarmWhenNoPending);
-  setInterval(maybeStopAlarmWhenNoPending, 2000);
-})();
-</script>
