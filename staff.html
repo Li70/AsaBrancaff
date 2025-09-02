@@ -1,667 +1,198 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt">
 <head>
-<script>
-  // Guards for served tracking
-  window.snapshotServedIds = window.snapshotServedIds || function(){
-    try{
-      const arr = (typeof getOrders==='function') ? getOrders() : [];
-      return new Set(arr.filter(o => o && o.served===true).map(o => String(o.id)));
-    }catch(e){ return new Set(); }
-  };
-  window._knownServed = window._knownServed || new Set();</script>
-
-<script>  let knownIds = new Set();
-
-window.render = window.render || function(){}; window.renderHistory = window.renderHistory || function(){};
-
-  window.render = window.render || function(){};
-  window.renderHistory = window.renderHistory || function(){};</script>
-
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Staff – Pedidos em Tempo Real</title>
- <script src="https://cdn.tailwindcss.com">
-window.renderHistory = window.renderHistory || function(){};</script> 
-<!-- <link rel="stylesheet" href="tailwind-lite.css"> -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Staff — Pedidos</title>
   <style>
-    :root { color-scheme: dark; }
-    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
-    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); transition: box-shadow .2s, border-color .2s; }
-    .muted { color: rgba(255,255,255,0.7); }
-    .btn { padding:.5rem .85rem; border-radius:.75rem; font-weight:600; }
-    .pill{ font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,.08); }
-    .items li { list-style: disc; margin-left: 1.25rem; }
-    .toast { position: fixed; left: 50%; transform: translateX(-50%); top: 12px; background:#065f46; border:1px solid #059669; padding:.6rem .9rem; border-radius:.75rem; z-index:50; }
-    .bar { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; }
-    details summary { cursor: pointer; }
-
-    /* Ready styling */
-    .card.ready { border-color: rgba(16,185,129,.6) !important; box-shadow: 0 0 0 2px rgba(16,185,129,.15); }
-    .pill-ready { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#052e2b; border:1px solid rgba(16,185,129,.6); color:#a7f3d0; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; margin:0; background:#111; color:#eee}
+    header{padding:12px 16px; background:#1b1b1b; position:sticky; top:0; z-index:10; display:flex; gap:12px; align-items:center}
+    .badge{background:#2a2a2a; padding:6px 10px; border-radius:999px; font-size:12px}
+    #banner{display:none; background:#0b3; color:#fff; padding:8px 12px; border-radius:8px; margin-left:auto}
+    main{padding:16px; display:grid; gap:12px}
+    .card{background:#1b1b1b; border:1px solid #2a2a2a; border-radius:12px; padding:12px}
+    .row{display:flex; justify-content:space-between; align-items:center; gap:12px}
+    .items{margin:8px 0 0 16px}
+    button{background:#2d6cdf; color:#fff; border:0; padding:8px 10px; border-radius:8px; cursor:pointer}
+    button.secondary{background:#444}
+    .muted{opacity:.7; font-size:12px}
   </style>
-
   <script>
-  // --- Tiny UI helpers
-  function showToast(msg){
-    const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
-    document.body.appendChild(t); setTimeout(()=>t.remove(), 2500);
-  }
-
-  // --- Shared helpers: storage + channel + polling
-  (function(){
-    window.ORDERS_KEY='orders_simple_v4';
-    window.VERSION_KEY='orders_simple_v4_ver';
-    window.SERVED_KEY='orders_served';
-    window.SERVED_VERSION='orders_served_ver';
-    window.HISTORY_KEY='orders_history_v1';
-
-    window.lsGet=(k,f=null)=>{ try{const v=localStorage.getItem(k); return v===null?f:v;}catch{return f;} };
-    window.lsSet=(k,v)=>{ try{localStorage.setItem(k,v); return true;}catch{return false;} };
-
-    window.getOrders=()=>{ try{return JSON.parse(lsGet(ORDERS_KEY,'[]'))||[];}catch{return[];} };
-    window.setOrders=(arr)=>{ lsSet(ORDERS_KEY,JSON.stringify(arr)); lsSet(VERSION_KEY,String(Date.now())); };
-
-    window.getHistory=()=>{ try{return JSON.parse(lsGet(HISTORY_KEY,'[]'))||[];}catch{return[];} };
-    window.setHistory=(arr)=>{ lsSet(HISTORY_KEY,JSON.stringify(arr)); };
-
-    window.getServedMap=()=>{ try{return JSON.parse(lsGet(SERVED_KEY,'{}'))||{};}catch{return{};} };
-    window.setServedMap=(m)=>{ lsSet(SERVED_KEY,JSON.stringify(m)); lsSet(SERVED_VERSION,String(Date.now())); };
-
-    const channels=[]; try{ channels.push(new BroadcastChannel('orders_simple_v4')); }catch{}
-    window.bcPost=(msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
-
-    window.subscribeAll=function(onChange,{pollMs=900}={}){
-      channels.forEach(ch=>ch.onmessage=(e)=> onChange(e?.data||null));
-      window.addEventListener('storage',(e)=>{ if(!e.key) return;
-        if([ORDERS_KEY,VERSION_KEY,SERVED_VERSION,HISTORY_KEY].includes(e.key)) onChange(null); });
-      let lastV=lsGet(VERSION_KEY,'0'), lastS=lsGet(SERVED_VERSION,'0'), lastH=lsGet(HISTORY_KEY,'[]');
-      const t=setInterval(()=>{
-        const v=lsGet(VERSION_KEY,'0'), s=lsGet(SERVED_VERSION,'0'), h=lsGet(HISTORY_KEY,'[]');
-        if(v!==lastV || s!==lastS || h!==lastH){ lastV=v; lastS=s; lastH=h; onChange(null); }
-      }, pollMs);
-      return ()=>clearInterval(t);
-    };
-
-    window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
-  })();
+    // Safe no-op guards (some older code references these)
+    window.render = window.render || function(){};
+    window.renderHistory = window.renderHistory || function(){};
   </script>
+</head>
+<body>
+  <header>
+    <div class="badge">Staff</div>
+    <div id="counts" class="badge">—</div>
+    <div id="banner">Pronto!</div>
+    <audio id="readySound" preload="auto" loop>
+      <source src="/ready.mp3" type="audio/mpeg">
+      <source src="ready.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="doneSound" preload="auto">
+      <source src="/done.mp3" type="audio/mpeg">
+      <source src="done.mp3" type="audio/mpeg">
+    </audio>
+  </header>
+  <main id="list"></main>
 
-
+  <!-- Firebase + realtime logic -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-  
-    const app = 
-    const db = getFirestore(app);
-    const ordersCol = collection(db, "orders");
-    
-  </script>
-<script type="module">
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  if (window.__fb?.app) {
-    const auth = getAuth(window.__fb.app);
-    // Promise that resolves when a user is available
-    let resolved = false;
-    window.__authReady = new Promise((resolve) => {
-      onAuthStateChanged(auth, (user) => {
-        if (user && !resolved) { resolved = true; resolve(user); }
-      });
+    // --- Firebase config (from your project) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+      authDomain: "asabrancaff-faebe.firebaseapp.com",
+      projectId: "asabrancaff-faebe",
+      storageBucket: "asabrancaff-faebe.appspot.com",
+      messagingSenderId: "326390762122",
+      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    };
+
+    // --- Init ---
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const auth = getAuth(app);
+    const ordersRef = collection(db, "orders");
+
+    // --- UI refs ---
+    const listEl = document.getElementById("list");
+    const countsEl = document.getElementById("counts");
+    const bannerEl = document.getElementById("banner");
+    const readyEl = document.getElementById("readySound");
+    const doneEl  = document.getElementById("doneSound");
+
+    // --- Sound helpers ---
+    let soundPrimed = false;
+    function primeSound() {
+      if (soundPrimed) return;
+      soundPrimed = true;
+      // try one quiet play/pause to unlock
+      readyEl.volume = 0; doneEl.volume = 0;
+      readyEl.play().then(()=>readyEl.pause()).catch(()=>{});
+      doneEl.play().then(()=>doneEl.pause()).catch(()=>{});
+      readyEl.volume = 1; doneEl.volume = 1;
+    }
+    function startReadyLoop() {
+      primeSound();
+      try { readyEl.currentTime = 0; readyEl.play().catch(()=>{}); } catch{}
+    }
+    function stopReadyLoop() {
+      try { readyEl.pause(); readyEl.currentTime = 0; } catch{}
+    }
+    function playDoneOnce() {
+      primeSound();
+      try { doneEl.currentTime = 0; doneEl.play().catch(()=>{}); } catch{}
+      try {
+        bannerEl.textContent = "Pronto!";
+        bannerEl.style.display = "block";
+        setTimeout(()=> { bannerEl.style.display="none"; }, 2500);
+      } catch{}
+    }
+
+    // --- State for edge-triggered sounds ---
+    let prevPendingCount = 0;
+    let prevReadyIds = new Set();
+
+    // --- Render ---
+    function esc(s){ const d=document.createElement("div"); d.textContent=String(s??""); return d.innerHTML; }
+    function renderList(orders){
+      listEl.innerHTML = "";
+      if (!orders.length){
+        listEl.innerHTML = '<div class="card muted">Sem pedidos.</div>';
+        return;
+      }
+      for (const o of orders){
+        const li = document.createElement("div");
+        li.className = "card";
+        const items = (Array.isArray(o.items)?o.items:[]).map(i=>`<li>${esc(i.qty??1)} × ${esc(i.name||i.item||i.pizzaType||"")}</li>`).join("") || '<li class="muted">—</li>';
+        li.innerHTML = `
+          <div class="row">
+            <strong>Mesa ${esc(o.table??"?")}</strong>
+            <div>
+              ${o.confirmed ? '' : `<button data-action="confirm" data-id="${o.id}">Confirmar</button>`}
+              <button class="secondary" data-action="served" data-id="${o.id}">Servido</button>
+            </div>
+          </div>
+          <ul class="items">${items}</ul>
+          ${o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : ''}
+        `;
+        listEl.appendChild(li);
+      }
+    }
+
+    // --- Button actions (event delegation) ---
+    listEl.addEventListener("click", async (ev)=>{
+      const btn = ev.target.closest("button[data-action]");
+      if (!btn) return;
+      const id = btn.getAttribute("data-id");
+      const action = btn.getAttribute("data-action");
+      const ref = doc(ordersRef, id);
+      try {
+        if (action === "confirm") {
+          await updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
+        } else if (action === "served") {
+          await updateDoc(ref, { served: true, servedAtMs: Date.now() });
+        }
+      } catch (e) { console.error(e); }
     });
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch(console.error);
-    }
-  }</script>
 
+    // --- Start realtime after auth ---
+    onAuthStateChanged(auth, (u)=>{
+      if (!u) return;
+      onSnapshot(ordersRef, (snap)=>{
+        const orders = [];
+        const readyNow = new Set();
+        let pendingCount = 0;
 
-</head>
-<body class="p-4">
-  <!-- sound controls -->
-  <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
-    <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
-  </div>
-
-  <!-- alert banner -->
-  <div id="alertBanner" class="hidden fixed left-1/2 -translate-x-1/2 bottom-16 bg-rose-700/90 border border-rose-500 rounded-xl px-4 py-2 text-sm z-40">Alerta</div>
-
-  <div class="max-w-6xl mx-auto">
-    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-      <h1 class="text-2xl font-bold">Staff – Pedidos em Tempo Real</h1>
-      <div class="flex items-center gap-2">
-        <input id="filterTable" type="number" min="1"
-               class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 w-28"
-               placeholder="Mesa #" />
-        <button id="clearTableBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar mesa</button>
-        <button id="clearAllBtn" class="btn bg-red-600 hover:bg-red-700">Limpar tudo</button>
-        <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
-      </div>
-    </header>
-
-    <section class="card p-3 rounded-2xl mb-3">
-      <div class="muted text-sm">
-        Pode confirmar as encomendas com o cliente se necessário. As encomendas confirmadas serao enviadas directamente para a cozinha.<br/>
-        A cozinha só vê pedidos <b>Confirmados</b>.
-      </div>
-    </section>
-
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-      <section class="card p-3 rounded-2xl">
-        <h2 class="font-semibold mb-2">Pendentes <span id="countPend" class="pill">0</span></h2>
-        <div id="pending" class="space-y-2"></div>
-      </section>
-
-      <section class="card p-3 rounded-2xl sm:col-span-1 lg:col-span-2">
-        <h2 class="font-semibold mb-2">Confirmados <span id="countConf" class="pill">0</span></h2>
-        <div id="confirmed" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-      </section>
-    </div>
-
-    <!-- (Optional) Histórico escondido: deixe a estrutura intacta -->
-    <details class="card rounded-2xl p-3" style="display:none">
-      <summary class="font-semibold">Histórico (Hoje) — Total: <span id="histTotal">0$00</span></summary>
-      <div id="histList" class="mt-3 space-y-2"></div>
-    </details>
-  </div>
-
-  <!-- sounds -->
-  <audio id="alertSound" preload="auto" loop>
-  <source src="/ready.mp3" type="audio/mpeg">
-  <source src="ready.mp3" type="audio/mpeg">
-  <source src="/assets/ready.mp3" type="audio/mpeg">
-  <source src="/sounds/ready.mp3" type="audio/mpeg">
-</audio>
-
-
-  <audio id="doneSound" preload="auto">
-  <source src="/done.mp3" type="audio/mpeg">
-  <source src="done.mp3" type="audio/mpeg">
-  <source src="/assets/done.mp3" type="audio/mpeg">
-  <source src="/sounds/done.mp3" type="audio/mpeg">
-</audio>
-
-  <script>
-  "use strict";
-
-  /* === PRICE INDEX (match client) === */
-  const PRICE_INDEX = {
-    "LEGS":200,"WINGS":200,"SWEET CHILLI WINGS":600,"BARBECUE WINGS":600,"NUGGETS":500,"POP CORNS":500,"FRIED CHICKEN":300,"SANDWICH":500,"MEIA DE FRANGO":600,
-    "COMBO 1":450,"COMBO 2":650,"COMBO 3":800,"COMBO 4":1000,
-    "CHICAGO":300,"ITALIAN":300,"MICHIGAN":300,"NEW YORK":300,"DODGER DOG":300,"CAROLINA":300,
-    "SWEET & SOUR SAUCE":50,"ALFREDO (CREMOSO CLÁSSICO)":50,"HONEY MUSTARD":50,"CHEESY SAUCE":50,"CREOLE TOMATO":50,"COLESLAW":50,"BUFFALO":50,
-    "COXINHA":60,"PASTEL":50,"BIFANAS À MODA DO PORTO":300,"MOELAS À PORTUGUESA":600,"LINGUIÇA":100,
-    "PEPERONI":800,"HAWAII-II":800,"ATUM":800,"FRANGO":800,"VEGETARIANO":800,
-    "S.C.P.":1000,"S.L.B":1000,"F.C.P.":1000,
-    "1 Pizza + Coca-Cola 1,5L":1200,"1 Pizza + Compal 1L":1250
-  };
-
-  /* === UI refs === */
-  const pendingDiv=document.getElementById('pending');
-  const confirmedDiv=document.getElementById('confirmed');
-  const countPend=document.getElementById('countPend');
-  const countConf=document.getElementById('countConf');
-  const filterInput=document.getElementById('filterTable');
-  const histList=document.getElementById('histList');
-  const histTotalEl=document.getElementById('histTotal');
-
-  const soundBtn=document.getElementById('soundBtn');
-  const ackBtn=document.getElementById('ackBtn');
-  const alertBanner=document.getElementById('alertBanner');
-  const alertEl=document.getElementById('alertSound');
-  const doneEl=document.getElementById('doneSound');
-
-  /* === Sound / alarm === */
-function playDone(msg){
-  try{ if(!soundEnabled) enableSound(); }catch(e){}
-  try {
-    if (msg) showBanner(msg);
-    if (doneEl) {
-      try { doneEl.currentTime = 0; if (typeof doneEl.load==='function') doneEl.load(); } catch(e){}
-      doneEl.play().catch(()=>{});
-    }
-  } catch(e){}
-  try { setTimeout(()=> hideBanner(), 3000); } catch(e){}
-}
-
-  let soundEnabled = false, fallbackLoop = null;
-function showBanner(msg){
-  try { alertBanner.textContent = msg; } catch(e){}
-  try { alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); } catch(e){}
-}
-function hideBanner(){
-  try { alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); } catch(e){}
-}
-async function enableSound(){
-  try { if (alertEl){ alertEl.muted = false; alertEl.currentTime = 0; await alertEl.play().catch(()=>{}); } } catch(e){}
-  try { if (doneEl){ doneEl.muted = false; doneEl.currentTime = 0; await doneEl.play().catch(()=>{}); doneEl.pause(); } } catch(e){}
-  soundEnabled = true;
-}
-function stopAlarm(){
-  try { if (alertEl) { alertEl.pause(); alertEl.currentTime = 0; } } catch(e){}
-  try { if (typeof fallbackLoop !== 'undefined' && fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop = null; } } catch(e){}
-  hideBanner();
-}
-
-function startAlarm(msg){
-  try{ if(!soundEnabled) enableSound(); }catch(e){}
-  showBanner(msg);
-  try {
-    alertEl.loop = true;
-    alertEl.currentTime = 0;
-    if (typeof alertEl.load === 'function') alertEl.load();
-  } catch(e){}
-  try { alertEl.play().catch(()=>{}); } catch(e){}
-}
-
-
-
-  // initial
-  render(); renderHistory();
-  knownIds=new Set(getOrders().map(o=>String(o.id)));
-  _knownServed = snapshotServedIds();
-  </script>
-
-
-
-
-
-
-
-<!-- STAFF_SERVED_VIRTUAL_V2 -->
-<script>
-(function(){
-  var SERVED_KEY = 'orders_served';
-  var SERVED_VERSION = 'orders_served_version';
-  var _get = null;
-  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
-  localStorage.getItem = function(k){
-    try{
-      if (k===SERVED_KEY){
-        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
-        return JSON.stringify(m);
-      }
-      if (k===SERVED_VERSION){
-        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
-        return String(v);
-      }
-    }catch(e){}
-    return _get ? _get(k) : null;
-  };
-})();</script>
-
-
-<!-- REMOVE_FILTERTABLE_V2 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();</script>
-
-
-<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
-<script>
-(function() {
-  function attach() {
-    try {
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllRemoveV1) return;
-      btn.__wiredClearAllRemoveV1 = true;
-      btn.addEventListener('click', function(ev) {
-        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
-        try { 
-          if (typeof setOrders === 'function') setOrders([]);
-          if (typeof setServedMap === 'function') setServedMap({});
-          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
-          if (typeof render === 'function') render();
-        } catch(e){}
-      }, true);
-    } catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();</script>
-
-
-<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllV2) return;
-      btn.__wiredClearAllV2 = true;
-      btn.addEventListener('click', async function(ev){
-        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-        var ok = true;
-        try{ ok = window.confirm('Quer mesmo apagar TODAS as encomendas? Esta ação não pode ser desfeita.'); }catch(e){ ok = true; }
-        if (!ok) return false;
-        try{
-          // Wait for auth, then delete all docs in 'orders'
-          if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-          var fb = window.__fb;
-          if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
-          const snap = await fb.getDocs(fb.query(fb.ordersCol));
-          const deletions = [];
-          snap.forEach(function(docSnap){
-            deletions.push(fb.deleteDoc(fb.doc(fb.db, 'orders', docSnap.id)));
-          });
-          await Promise.allSettled(deletions);
-          try{ alert('Todas as encomendas foram removidas.'); try{ stopAlarm(); }catch{} }
-            catch(e){}
-        }catch(e){
-          console.warn('Falha ao limpar encomendas: ', e);
-          try{ alert('Falha ao limpar encomendas. Ver console.'); }catch(_){}
-        }
-        return false;
-      }, true);
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();</script>
-
-
-<!-- STAFF_ATUALIZAR_RELOAD_V1 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-      nodes.forEach(function(n){
-        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-        if (t==='atualizar' || t==='actualizar' || n.id==='refreshBtn') {
-          if (n.__wiredRefreshV1) return;
-          n.__wiredRefreshV1 = true;
-          n.addEventListener('click', function(ev){
-            try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-            try{ location.reload(); }catch(e){}
-          }, true);
-        }
-      });
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();</script>
-
-
-
-<!-- STAFF_FIREBASE_CLOUD_ONLY_V2 -->
-<script>
-(function(){
-  function init(){
-    const fb = window.__fb;
-// Source of truth: Firestore
-  window.__cloudList = [];
-
-  // Make getOrders() return cloud list everywhere in the page
-  window.getOrders = function(){
-    return Array.isArray(window.__cloudList) ? window.__cloudList : [];
-  };
-  // setOrders becomes a no-op (we never write local)
-  window.setOrders = function(){ /* cloud only */ };
-
-  // Subscribe to all orders, oldest first
-  const qAll = fb.query(fb.ordersCol, fb.orderBy('createdAtMs','asc'));
-  });
-  window.__cloudList = list;
-  try{ if (typeof render==='function') render(); }catch(e){}
-  try{ if (typeof __evaluateAlarmsAndReady==='function') __evaluateAlarmsAndReady(); }catch(e){}
-});
-
-  // Cloud-write actions
-  window.confirmOrder = async function(id){
-    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
-    }catch(e){ console.warn('confirmOrder cloud error', e); }
-  };
-  window.rejectOrder = async function(id){
-    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      const ok = window.confirm('Rejeitar este pedido?');
-      if (!ok) return;
-      fb.deleteDoc(ref);
-    }catch(e){ console.warn('rejectOrder cloud error', e); }
-  };
-  window.markServedAndClear = async function(id){
-  try {
-    if (window.__authReady) { try { await window.__authReady; } catch(e){} }
-    const fb = window.__fb;
-    if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
-    const ref = fb.doc(fb.db, 'orders', String(id));
-    await fb.deleteDoc(ref);
-  } catch (e) {
-    console.warn('Erro ao marcar servido/remover:', e);
-    try{ alert('Falha ao remover pedido. Ver consola.'); }catch(_){}
-  }
-};
-}
-  if (window.__fb) init(); else {
-    const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
-    setTimeout(()=> clearInterval(t), 8000);
-  }
-})();
-</script>
-
-<!-- FIREBASE_BOOT_START -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const auth = getAuth(app);
-
-  window.__fb = {
-    app, db, auth,
-    collection, onSnapshot, doc, setDoc, updateDoc, addDoc,
-    ordersCol: collection(db, "orders")
-  };
-
-  function startListeners() {
-    const col = collection(db, "orders");
-    onSnapshot(col, (snap) => {
-      const list = [];
-      snap.forEach(doc => {
-        const d = doc.data() || {};
-        list.push({
-          id: String(doc.id),
-          table: d.table ?? null,
-          items: Array.isArray(d.items) ? d.items : [],
-          notes: d.notes || "",
-          totalCVE: d.totalCVE || null,
-          createdAtMs: d.createdAtMs || 0,
-          confirmed: !!d.confirmed,
-          confirmedAtMs: d.confirmedAtMs || null,
-          isReady: !!d.isReady,
-          readyAtMs: d.readyAtMs || null,
-          served: !!d.served
+        snap.forEach(docSnap=>{
+          const d = docSnap.data()||{};
+          const o = {
+            id: String(docSnap.id),
+            table: d.table ?? null,
+            items: Array.isArray(d.items) ? d.items : [],
+            notes: d.notes || "",
+            totalCVE: d.totalCVE || null,
+            createdAtMs: d.createdAtMs || 0,
+            confirmed: !!d.confirmed,
+            confirmedAtMs: d.confirmedAtMs || null,
+            isReady: !!d.isReady,
+            readyAtMs: d.readyAtMs || null,
+            served: !!d.served
+          };
+          if (!o.served) orders.push(o);
+          if (!o.confirmed) pendingCount++;
+          if (o.confirmed && !o.served && o.isReady === true) readyNow.add(o.id);
         });
-      });
-      list.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0) || a.id.localeCompare(b.id));
-      window.__cloudList = list;
-      try { if (typeof window.render === 'function') window.render(); } catch(e) { }
-      try { if (typeof window.__evaluateAlarmsAndReady === 'function') window.__evaluateAlarmsAndReady(); } catch(e) {}
-    });
-  }
 
-  onAuthStateChanged(auth, (u)=>{
-    if (u) { startListeners(); }
-  });
-  signInAnonymously(auth).catch(()=>{});
-</script>
-<!-- FIREBASE_BOOT_END -->
+        // Sort newest first for staff
+        orders.sort((a,b)=> (b.createdAtMs||0)-(a.createdAtMs||0) || b.id.localeCompare(a.id));
+
+        // Render
+        renderList(orders);
+        countsEl.textContent = `Pendentes: ${pendingCount} · Ativos: ${orders.length}`;
+
+        // Sounds
+        if (pendingCount > 0 && prevPendingCount === 0) startReadyLoop();
+        if (pendingCount === 0 && prevPendingCount > 0) stopReadyLoop();
+        prevPendingCount = pendingCount;
+
+        // Done sound for new readies
+        const newReady = [];
+        readyNow.forEach(id => { if (!prevReadyIds.has(id)) newReady.push(id); });
+        if (newReady.length > 0) playDoneOnce();
+        prevReadyIds = readyNow;
+      });
+    });
+
+    // Kick off anon auth
+    signInAnonymously(auth).catch(()=>{});
+  </script>
 </body>
 </html>
-
-
-
-
-
-
-<!-- STAFF_DOM_TWEAKS_V2 -->
-<script>
-(function(){
-  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
-  function removeLimparMesa(){
-    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
-  }
-  function removeMesaField(){
-    try{
-      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
-        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
-        if (ph==='mesa'){ el.remove(); return; }
-        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
-        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
-      });
-    }catch(e){}
-  }
-  function run(){ removeLimparMesa(); removeMesaField(); }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
-})();</script>
-
-
-
-<!-- STAFF_CLEARALL_UNIFIED_V4 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  var hooked = false;
-  function attach(){
-    if (hooked) return;
-    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-    nodes.forEach(function(n){
-      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-      if (t==='limpar tudo'){
-        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
-        n.addEventListener('click', function(ev){
-          try{
-            var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
-            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
-          }catch(e){}
-          (async function(){
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
-              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
-            }catch(e){}
-          })();
-        }, true);
-      }
-    });
-  }
-  
-})();</script>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  // add other product imports if needed:
-  // import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-  
-
-  const app = </script>
-
-
-<!-- FIREBASE_BOOT_START -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const auth = getAuth(app);
-
-  window.__fb = {
-    app, db, auth,
-    collection, onSnapshot, doc, setDoc, updateDoc, addDoc,
-    ordersCol: collection(db, "orders")
-  };
-
-  function startListeners() {
-    const col = collection(db, "orders");
-    onSnapshot(col, (snap) => {
-      const list = [];
-      snap.forEach(doc => {
-        const d = doc.data() || {};
-        list.push({
-          id: String(doc.id),
-          table: d.table ?? null,
-          items: Array.isArray(d.items) ? d.items : [],
-          notes: d.notes || "",
-          totalCVE: d.totalCVE || null,
-          createdAtMs: d.createdAtMs || 0,
-          confirmed: !!d.confirmed,
-          confirmedAtMs: d.confirmedAtMs || null,
-          isReady: !!d.isReady,
-          readyAtMs: d.readyAtMs || null,
-          served: !!d.served
-        });
-      });
-      list.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0) || a.id.localeCompare(b.id));
-      window.__cloudList = list;
-      try { if (typeof window.render === 'function') window.render(); } catch(e) { }
-      try { if (typeof window.__evaluateAlarmsAndReady === 'function') window.__evaluateAlarmsAndReady(); } catch(e) {}
-    });
-  }
-
-  onAuthStateChanged(auth, (u)=>{
-    if (u) { startListeners(); }
-  });
-  signInAnonymously(auth).catch(()=>{});
-</script>
-<!-- FIREBASE_BOOT_END -->
-</body>
-</html>
-
-<script>
-(function(){
-  function maybeStopAlarmWhenNoPending(){
-    try{
-      const hasPending = (typeof getOrders==='function') && getOrders().some(o=>!o.confirmed);
-      if (!hasPending && typeof stopAlarm==='function') stopAlarm();
-    }catch(e){}
-  }
-  document.addEventListener('orders:rendered', maybeStopAlarmWhenNoPending);
-  setInterval(maybeStopAlarmWhenNoPending, 2000);
-})();
-
-function render(){ /* no-op (UI handled by Firestore-driven components) */ }</script>
