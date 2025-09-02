@@ -507,6 +507,7 @@
           const _map = (typeof getServedMap==='function') ? getServedMap() : {};
           if (evt && evt.id != null) { _map[String(evt.id)] = !!evt.served; }
           if (typeof setServedMap==='function') setServedMap(_map);
+          try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; window.__staffServedMem.map = _map; window.__staffServedMem.ver = Date.now(); }catch(e){}
           if (typeof render==='function') render();
         } catch(e) {}
       } // end served_update
