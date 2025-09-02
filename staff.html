@@ -104,6 +104,7 @@
     set(k,v){ this._data[k]=v; }
     get(k){ return this._data[k]; }
     async save(){
+      // ensure defaults so `doesNotExist` can be emulated via `== null`
       if (this.className==='Order'){
         if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
         if (!('servedAt' in this._data)) this._data.servedAt = null;
@@ -141,7 +142,7 @@
       this._limit = 1000;
     }
     equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; }
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
     limit(n){ this._limit = n; return this; }
     ascending(f){ this._order = ['asc', f]; return this; }
     descending(f){ this._order = ['desc', f]; return this; }
@@ -186,89 +187,10 @@
     }
   };
 
+  // Expose for the rest of the page
   window.Parse = Parse;
   window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
 </script>
-<script>
-  // Add a small "Pronto" badge next to the Servido button when isReady=true
-  (function(){
-    function ensureBadge(btn){
-      try{
-        const card = btn.closest('.card') || btn.closest('div');
-        if (!card) return null;
-        let badge = card.querySelector('.ready-badge');
-        if (!badge){
-          badge = document.createElement('span');
-          badge.className = 'ready-badge text-yellow-300 text-xs font-semibold';
-          badge.style.marginRight = '8px';
-          // place before the 'Servido' button
-          btn.parentNode.insertBefore(badge, btn);
-        }
-        return badge;
-      }catch(e){ return null; }
-    }
-
-    function updateReadyIcons(map){
-      try{
-        document.querySelectorAll('[data-served]').forEach(btn=>{
-          const id = String(btn.getAttribute('data-served')||'');
-          if (!id) return;
-          const badge = ensureBadge(btn);
-          if (!badge) return;
-          const isReady = !!(map && map[id]);
-          badge.textContent = isReady ? 'Pronto' : '';
-          badge.style.display = isReady ? 'inline-block' : 'none';
-        });
-      }catch(e){}
-    }
-
-    try{
-      const Order = Parse.Object.extend('Order');
-      const q = new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      const state = {};
-      function setItem(o){
-        const id = String(o.get('orderId') || o.id);
-        state[id] = !!o.get('isReady');
-        updateReadyIcons(state);
-      }
-      const sub = q.subscribe();
-      sub.on('create', setItem);
-      sub.on('update', setItem);
-      sub.on('delete', (o)=>{ const id=String(o.get('orderId')||o.id); delete state[id]; updateReadyIcons(state); });
-
-      // initial populate
-      (async ()=>{ try { (await q.find()).forEach(setItem); } catch(e){} })();
-
-      // also refresh icon map after every micro task (helps after UI rerender)
-      setInterval(()=>updateReadyIcons(state), 1000);
-    }catch(e){}
-  })();
-</script>
-
-<script>
-  // Load audio from Firebase Storage
-  (function(){
-    try{
-      const map = { "cash.mp3":"audio/cash.mp3", "ready.mp3":"audio/ready.mp3", "done.mp3":"audio/done.mp3" };
-      const els = Array.from(document.querySelectorAll('audio, source'));
-      const {storage, sRef, getDownloadURL} = window.__fb || {};
-      if (!storage || !getDownloadURL) return;
-      els.forEach(async el=>{
-        const src = el.getAttribute('src') || '';
-        const key = Object.keys(map).find(k => src.endsWith(k));
-        if (!key) return;
-        try{
-          const url = await getDownloadURL(sRef(storage, map[key]));
-          el.setAttribute('src', url);
-          const a = el.tagName.toLowerCase()==='audio' ? el : el.parentElement;
-          if (a && a.load) a.load();
-        }catch(e){}
-      });
-    }catch(e){}
-  })();
-</script>
-
 
 </head>
 <body class="p-4">
@@ -289,7 +211,8 @@
                class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 w-28"
                placeholder="Mesa #" />
         <button id="clearTableBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar mesa</button>
-        <button id="clearAllBtn" class="btn bg-red-600 hover:bg-red-700">Limpar tudo</button>
+        <button id="limparBtn" class="btn bg-red-600 hover:bg-red-700">Limpar</button>
+        
         <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
       </div>
     </header>
@@ -563,19 +486,7 @@
     try {
       const m = getServedMap();
       return new Set(Object.keys(m).filter(k => !!m[k]));
-    }
-          try { playReadySound(); } catch(e){}
-          _knownServed.add(k);
-        }
-      });
-    }catch(e){}
-  }
-        try { playReadySound(); } catch(e){}
-      }
-      _knownServed = next;
-    }catch(e){}
-  }
- catch { return new Set(); }
+    } catch { return new Set(); }
   }
  
 
@@ -590,9 +501,16 @@
       showToast('Pedido pronto ✨');
       playReadySound();
       if (evt.id != null) _knownServed.add(String(evt.id)); // avoid double notify next tick
-    }
-
-    // Fallback for storage/poll-only
+    
+        try {
+          // update served map instantly so the ✔️ Pronto icon shows right away
+          const _map = (typeof getServedMap==='function') ? getServedMap() : {};
+          if (evt && evt.id != null) { _map[String(evt.id)] = !!evt.served; }
+          if (typeof setServedMap==='function') setServedMap(_map);
+          if (typeof render==='function') render();
+        } catch(e) {}
+      } // end served_update
+        // Fallback for storage/poll-only
     detectNewServedAndNotify();
   }, {pollMs: 900});
 
@@ -732,69 +650,10 @@
 </script>
 
 
-<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
-<script>
-(function() {
-  function attach() {
-    try {
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllRemoveV1) return;
-      btn.__wiredClearAllRemoveV1 = true;
-      btn.addEventListener('click', function(ev) {
-        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
-        try { 
-          if (typeof setOrders === 'function') setOrders([]);
-          if (typeof setServedMap === 'function') setServedMap({});
-          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
-          if (typeof render === 'function') render();
-        } catch(e){}
-      }, true);
-    } catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
 
 
-<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllV2) return;
-      btn.__wiredClearAllV2 = true;
-      btn.addEventListener('click', function(ev){
-        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-        var ok = true;
-        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
-        if (!ok) return;
-        if (ok) (async function(){
-          // Optional: Cloud reject so they don't come back after refresh
-          if (window.Parse && Parse.applicationId) {
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
-          }
-          // Local UI clear (always)
-          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
-          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
-          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-          try{ if (typeof render==='function') render(); }catch(e){}
-        })();
-      }, true);
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
+
+
 
 
 <!-- STAFF_ATUALIZAR_RELOAD_V1 -->
@@ -819,65 +678,60 @@
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
 })();
+
+<script>
+// Minimal fallback: we now handle Pronto via served_update; keep this to avoid reference errors.
+function detectNewServedAndNotify(){ /* handled via served_update */ }
+</script>
 </script>
 
 
 <script>
-// Clean replacement for "Limpar tudo" — ONLY clears if user confirms.
 (function(){
-  function makeBtn(){
+  function attach(){
     try{
-      // Remove any old button to avoid legacy handlers
-      var old = document.getElementById('clearAllBtn');
-      if (old && old.parentNode) old.parentNode.removeChild(old);
-
-      // Create new button
-      var btn = document.createElement('button');
-      btn.id = 'clearAllBtn2';
-      btn.className = 'btn bg-red-600 hover:bg-red-700';
-      btn.textContent = 'Limpar tudo';
-      btn.__wiredClearAll = true; // prevent legacy attachers from wiring their handlers
-
-      // Insert near the old position (next to "Limpar mesa" if present)
-      var anchor = document.getElementById('clearTableBtn');
-      if (anchor && anchor.parentNode){
-        if (anchor.nextSibling) { anchor.parentNode.insertBefore(btn, anchor.nextSibling); }
-        else { anchor.parentNode.appendChild(btn); }
-      } else {
-        // fallback: add to first .card or header
-        var header = document.querySelector('header .flex, header div, header');
-        (header || document.body).appendChild(btn);
-      }
-
-      // Guarded handler
+      var btn = document.getElementById('limparBtn');
+      if (!btn || btn.__wiredLimparV1) return;
+      btn.__wiredLimparV1 = true;
       btn.addEventListener('click', function(ev){
         try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-        var ok = false;
-        try{ ok = window.confirm('Quer mesmo remover todas as encomendas?'); }catch(e){ ok = false; }
+        var ok=false;
+        try{ ok = window.confirm('Quer mesmo remover todas as encomendas?'); }catch(e){ ok=false; }
         if (!ok) return;
+
         (async function(){
-          try{
-            var Order = Parse.Object.extend('Order');
-            var q = new Parse.Query(Order);
-            q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-            q.limit(1000);
-            var res = await q.find();
-            for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-            for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
-            try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
-          }catch(e){}
+          // Cloud clear (reject+delete all active)
+          try {
+            if (window.Parse && Parse.applicationId) {
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){
+                try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){}
+              }
+              for (var j=0;j<res.length;j++){
+                try{ await res[j].destroy(); }catch(e){}
+              }
+            }
+          } catch(e){}
+
+          // Local clear (always)
+          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
+          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
+          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
+          try{ if (typeof render==='function') render(); }catch(e){}
         })();
       }, true);
     }catch(e){}
   }
-
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', makeBtn, {once:true});
-  } else {
-    makeBtn();
-  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach);
+  else attach();
+  setInterval(attach, 1200);
 })();
 </script>
+
 </body>
 </html>
 
@@ -910,40 +764,5 @@
 
 
 
-<!-- STAFF_CLEARALL_UNIFIED_V4 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  var hooked = false;
-  function attach(){
-    if (hooked) return;
-    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-    nodes.forEach(function(n){
-      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-      if (t==='limpar tudo'){
-        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
-        n.addEventListener('click', function(ev){
-          try{
-            var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
-            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return; }
-          }catch(e){}
-          if (ok) (async function(){
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
-              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
-            }catch(e){}
-          })();
-        }, true);
-      }
-    });
-  }
-  
-})();
-</script>
+
 
