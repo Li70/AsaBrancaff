@@ -2,51 +2,24 @@
 <html lang="pt">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Cozinha · Pedidos (Firebase)</title>
-  
-<style>
-  :root { color-scheme: light dark; --accent: #00897b; --bg:#0b0b0b; --card:#141414; --muted:#8a8a8a; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif; background: var(--bg); color: #fff; }
-  header { padding: 16px; background: #111; display: flex; gap: 12px; align-items:center; border-bottom: 1px solid #1e1e1e; position: sticky; top: 0; z-index: 5; }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  main { padding: 16px; display: grid; gap: 16px; max-width: 1100px; margin: 0 auto; }
-  .card { background: var(--card); border: 1px solid #1e1e1e; border-radius: 16px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
-  .row { display:flex; gap:12px; flex-wrap:wrap; }
-  input, textarea, select, button { background: #131313; color: #fff; border-radius: 10px; border: 1px solid #2a2a2a; padding: 10px 12px; font: inherit; }
-  button { background: var(--accent); border: 0; cursor: pointer; }
-  button.secondary { background: #2a2a2a; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .list { display: grid; gap: 10px; }
-  .item { border: 1px solid #262626; background: #121212; padding: 12px; border-radius: 12px; display: grid; gap: 8px; }
-  .pill { font-size:12px; background:#1e1e1e; padding:4px 8px; border-radius:999px; }
-  .split { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 800px){ .split { grid-template-columns: 1fr; } }
-</style>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cozinha – Pedidos (Só Visualização)</title>
+  <script src="https://cdn.tailwindcss.com"></script> 
+<!-- <link rel="stylesheet" href="tailwind-lite.css"> -->
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#0b1020; color:#fff; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
+    .muted { color: rgba(255,255,255,0.7); }
+    .btn  { padding:.55rem .85rem; border-radius:.75rem; font-weight:600; }
+    .items li { list-style: disc; margin-left: 1.25rem; }
+    details summary { cursor: pointer; }
+  </style>
 
-</head>
-<body>
-  <header>
-    <h1>Cozinha</h1>
-    <span class="pill">Em preparação</span>
-  </header>
-
-  <main>
-    <section class="card">
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <h2 style="margin:0">Pedidos ativos</h2>
-        <button id="refresh" class="secondary">Atualizar</button>
-      </div>
-      <div id="list" class="list"></div>
-    </section>
-  </main>
-
-  
-<!-- Firebase bootstrap (shared) -->
+<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
   import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
@@ -58,82 +31,553 @@
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
-  window.firebaseConfig = firebaseConfig;
 
-  const app = initializeApp(window.firebaseConfig);
+  const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
   const auth = getAuth(app);
   const storage = getStorage(app);
-
-  window.__fb = { app, db, auth, storage, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp, sRef, getDownloadURL,
-    ordersCol: collection(db, "orders")
-  };
-  window.__fbReady = false;
-  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
   signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  // === Minimal Parse compatibility shim (Firestore-backed) ===
+  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
+
+  class _ParseObject {
+    constructor(className){
+      this.className = className;
+      this._data = {};
+      this.id = null;
+    }
+    set(k,v){ this._data[k]=v; }
+    get(k){ return this._data[k]; }
+    async save(){
+      // ensure defaults so `doesNotExist` can be emulated via `== null`
+      if (this.className==='Order'){
+        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
+        if (!('servedAt' in this._data)) this._data.servedAt = null;
+        if (!('confirmed' in this._data)) this._data.confirmed = false;
+      }
+      const cname = colNameFromClass(this.className);
+      const id = String(this._data.orderId || this.id || Date.now());
+      this.id = id;
+      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
+      return this;
+    }
+    async destroy(){
+      const cname = colNameFromClass(this.className);
+      if (!this.id) return;
+      await deleteDoc(doc(collection(db, cname), this.id));
+    }
+  }
+
+  const Parse = {};
+  Parse.applicationId = "firebase-shim";
+  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  Parse.serverURL = "";
+  Parse.liveQueryServerURL = "";
+  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
+
+  Parse.Object = {
+    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
+  };
+
+  Parse.Query = class {
+    constructor(Cls){
+      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
+      this._w = [];
+      this._order = null;
+      this._limit = 1000;
+    }
+    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    limit(n){ this._limit = n; return this; }
+    ascending(f){ this._order = ['asc', f]; return this; }
+    descending(f){ this._order = ['desc', f]; return this; }
+    _build(){
+      const cname = colNameFromClass(this.className);
+      let ref = collection(db, cname);
+      const terms = this._w.map(([f,op,v])=> where(f, op, v));
+      let qref = terms.length ? query(ref, ...terms) : ref;
+      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
+      return qref;
+    }
+    async find(){
+      const qref = this._build();
+      const snap = await getDocs(qref);
+      const arr = [];
+      snap.forEach(d=>{
+        const Obj = Parse.Object.extend(this.className);
+        const o = new Obj();
+        o.id = d.id; o._data = d.data() || {};
+        arr.push(o);
+      });
+      return arr.slice(0, this._limit);
+    }
+    async first(){
+      this.limit(1);
+      const a = await this.find();
+      return a[0]||null;
+    }
+    subscribe(){
+      const listeners = { create:[], update:[], delete:[] };
+      const unsub = onSnapshot(this._build(), (snap)=>{
+        snap.docChanges().forEach(ch=>{
+          const Obj = Parse.Object.extend(this.className);
+          const o = new Obj();
+          o.id = ch.doc.id; o._data = ch.doc.data() || {};
+          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+        });
+      });
+      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
+    }
+  };
+
+  // Expose for the rest of the page
+  window.Parse = Parse;
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
+</script>
+
+</head>
+<body class="p-4">
+  <div class="max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-3">
+      <h1 class="text-2xl font-bold">Pedidos da Cozinha (Só Visualização)</h1>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 cursor-pointer select-none flex items-center gap-2">
+          <input id="hideServedChk" type="checkbox" /> Ocultar servidos
+        </label>
+        <button id="clearServedBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar servidos</button>
+        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
+      </div>
+    </div>
+
+    <div id="banner" class="hidden mb-3 p-3 rounded-xl bg-emerald-800/40 border border-emerald-700 text-sm">
+      Novo pedido recebido!
+    </div>
+
+    <div id="orders" class="space-y-3 mb-6"></div>
+
+   
+
+  <!-- coloque cash.mp3 na mesma pasta ou troque por um URL -->
+  <audio id="cashSound" preload="auto" src="cash.mp3"></audio>
+
+  <script>
+    "use strict";
+
+    /* ====== Compatibilidade com dois formatos ====== */
+    const KEYS = [
+      { store: 'orders_simple_v4', version: 'orders_simple_v4_ver', channel: 'orders_simple_v4' },
+      { store: 'orders',           version: 'orders_version',       channel: 'pizzaOrders' }
+    ];
+
+    function safeParse(json){ try { return JSON.parse(json || '[]'); } catch { return []; } }
+    function uniqById(arr){
+      const seen = new Set(); const out = [];
+      for (const o of arr){
+        const id = String((o && o.id) || o.createdAt || Math.random());
+        if (!seen.has(id)){ seen.add(id); out.push(o); }
+      }
+      return out;
+    }
+
+    /* ====== CHANGED: only return CONFIRMED orders ====== */
+    function getAllOrders(){
+      const all = [];
+      for (const k of KEYS) all.push(...safeParse(localStorage.getItem(k.store)));
+
+      // Only orders confirmed by Staff should be visible to Kitchen.
+      // Accept current shape (confirmed/confirmedAt) and legacy (status: 'confirmed').
+      const confirmedOnly = all.filter(o => {
+        const isConfirmed = o && (o.confirmed === true || !!o.confirmedAt || o.status === 'confirmed');
+        return !!isConfirmed;
+      });
+
+      return uniqById(confirmedOnly).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    }
+
+    /* ====== BroadcastChannels ====== */
+    const channels = [];
+    for (const k of KEYS){ try { channels.push(new BroadcastChannel(k.channel)); } catch {} }
+
+    /* ====== UI refs ====== */
+    const ordersDiv      = document.getElementById('orders');
+    const banner         = document.getElementById('banner');
+    const soundBtn       = document.getElementById('soundBtn');
+    const cashEl         = document.getElementById('cashSound');
+    const hideServedChk  = document.getElementById('hideServedChk');
+    const clearServedBtn = document.getElementById('clearServedBtn');
+    const histList       = document.getElementById('histList');
+    const histTotalEl    = document.getElementById('histTotal');
+
+    /* ====== Estado "Servido" (persistente) + versão ====== */
+    const SERVED_KEY = 'orders_served';
+    const SERVED_VERSION = 'orders_served_ver';
+    function loadServed(){ try { return JSON.parse(localStorage.getItem(SERVED_KEY) || '{}'); } catch { return {}; } }
+    function saveServed(map){
+      localStorage.setItem(SERVED_KEY, JSON.stringify(map));
+      localStorage.setItem(SERVED_VERSION, String(Date.now())); // trigger storage
+    }
+    let servedMap = loadServed();
+
+    /* ====== Histórico (vincula quando marca “Servido”) ====== */
+    const HISTORY_KEY = 'orders_history_v1';
+    function getHistory(){ try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); } catch { return []; } }
+    function setHistory(v){ localStorage.setItem(HISTORY_KEY, JSON.stringify(v)); }
+    function formatCVE(n){ return `${Math.floor(Number(n)||0)}$00`; }
+
+    function computeTotal(order){
+      if (typeof order.totalNum === 'number'){
+        return { num: order.totalNum, text: order.totalText || formatCVE(order.totalNum) };
+      }
+      let ok=false, sum=0;
+      for (const it of (order.items||[])){
+        if (typeof it.unitPrice === 'number'){ ok=true; sum += (it.unitPrice||0) * (Number(it.qty||1)); }
+      }
+      return ok ? { num: sum, text: formatCVE(sum) } : { num: null, text: null };
+    }
+
+    function ensureHistoryEntry(order, served){
+      if (!served) return; // só regista quando fica servido
+      const id = String(order.id);
+      const hist = getHistory();
+      if (!hist.some(h => String(h.id) === id)){
+        const t = computeTotal(order);
+        hist.push({
+          id,
+          table: order.table,
+          createdAt: order.createdAt || Date.now(),
+          servedAt: Date.now(),
+          totalNum: t.num,
+          totalText: t.text,
+          items: (order.items||[]).map(i=>({ name: i.pizzaType||'', qty: Number(i.qty||1), unitPrice: i.unitPrice||null }))
+        });
+        setHistory(hist);
+      }
+      renderHistory(); // update panel
+    }
+
+    function isToday(ts){
+      const d = new Date(ts || Date.now());
+      const now = new Date();
+      return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
+    }
+
+    function renderHistory(){
+      const hist = getHistory().filter(h => isToday(h.servedAt || h.createdAt));
+      histList.innerHTML = '';
+      if (!hist.length){
+        histList.innerHTML = '<p class="muted">Sem registos hoje.</p>';
+      } else {
+        let total = 0;
+        hist.forEach(h=>{
+          if (typeof h.totalNum === 'number') total += h.totalNum||0;
+          const when = h.servedAt ? new Date(h.servedAt).toLocaleTimeString() : '';
+          const ttxt = (h.totalText) ? h.totalText : (typeof h.totalNum==='number' ? formatCVE(h.totalNum) : '—');
+          const div = document.createElement('div');
+          div.className = 'card p-2 rounded-xl flex items-center justify-between';
+          div.innerHTML = `
+            <div>
+              <div class="font-semibold">Mesa ${escapeHtml(h.table)}</div>
+              <div class="muted text-xs">${when}</div>
+            </div>
+            <div class="font-semibold">${ttxt}</div>
+          `;
+          histList.appendChild(div);
+        });
+        histTotalEl.textContent = formatCVE(total);
+      }
+    }
+
+    /* ====== Som (auto-ativado) ====== */
+    let soundEnabled = false, audioCtx;
+    async function enableSound(){
+      soundEnabled = true;
+      try { cashEl.volume = 1; cashEl.muted = false; cashEl.currentTime = 0; await cashEl.play(); cashEl.pause(); cashEl.currentTime = 0; } catch {}
+      // teste curto silencioso
+      try { await cashEl.play(); setTimeout(()=>{ try{ cashEl.pause(); }catch{} }, 200); } catch {}
+    }
+    async function playSound(){
+      if (!soundEnabled) return;
+      try { cashEl.currentTime = 0; await cashEl.play(); return; } catch {}
+      playFallback();
+    }
+    function playFallback(){
+      if (!soundEnabled) return;
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtx && Ctx) audioCtx = new Ctx();
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime, g = audioCtx.createGain();
+      const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator();
+      o1.type='square'; o2.type='square'; o1.frequency.value=800; o2.frequency.value=1600;
+      o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.45, now+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
+      o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
+    }
+    soundBtn.addEventListener('click', enableSound);
+
+    // tentar ativar som por omissão
+    document.addEventListener('DOMContentLoaded', enableSound);
+    document.addEventListener('pointerdown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
+    document.addEventListener('keydown', ()=>{ if (!soundEnabled) enableSound(); }, { once:true });
+    document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible' && !soundEnabled) enableSound(); });
+
+    /* ====== Utils ====== */
+    function escapeHtml(str){
+      return String(str||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+    function showBanner(count){
+      banner.textContent = count === 1 ? 'Novo pedido recebido!' : `${count} novos pedidos recebidos!`;
+      banner.classList.remove('hidden');
+      clearTimeout(showBanner._t);
+      showBanner._t = setTimeout(()=> banner.classList.add('hidden'), 3000);
+    }
+
+    /* ====== Notificar Staff quando "Servido" muda ====== */
+    function notifyServed(id, served){
+      channels.forEach(ch => {
+        try { ch.postMessage({ type: 'served_update', id, served }); } catch {}
+      });
+      // storage "versão" já feito em saveServed()
+    }
+
+    /* ====== Render ====== */
+    let knownIds = new Set();
+
+    function render({withAlerts=true} = {}){
+      const orders = getAllOrders(); // ← agora só confirmados
+      const currIds = new Set(orders.map(o => String(o.id)));
+      let novos = 0;
+      currIds.forEach(id => { if (!knownIds.has(id)) novos++; });
+
+      ordersDiv.innerHTML = '';
+      const hideServed = hideServedChk.checked;
+
+      if (!orders.length){
+        ordersDiv.innerHTML = '<p class="muted">Sem pedidos ainda.</p>';
+      } else {
+        orders.forEach(o => {
+          const id = String(o.id);
+          const quando = o.createdAt ? new Date(o.createdAt).toLocaleString() : '';
+          const isServed = !!servedMap[id];
+          if (hideServed && isServed) return;
+
+          const div = document.createElement('div');
+          div.className = 'card p-3 rounded-xl';
+
+          const items = Array.isArray(o.items) ? o.items : [];
+          const itemsHTML = items.map(i => {
+            const qty = Number(i.qty||1);
+            const name = escapeHtml(i.pizzaType||'');
+            const note = i.notes ? ` <span class="muted">(${escapeHtml(i.notes)})</span>` : '';
+            return `<li>${qty} × ${name}${note}</li>`;
+          }).join('') || '<li class="muted">—</li>';
+
+          const t = (typeof o.totalNum === 'number') ? (o.totalText || formatCVE(o.totalNum)) : '';
+          const left = document.createElement('div');
+          left.innerHTML = `
+            <div class="font-semibold">Mesa ${escapeHtml(o.table ?? '?')}</div>
+            <ul class="items mt-2">${itemsHTML}</ul>
+            ${o.notes ? `<div class='text-sm mt-2'>✍️ ${escapeHtml(o.notes)}</div>` : ''}
+            ${t ? `<div class="mt-2"><span class="muted text-xs">Total:</span> <b>${t}</b></div>` : ''}
+          `;
+
+          const right = document.createElement('div');
+          right.className = 'flex flex-col items-end gap-2';
+          right.innerHTML = `<div class="muted text-xs">${quando}</div>`;
+
+          const label = document.createElement('label');
+          label.className = 'flex items-center gap-2 text-sm cursor-pointer select-none';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox'; checkbox.checked = isServed;
+          checkbox.addEventListener('change', () => {
+            servedMap[id] = checkbox.checked;
+            saveServed(servedMap);
+
+            notifyServed(id, checkbox.checked);
+            ensureHistoryEntry(o, checkbox.checked);   // <— regista no histórico
+            render({withAlerts:false});
+          });
+
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode('Pronto'));
+          right.appendChild(label);
+
+          const row = document.createElement('div');
+          row.className = 'flex items-start justify-between gap-3';
+          row.appendChild(left); row.appendChild(right);
+          if (isServed) row.classList.add('opacity-50');
+
+          div.appendChild(row);
+          ordersDiv.appendChild(div);
+        });
+      }
+
+      if (withAlerts && novos > 0){ showBanner(novos); playSound(); }
+      knownIds = currIds;
+      renderHistory();
+    }
+
+    /* ====== Eventos ====== */
+    hideServedChk.addEventListener('change', ()=>render({withAlerts:false}));
+    clearServedBtn.addEventListener('click', ()=>{
+      const ids = Object.keys(servedMap).filter(id => servedMap[id]);
+      if (!ids.length) { alert('Não há pedidos marcados como servidos.'); return; }
+      if (!confirm(`Limpar marcação de ${ids.length} pedido(s)?`)) return;
+      ids.forEach(id => delete servedMap[id]);
+      saveServed(servedMap);
+      render({withAlerts:false});
+    });
+
+    channels.forEach(ch => ch.onmessage = ()=> render({withAlerts:true}));
+    window.addEventListener('storage', (e)=>{
+      if (!e.key) return;
+      if (['orders_simple_v4','orders_simple_v4_ver','orders_served_ver', 'orders_history_v1'].includes(e.key)){
+        render({withAlerts:true});
+      }
+    });
+
+    setInterval(()=>render({withAlerts:true}), 1000);
+    render({withAlerts:false});
+
+    /* ====== Som ====== */
+    function playSound(){
+      if (!soundEnabled) return;
+      cashEl.currentTime = 0;
+      cashEl.play().catch(playFallback);
+    }
+  </script>
 </script>
 
 
-  <script type="module">
-    const $ = s=>document.querySelector(s);
-    const root = $("#list");
 
-    let cashAudio = null;
-    (async () => { try {
-      const {storage, sRef, getDownloadURL} = window.__fb;
-      const url = await getDownloadURL(sRef(storage, "audio/cash.mp3"));
-      cashAudio = new Audio(url);
-    } catch(e){} })();
 
-    function render(rows) {
-      root.innerHTML = rows.map(o=>\`
-        <div class="item">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <strong>Mesa \${o.table}</strong>
-            <span class="pill">\${o.isReady?'PRONTO':'A PREPARAR'}</span>
-          </div>
-          <div>Itens: \${o.items.join(', ')}</div>
-          <div class="row">
-            <button data-id="\${o.orderId}" class="toggle">\${o.isReady?'Desmarcar pronto':'Marcar pronto'}</button>
-          </div>
-          <div class="muted">#\${o.orderId} · \${new Date(o.createdAtMs).toLocaleTimeString()}</div>
-        </div>
-      \`).join("");
-      root.querySelectorAll(".toggle").forEach(btn=>{
-        btn.addEventListener("click", async (ev)=>{
-          const id = ev.currentTarget.getAttribute("data-id");
-          const {ordersCol, doc, updateDoc} = window.__fb;
-          const row = rows.find(r=>r.orderId===id);
-          await updateDoc(doc(ordersCol, id), { isReady: (row && row.isReady)? false : true, readyAt: Date.now() });
-          try{ cashAudio && cashAudio.play().catch(()=>{}); }catch(e){}
-        });
-      });
-    }
 
-    async function loadOnce() {
-      const {ordersCol, getDocs, query, where} = window.__fb;
-      const q = query(ordersCol, where("servedAt","==", null), where("rejectedAt","==", null));
-      const snap = await getDocs(q);
-      const rows = [];
-      snap.forEach(d=> rows.push(d.data()));
-      rows.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0));
-      render(rows);
-    }
+<!-- KITCHEN_SERVED_VIRTUAL_RO_V1 -->
+<script>
+(function(){
+  var SERVED_KEY = 'orders_served';
+  var SERVED_VERSION = 'orders_served_version';
+  var _get = null;
+  try{ _get = localStorage.getItem.bind(localStorage); }catch(e){}
+  function servedMapFromCloud(){
+    try{
+      var arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
+      var m = {}; arr.forEach(function(o){ m[String(o.id)] = !!o.isReady; });
+      return m;
+    }catch(e){ return {}; }
+  }
+  localStorage.getItem = function(k){
+    try{
+      if (k===SERVED_KEY){ return JSON.stringify(servedMapFromCloud()); }
+      if (k===SERVED_VERSION){ return String(Date.now()); }
+    }catch(e){}
+    return _get ? _get(k) : null;
+  };
+})();
+</script>
 
-    function live() {
-      const {ordersCol, onSnapshot, query, where} = window.__fb;
-      const q = query(ordersCol, where("servedAt","==", null), where("rejectedAt","==", null));
-      onSnapshot(q, (snap)=>{
-        const rows = [];
-        snap.forEach(d=> rows.push(d.data()));
-        rows.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0));
-        render(rows);
-      });
-    }
 
-    $("#refresh").addEventListener("click", loadOnce);
-    loadOnce();
-    live();
-  </script>
+
+
+
+<!-- REMOVE_FILTERTABLE_V2 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+
+
+<!-- KITCHEN_CLOUD_ONLY_V3B -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
+
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    window.__kCloudList = []; window.__kCloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__kCloudList);
+      if (k===VERSION_KEY) return String(window.__kCloudVer);
+      return _get(k);
+    };
+    window.__kApply = function(list,withAlerts){ try{ list = (list||[]).map(function(x){ return (x && x.id && x.items) ? x : toPlain(x); }); }catch(e){}
+      window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
+  })();
+
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+      createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
+  function pickBetter(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
+  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+
+  async function refreshAll(playAlerts){
+    try{
+      const q=new Parse.Query(Order);
+      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+      q.limit(1000);
+      const res=await q.find();
+      const best = coalesceById(res).map(toPlain);
+      window.__kApply(best, !!playAlerts);
+}catch(e){}
+  }
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
+  function poll(){ setInterval(()=>refreshAll(false), 5000); }
+
+  function updateLocalReadyFromMap(map){
+    try{
+      const arr = Array.isArray(window.__kCloudList) ? window.__kCloudList : [];
+      arr.forEach(function(o){ if (Object.prototype.hasOwnProperty.call(map, String(o.id))) o.isReady = !!map[String(o.id)]; });
+      window.__kApply(arr, false);
+    }catch(e){}
+  }
+
+  (function(){
+    const orig = window.saveServed;
+    if (!orig) return;
+    window.saveServed = function(map){
+      (async ()=>{
+        try{
+          for (const id in (map||{})){
+            if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
+            const ready = !!map[id];
+            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
+            const res=await q.find();
+            if (res && res.length){
+              for (const obj of res){
+                if (!!obj.get('isReady') !== ready){
+                  obj.set('isReady', ready);
+                  await obj.save();
+                }
+              }
+            }
+          }
+          updateLocalReadyFromMap(map); // instant checkbox sync locally
+        }catch(e){}
+      })();
+      return orig.apply(this, arguments);
+    };
+  })();
+
+  refreshAll(false); live(); poll();
+})();
+</script>
+
 </body>
 </html>

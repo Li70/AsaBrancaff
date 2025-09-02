@@ -3,61 +3,87 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Mesa · Pedidos (Firebase)</title>
-  
-<style>
-  :root { color-scheme: light dark; --accent: #00897b; --bg:#0b0b0b; --card:#141414; --muted:#8a8a8a; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif; background: var(--bg); color: #fff; }
-  header { padding: 16px; background: #111; display: flex; gap: 12px; align-items:center; border-bottom: 1px solid #1e1e1e; position: sticky; top: 0; z-index: 5; }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  main { padding: 16px; display: grid; gap: 16px; max-width: 1100px; margin: 0 auto; }
-  .card { background: var(--card); border: 1px solid #1e1e1e; border-radius: 16px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
-  .row { display:flex; gap:12px; flex-wrap:wrap; }
-  input, textarea, select, button { background: #131313; color: #fff; border-radius: 10px; border: 1px solid #2a2a2a; padding: 10px 12px; font: inherit; }
-  button { background: var(--accent); border: 0; cursor: pointer; }
-  button.secondary { background: #2a2a2a; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .list { display: grid; gap: 10px; }
-  .item { border: 1px solid #262626; background: #121212; padding: 12px; border-radius: 12px; display: grid; gap: 8px; }
-  .pill { font-size:12px; background:#1e1e1e; padding:4px 8px; border-radius:999px; }
-  .split { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 800px){ .split { grid-template-columns: 1fr; } }
-</style>
+  <title>Pedido – Mesa & Menu</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
+    .muted { color: rgba(255,255,255,0.75); }
 
-</head>
-<body>
-  <header>
-    <h1>Pedidos · Sala</h1>
-    <span class="pill">Firebase</span>
-  </header>
+    .table{
+      background:#111a34; border:1px solid rgba(255,255,255,0.08); border-radius:12px;
+      display:flex; align-items:center; justify-content:center; height:56px; font-weight:700;
+      cursor:pointer; transition:.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .table:hover { background:#132142; } .table.active { outline:5px solid #22c55e; }
 
-  <main>
-    <section class="card">
-      <h2 style="margin:0 0 10px 0;">Novo Pedido</h2>
-      <div class="row">
-        <label>Mesa<br><input id="table" placeholder="Ex.: 12" inputmode="numeric"></label>
-        <label>Itens (vírgula separada)<br><input id="items" placeholder="Ex.: Café, Sandes mista, Sumol"></label>
-        <label>Total (CVE)<br><input id="total" placeholder="Ex.: 450" inputmode="numeric"></label>
-      </div>
-      <label>Notas<br><textarea id="notes" rows="3" placeholder="Sem açúcar, alergia ao leite…"></textarea></label>
-      <div class="row" style="margin-top:10px">
-        <button id="send">Enviar pedido</button>
-        <span class="muted" id="status">aguardando…</span>
-      </div>
-    </section>
+    .btn{ padding:.65rem .95rem; border-radius:.9rem; font-weight:700; }
+    .tab{ padding:.5rem .85rem; border-radius:.9rem; border:1px solid rgba(255,255,255,0.12); background:#121a33; }
+    .tab.active { outline:3px solid #22c55e; }
+    .tab:hover{ background:#132142; border-color:#334155; }
 
-    <section class="card">
-      <h3 style="margin:0 0 8px 0;">Meus últimos pedidos</h3>
-      <div id="mine" class="list"></div>
-    </section>
-  </main>
+    .row{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+    .name{ font-weight:800; } .desc{ font-size:.9rem; opacity:.9; } .price{ font-weight:800; white-space:nowrap; }
+    .qty{ width:3.5rem; text-align:center; font-weight:700; }
+    .sticky-top{ position:sticky; top:1rem; }
+    .divider{ height:1px; background:rgba(255,255,255,.08); margin:.65rem 0 .25rem; }
+    .badge{ font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,.08); }
+    .icon{ width:42px; height:42px; object-fit:contain; }
+    @media (min-width:640px){ .icon{ width:52px; height:52px; } }
+    .name-line{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
 
-  
-<!-- Firebase bootstrap (shared) -->
+    /* Mobile cart sheet & FAB */
+    .sheet {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+      background: #0f172a; border-top-left-radius: 16px; border-top-right-radius: 16px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      transform: translateY(100%); transition: transform .25s ease;
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+      max-height: 85vh; overflow: auto;
+    }
+    .sheet.open { transform: translateY(0); }
+    .grab { width: 52px; height: 5px; border-radius: 999px; background: rgba(255,255,255,.2); margin: 8px auto 10px; }
+    .fab {
+      position: fixed; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); z-index: 50;
+      background:#0ea5e9; color:#001018; font-weight:800; border-radius:999px; padding:.8rem 1rem;
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    }
+    .fab:active { transform: translateY(1px); }
+
+    .mbbar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 55; background:#0b1226;
+      border-top:1px solid rgba(255,255,255,.08);
+      padding: .6rem .9rem calc(.6rem + env(safe-area-inset-bottom, 0px));
+      display: flex; align-items: center; gap: .75rem;
+    }
+
+    @media (max-width: 380px){
+      .btn { padding:.6rem .8rem; }
+      .qty { width:3.25rem; }
+      .table { height: 52px; }
+    }
+  </style>
+
+  <!-- Compat -->
+  <script>
+  (function(){
+    window.lsGet = function(key, fallback=null){ try{ const v=localStorage.getItem(key); return v===null?fallback:v; }catch{ return fallback; } };
+    window.lsSet = function(key, val){ try{ localStorage.setItem(key, val); return true; }catch{ return false; } };
+    window.ORDERS_KEY='orders_simple_v4'; window.VERSION_KEY='orders_simple_v4_ver';
+    window.getOrdersCompat = function(){ try{ return JSON.parse(lsGet(ORDERS_KEY,'[]'))||[]; }catch{ return []; } };
+    window.setOrdersCompat = function(v){ lsSet(ORDERS_KEY, JSON.stringify(v)); lsSet(VERSION_KEY, String(Date.now())); };
+    const channels=[]; try{ channels.push(new BroadcastChannel('orders_simple_v4')); }catch{}
+    window.bcPost = (msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
+  })();
+  </script>
+
+  <!-- CLOUD_PARSE_INIT_V1 -->
+
+<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
   import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
@@ -69,87 +95,635 @@
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
-  window.firebaseConfig = firebaseConfig;
 
-  const app = initializeApp(window.firebaseConfig);
+  const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
   const auth = getAuth(app);
   const storage = getStorage(app);
-
-  window.__fb = { app, db, auth, storage, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp, sRef, getDownloadURL,
-    ordersCol: collection(db, "orders")
-  };
-  window.__fbReady = false;
-  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
   signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  // === Minimal Parse compatibility shim (Firestore-backed) ===
+  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
+
+  class _ParseObject {
+    constructor(className){
+      this.className = className;
+      this._data = {};
+      this.id = null;
+    }
+    set(k,v){ this._data[k]=v; }
+    get(k){ return this._data[k]; }
+    async save(){
+      // ensure defaults so `doesNotExist` can be emulated via `== null`
+      if (this.className==='Order'){
+        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
+        if (!('servedAt' in this._data)) this._data.servedAt = null;
+        if (!('confirmed' in this._data)) this._data.confirmed = false;
+      }
+      const cname = colNameFromClass(this.className);
+      const id = String(this._data.orderId || this.id || Date.now());
+      this.id = id;
+      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
+      return this;
+    }
+    async destroy(){
+      const cname = colNameFromClass(this.className);
+      if (!this.id) return;
+      await deleteDoc(doc(collection(db, cname), this.id));
+    }
+  }
+
+  const Parse = {};
+  Parse.applicationId = "firebase-shim";
+  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  Parse.serverURL = "";
+  Parse.liveQueryServerURL = "";
+  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
+
+  Parse.Object = {
+    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
+  };
+
+  Parse.Query = class {
+    constructor(Cls){
+      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
+      this._w = [];
+      this._order = null;
+      this._limit = 1000;
+    }
+    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    limit(n){ this._limit = n; return this; }
+    ascending(f){ this._order = ['asc', f]; return this; }
+    descending(f){ this._order = ['desc', f]; return this; }
+    _build(){
+      const cname = colNameFromClass(this.className);
+      let ref = collection(db, cname);
+      const terms = this._w.map(([f,op,v])=> where(f, op, v));
+      let qref = terms.length ? query(ref, ...terms) : ref;
+      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
+      return qref;
+    }
+    async find(){
+      const qref = this._build();
+      const snap = await getDocs(qref);
+      const arr = [];
+      snap.forEach(d=>{
+        const Obj = Parse.Object.extend(this.className);
+        const o = new Obj();
+        o.id = d.id; o._data = d.data() || {};
+        arr.push(o);
+      });
+      return arr.slice(0, this._limit);
+    }
+    async first(){
+      this.limit(1);
+      const a = await this.find();
+      return a[0]||null;
+    }
+    subscribe(){
+      const listeners = { create:[], update:[], delete:[] };
+      const unsub = onSnapshot(this._build(), (snap)=>{
+        snap.docChanges().forEach(ch=>{
+          const Obj = Parse.Object.extend(this.className);
+          const o = new Obj();
+          o.id = ch.doc.id; o._data = ch.doc.data() || {};
+          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+        });
+      });
+      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
+    }
+  };
+
+  // Expose for the rest of the page
+  window.Parse = Parse;
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
 </script>
 
+</head>
+<body class="p-4 pb-28 lg:pb-4">
+  <div class="max-w-7xl mx-auto">
+    <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+      <h1 class="text-2xl font-bold">🍽️ Faça o seu pedido</h1>
+      <div class="muted text-sm">Selecione a mesa, escolha o que vai consumir e passe a sua encomenda.</div>
+    </header>
 
-  <script type="module">
-    const $ = sel => document.querySelector(sel);
+    <section class="card p-4 rounded-2xl mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-semibold">Indique o numero da sua mesa</h2>
+        <span class="muted text-sm">Mesa selecionada: <span id="selectedTable" class="font-semibold">Nenhuma</span></span>
+      </div>
+      <div id="floor" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3"></div>
+    </section>
 
-    // Optional: preload audio from Storage (plays on confirm updates)
-    let audioConfirm = null;
-    (async () => { try {
-      const {storage, sRef, getDownloadURL} = window.__fb;
-      const url = await getDownloadURL(sRef(storage, "audio/ready.mp3"));
-      audioConfirm = new Audio(url);
-    } catch(e){} })();
+    <div class="grid lg:grid-cols-[2fr_1fr] gap-4">
+      <div class="space-y-4" id="leftCol">
+        <!-- PIZZAS -->
+        <section class="card p-4 rounded-2xl" id="pizzaSection">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold">🍕 Pizzas</h2>
+            <button id="togglePizza" class="text-slate-300 hover:underline">Recolher</button>
+          </div>
+          <div id="pizzaTabs" class="flex flex-wrap gap-2 mb-4 hidden"></div>
+          <div id="pizzaGrid" class="space-y-4"></div>
+        </section>
+        <!-- Other sections injected by JS -->
+      </div>
 
-    $("#send").addEventListener("click", async () => {
-      const table = $("#table").value.trim();
-      const items = $("#items").value.split(",").map(s=>s.trim()).filter(Boolean);
-      const notes = $("#notes").value.trim();
-      const totalCVE = Number($("#total").value||0);
-      if (!table || !items.length) { alert("Mesa e itens são obrigatórios."); return; }
-      const orderId = String(Date.now());
+      <!-- CARRINHO -->
+      <aside class="card p-4 rounded-2xl sticky-top h-fit hidden lg:block">
+        <h2 class="text-lg font-semibold mb-2">Carrinho</h2>
+        <div id="cartList" class="space-y-2 mb-3"></div>
+        <div class="row mb-3"><span class="muted">Total</span><strong id="cartTotal">0$00</strong></div>
+        <label class="muted text-sm">Observações (opcional)</label>
+        <textarea id="notes" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
+        <button id="sendBtnDesktop" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
+        <p class="muted text-xs mt-2">A sua encomenda aguarda confirmação e sera tratada em breve.</p>
+      </aside>
+    </div>
+  </div>
 
-      const payload = {
-        orderId, table, items, notes, totalCVE,
-        createdAtMs: Date.now(),
-        confirmed: false,
-        isReady: false,
-        rejectedAt: null,
-        servedAt: null
-      };
+  <!-- Floating Cart Button (mobile only) -->
+  <button id="openCartFab" class="fab lg:hidden">🧺 Carrinho</button>
 
-      try {
-        const {ordersCol, setDoc, doc} = window.__fb;
-        await setDoc(doc(ordersCol, orderId), payload, { merge: true });
-        $("#status").textContent = "Enviado ✔️";
-        $("#items").value = ""; $("#notes").value = ""; $("#total").value = "";
-      } catch (e) {
-        console.error(e);
-        $("#status").textContent = "Erro ao enviar";
+  <!-- Mobile bottom bar -->
+  <div class="mbbar lg:hidden">
+    <div class="flex-1">
+      <div class="text-xs muted">Total</div>
+      <div id="cartTotalMobile" class="text-lg font-extrabold">0$00</div>
+    </div>
+    <button id="sendBtnMobile" class="flex-1 btn bg-emerald-600 hover:bg-emerald-700">Enviar →</button>
+  </div>
+
+  <!-- Mobile Cart Sheet -->
+  <div id="cartSheet" class="sheet lg:hidden" aria-hidden="true">
+    <div class="grab"></div>
+    <div class="px-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-semibold">Seu Carrinho</h2>
+        <button id="closeCartSheet" class="btn bg-slate-700 hover:bg-slate-600">Fechar</button>
+      </div>
+      <div id="cartListMobile" class="space-y-2 mb-3"></div>
+      <div class="row mb-3"><span class="muted">Total</span><strong id="cartTotalSheet">0$00</strong></div>
+      <label class="muted text-sm">Observações (opcional)</label>
+      <textarea id="notesMobile" rows="3" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
+      <button id="sendBtnSheet" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Enviar para o Staff →</button>
+      <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
+      <div class="h-2"></div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+    (function(){ if(!window.CSS) window.CSS={}; if(typeof CSS.escape!=='function'){ CSS.escape=function(v){return String(v).replace(/[^a-zA-Z0-9_\-]/g,function(ch){var h=ch.charCodeAt(0).toString(16).toUpperCase();return '\\'+h+' ';});};}})();
+
+    /* ===== DATA ===== */
+    const PIZZAS=[{category:'Clássicas',items:[
+      {id:'pz-peperoni',name:'PEPERONI',desc:'Massa, molho de tomate, queijo, chouriço, orégano',priceNum:800,price:'800$00'},
+      {id:'pz-hawaii-ii',name:'HAWAII-II',desc:'Massa, molho de tomate, queijo, presunto, cebola, ananás, oréganos',priceNum:800,price:'800$00'},
+      {id:'pz-atum',name:'ATUM',desc:'Massa, molho de tomate, queijo, atum, azeitona, orégano, cebola, tomate',priceNum:800,price:'800$00'},
+      {id:'pz-frango',name:'FRANGO',desc:'Massa, molho de tomate, queijo, frango, milho, cebola, tomate, pimentão',priceNum:800,price:'800$00'},
+      {id:'pz-vegetariano',name:'VEGETARIANO',desc:'Massa, molho de tomate, pimentão, cogumelo, milho, cebola, tomate, curgete, azeitona',priceNum:800,price:'800$00'}
+    ]},{category:'Especiais',items:[
+      {id:'pz-scp',name:'S.C.P.',desc:'Bacon, fiambre, ovo, ervilha, queijo, milho, pimentão verde, cogumelos, azeitona, ananás, nata, orégano',priceNum:1000,price:'1000$00',icon:'scp.png'},
+      {id:'pz-slb',name:'S.L.B',desc:'Galinha, queijo, ananás, milho, pimentão vermelho, cogumelos, azeitona preta, chouriço, nata, orégano',priceNum:1000,price:'1000$00',icon:'slb.png'},
+      {id:'pz-fcp',name:'F.C.P.',desc:'Queijo, milho, atum, pimentão, ananás, cogumelos, azeitona preta, nata, orégano',priceNum:1000,price:'1000$00',icon:'fcp.png'}
+    ]},{category:'Pizza Familiar Combo',items:[
+      {id:'pz-combo-coca',name:'1 Pizza + Coca-Cola 1,5L',desc:'Pizza familiar + Coca-Cola',priceNum:1200,price:'1200$00'},
+      {id:'pz-combo-compal',name:'1 Pizza + Compal 1L',desc:'Pizza familiar + Compal',priceNum:1250,price:'1250$00'}
+    ]}];
+
+    const MENU=[{
+      category:'Fried Chicken',
+      items:[
+        { id:'legs', name:'LEGS', price:'200$00', priceNum:200 },
+        { id:'wings-plain', name:'WINGS', price:'200$00', priceNum:200 },
+        { id:'wings-sweet-chilli', name:'SWEET CHILLI WINGS', price:'600$00', priceNum:600 },
+        { id:'wings-bbq', name:'BARBECUE WINGS', price:'600$00', priceNum:600 },
+        { id:'nuggets', name:'NUGGETS', price:'500$00', priceNum:500 },
+        { id:'popcorn', name:'POP CORNS', price:'500$00', priceNum:500 },
+        { id:'fried-chicken', name:'FRIED CHICKEN', price:'300$00', priceNum:300 },
+        { id:'sandwich', name:'SANDWICH', price:'500$00', priceNum:500 },
+        { id:'meia-frango', name:'MEIA DE FRANGO', price:'600$00', priceNum:600 }
+      ]
+    },{
+      category:'Combos',
+      items:[
+        { id:'combo1', name:'COMBO 1', desc:'1 PERNA · 1 ASA · 1 BATATA', price:'450$00', priceNum:450 },
+        { id:'combo2', name:'COMBO 2', desc:'2 PERNA · 1 ASA · 1 BATATA', price:'650$00', priceNum:650 },
+        { id:'combo3', name:'COMBO 3', desc:'3 PERNAS · 3 ASAS · 1 BATATA', price:'800$00', priceNum:800 },
+        { id:'combo4', name:'COMBO 4', desc:'4 PERNAS · 4 ASAS · 1 BATATA', price:'1000$00', priceNum:1000 },
+        { id:'pz-combo-coca', name:'PIZZA COMBO + Coca-Cola 1,5L', price:'1200$00', priceNum:1200 },
+        { id:'pz-combo-compal', name:'PIZZA COMBO + Compal 1L', price:'1250$00', priceNum:1250 },
+        { id:'shawarma-combo', name:'SHAWARMA COMBO', desc:'1 Shawarma + CocaCola 0,5L + Batata Frita', price:'650$00', priceNum:650 },
+        { id:'doner-combo', name:'DONER KEBAB COMBO', desc:'1 Doner Kebab + CocaCola 0,5L', price:'600$00', priceNum:600 }
+      ]
+    },{
+      category:'Hot Dog',
+      items:[
+        { id:'hot-chicago', name:'CHICAGO', price:'300$00', priceNum:300 },
+        { id:'hot-italian', name:'ITALIAN', price:'300$00', priceNum:300 },
+        { id:'hot-michigan', name:'MICHIGAN', price:'300$00', priceNum:300 },
+        { id:'hot-ny', name:'NEW YORK', price:'300$00', priceNum:300 },
+        { id:'hot-dodger', name:'DODGER DOG', price:'300$00', priceNum:300 },
+        { id:'hot-carolina', name:'CAROLINA', price:'300$00', priceNum:300 }
+      ]
+    },{
+      category:'Molhos',
+      items:[
+        { id:'sauce-sweet-sour', name:'SWEET & SOUR SAUCE', price:'50$00', priceNum:50 },
+        { id:'sauce-alfredo', name:'ALFREDO (CREMOSO CLÁSSICO)', price:'50$00', priceNum:50 },
+        { id:'sauce-honey-mustard', name:'HONEY MUSTARD', price:'50$00', priceNum:50 },
+        { id:'sauce-cheesy', name:'CHEESY SAUCE', price:'50$00', priceNum:50 },
+        { id:'sauce-creole', name:'CREOLE TOMATO', price:'50$00', priceNum:50 },
+        { id:'sauce-coleslaw', name:'COLESLAW', price:'50$00', priceNum:50 },
+        { id:'sauce-buffalo', name:'BUFFALO', price:'50$00', priceNum:50 }
+      ]
+    },{
+      category:'Salgados/Petiscos',
+      items:[
+        { id:'coxinha', name:'COXINHA', price:'60$00', priceNum:60 },
+        { id:'pastel', name:'PASTEL', price:'50$00', priceNum:50 },
+        { id:'bifanas', name:'BIFANAS À MODA DO PORTO', price:'300$00', priceNum:300 },
+        { id:'moelas', name:'MOELAS À PORTUGUESA', price:'600$00', priceNum:600 },
+        { id:'linguica', name:'LINGUIÇA', price:'100$00', priceNum:100 }
+      ]
+    },{
+      category:'Hambúrgueres',
+      items:[
+        { id:'burg-cheeseburger', name:'CLÁSSICO CHEESEBURGER', desc:'Pão, queijo, carne, ovo, molho big, batata, ketchup, maionese', price:'250$00', priceNum:250 },
+        { id:'burg-bigmac', name:'BIG MAC BURGER', desc:'2 carnes, queijo cheddar, alface, picles, tomate, cebola, molho big', price:'500$00', priceNum:500 },
+        { id:'burg-sweet', name:'SWEET BURGER', desc:'Queijo, bacon, cebola caramelizada, alface, molho burger', price:'450$00', priceNum:450 },
+        { id:'burg-xtudo', name:'BURGER X TUDO MODA DA CASA', desc:'Carne, queijo, ovo, batata, tomate, molhos', price:'300$00', priceNum:300 },
+        { id:'burg-completo', name:'HAMBÚRGUER COMPLETO', desc:'Carne, cebola caramelizada, queijo, bacon, maionese, batata', price:'550$00', priceNum:550 },
+        { id:'burg-crispy', name:'HAMBÚRGUER CRISPY', desc:'Frango, molho kfc, alface, tomate, molhos', price:'400$00', priceNum:400 }
+      ]
+    },{
+      category:'Shawarma',
+      items:[
+        { id:'shawarma-atum', name:'SHAWARMA DE ATUM', price:'400$00', priceNum:400 },
+        { id:'shawarma-galinha', name:'SHAWARMA DE GALINHA', price:'400$00', priceNum:400 },
+        { id:'shawarma-carne', name:'SHAWARMA DE CARNE', price:'300$00', priceNum:300 },
+        { id:'shawarma-veg', name:'SHAWARMA VEGETARIANO', price:'400$00', priceNum:400 },
+        { id:'doner', name:'DONER KEBAB', price:'500$00', priceNum:500 }
+      ]
+    },{
+      category:'Sumos Naturais',
+      items:[
+        { id:'sumo-cenoura', name:'CENOURA', price:'300$00', priceNum:300 },
+        { id:'sumo-papaia', name:'PAPAIA', price:'300$00', priceNum:300 },
+        { id:'sumo-melancia', name:'MELANCIA', price:'300$00', priceNum:300 },
+        { id:'sumo-laranja', name:'LARANJA', price:'300$00', priceNum:300 },
+        { id:'sumo-uva', name:'UVA', price:'300$00', priceNum:300 },
+        { id:'sumo-maca', name:'MAÇÃ', price:'300$00', priceNum:300 },
+        { id:'sumo-manga', name:'MANGA', price:'300$00', priceNum:300 },
+        { id:'sumo-banana', name:'BANANA', price:'300$00', priceNum:300 },
+        { id:'sumo-maracuja', name:'MARACUJÁ', price:'300$00', priceNum:300 },
+        { id:'sumo-kiwi', name:'KIWI', price:'300$00', priceNum:300 }
+      ]
+    },{
+      category:'Gelados',
+      items:[
+        { id:'gelado-cone', name:'GELADO DE CONE', price:'200$00', priceNum:200 },
+        { id:'gelado-copo', name:'GELADO DE COPO', price:'200$00', priceNum:200 }
+      ]
+    }];
+
+    /* ===== UI refs ===== */
+    const floor=document.getElementById('floor'); const selectedLabel=document.getElementById('selectedTable');
+    const cartList=document.getElementById('cartList'); const cartTotal=document.getElementById('cartTotal');
+    const notesDesktop=document.getElementById('notes'); const sendBtnDesktop=document.getElementById('sendBtnDesktop');
+    const pizzaTabsEl=document.getElementById('pizzaTabs'); const pizzaGridEl=document.getElementById('pizzaGrid');
+    const togglePizzaBtn=document.getElementById('togglePizza');
+    const leftCol=document.getElementById('leftCol');
+
+    // Mobile
+    const cartTotalMobile=document.getElementById('cartTotalMobile');
+    const openCartFab=document.getElementById('openCartFab');
+    const cartSheet=document.getElementById('cartSheet');
+    const closeCartSheet=document.getElementById('closeCartSheet');
+    const cartListMobile=document.getElementById('cartListMobile');
+    const cartTotalSheet=document.getElementById('cartTotalSheet');
+    const notesMobile=document.getElementById('notesMobile');
+    const sendBtnMobile=document.getElementById('sendBtnMobile');
+    const sendBtnSheet=document.getElementById('sendBtnSheet');
+
+    /* ===== Tables ===== */
+    let selectedTable=null;
+    for(let i=1;i<=8;i++){
+      const b=document.createElement('button'); b.type='button'; b.className='table'; b.textContent=String(i);
+      b.addEventListener('click',()=>selectTable(i,b)); floor.appendChild(b);
+    }
+    function selectTable(id,el){
+      selectedTable=String(id);
+      [...floor.children].forEach(n=>n.classList.remove('active')); el.classList.add('active');
+      selectedLabel.textContent='Mesa '+id; try{ localStorage.setItem('my_table',selectedTable);}catch{}
+    }
+    try{ const saved=localStorage.getItem('my_table'); if(saved && floor.children[Number(saved)-1]) floor.children[Number(saved)-1].click(); }catch{}
+
+    /* ===== helpers ===== */
+    function formatCVE(n){return Math.floor(n)+'$00';}
+    function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+    function flattenItems(dsets){
+      const out=[];
+      dsets.forEach(ds=>ds.forEach(cat=>cat.items&&cat.items.forEach(x=>out.push(x))));
+      return out;
+    }
+    function buildIndex(){
+      const idx={};
+      flattenItems([PIZZAS]).concat(flattenItems([MENU])).forEach(it=>{ idx[it.id]=it; });
+      return idx;
+    }
+    let ITEM_INDEX = buildIndex();
+
+    function itemRowHtml(item){
+      const iconHtml = item.icon ? `<img src="${encodeURI(item.icon)}" alt="${escapeHtml(item.name)}" class="icon" onerror="this.style.display='none'">` : '';
+      return `
+        <div class="row">
+          <div class="flex-1 min-w-0">
+            <div class="name name-line">${iconHtml}${escapeHtml(item.name)}</div>
+            ${item.desc?`<div class="desc">${escapeHtml(item.desc)}</div>`:''}
+          </div>
+          <div class="price">${escapeHtml(item.price||formatCVE(item.priceNum||0))}</div>
+        </div>
+        <div class="row mt-2">
+          <div class="muted text-xs">Quantidade</div>
+          <div class="flex items-center gap-2">
+            <button class="btn bg-slate-700 hover:bg-slate-600" data-action="minus" data-id="${item.id}">−</button>
+            <input inputmode="numeric" pattern="[0-9]*" data-qty="${item.id}" type="number" value="1" min="1" class="qty px-2 py-2 rounded-lg bg-slate-800 border border-slate-700" />
+            <button class="btn bg-slate-700 hover:bg-slate-600" data-action="plus" data-id="${item.id}">+</button>
+            <button class="btn bg-emerald-700 hover:bg-emerald-600" data-action="add" data-id="${item.id}">Adicionar</button>
+          </div>
+        </div>`;
+    }
+    function renderTabs(container,categories,getActive,setActive){
+      container.innerHTML='';
+      if(!categories||categories.length<=1){container.classList.add('hidden');return;}
+      container.classList.remove('hidden');
+      categories.forEach(cat=>{
+        const btn=document.createElement('button');
+        btn.className='tab'+(cat===getActive()?' active':'');
+        btn.textContent=cat;
+        btn.addEventListener('click',()=>setActive(cat));
+        container.appendChild(btn);
+      });
+    }
+    function renderGrid(container,dataset,activeCategory){
+      container.innerHTML='';
+      const cat=dataset.find(c=>c.category===activeCategory);
+      if(!cat){ container.innerHTML='<p class="muted">Nenhum item.</p>'; return; }
+      cat.items.forEach((item,idx)=>{
+        const wrap=document.createElement('div'); wrap.className='card rounded-2xl p-3'; wrap.innerHTML=itemRowHtml(item);
+        if(idx<cat.items.length-1){ const d=document.createElement('div'); d.className='divider'; wrap.appendChild(d);}
+        container.appendChild(wrap);
+      });
+    }
+
+    /* ===== PIZZAS ===== */
+    let activePizzaCat = PIZZAS[0]?.category||''; const PIZZA_CATS = PIZZAS.map(c=>c.category);
+    function setActivePizzaCat(cat){ activePizzaCat=cat; renderTabs(pizzaTabsEl,PIZZA_CATS,()=>activePizzaCat,setActivePizzaCat); renderGrid(pizzaGridEl,PIZZAS,activePizzaCat); }
+    setActivePizzaCat(activePizzaCat);
+
+    // start COLLAPSED by default for Pizzas
+    let pizzaCollapsed = true;
+    pizzaGridEl.style.display = 'none';
+    pizzaTabsEl.style.display = 'none';
+    document.getElementById('togglePizza').textContent = 'Expandir';
+    document.getElementById('togglePizza').addEventListener('click',()=>{
+      pizzaCollapsed = !pizzaCollapsed;
+      pizzaGridEl.style.display = pizzaCollapsed ? 'none' : '';
+      pizzaTabsEl.style.display = pizzaCollapsed ? 'none' : '';
+      document.getElementById('togglePizza').textContent = pizzaCollapsed ? 'Expandir' : 'Recolher';
+    });
+
+    /* ===== Build sections (icon + Recolher) ===== */
+    const SECTION_ICONS = {
+      'Hambúrgueres':'🍔','Hot Dog':'🌭','Fried Chicken':'🍗','Shawarma':'🌯',
+      'Sumos Naturais':'🍹','Gelados':'🍦','Combos':'🎁','Salgados/Petiscos':'🥟','Molhos':'🥫'
+    };
+    const SECTION_ORDER = ['Hambúrgueres','Hot Dog','Fried Chicken','Shawarma','Sumos Naturais','Gelados','Combos','Salgados/Petiscos','Molhos'];
+
+    function slugify(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-'); }
+
+    SECTION_ORDER.forEach(name=>{
+      const catData = MENU.find(c=>c.category===name);
+      if(!catData) return;
+
+      const slug = slugify(name);
+      const sec = document.createElement('section');
+      sec.className = 'card p-4 rounded-2xl';
+
+      sec.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-semibold">${SECTION_ICONS[name]||'🍽️'} ${name}</h2>
+          <button class="text-slate-300 hover:underline" data-toggle="${slug}">Recolher</button>
+        </div>
+        <div id="tabs-${slug}" class="flex flex-wrap gap-2 mb-4 hidden"></div>
+        <div id="grid-${slug}" class="space-y-4"></div>
+      `;
+      leftCol.appendChild(sec);
+
+      const tabsDiv = sec.querySelector(`#tabs-${slug}`);
+      const gridDiv = sec.querySelector(`#grid-${slug}`);
+
+      renderTabs(tabsDiv, [catData.category], ()=>catData.category, ()=>{});
+      renderGrid(gridDiv, [catData], catData.category);
+
+      const toggleBtn = sec.querySelector(`[data-toggle="${slug}"]`);
+
+      // start COLLAPSED by default for all other sections
+      let collapsed = true;
+      gridDiv.style.display = 'none';
+      tabsDiv.style.display = 'none';
+      toggleBtn.textContent = 'Expandir';
+
+      toggleBtn.addEventListener('click', ()=>{
+        collapsed = !collapsed;
+        gridDiv.style.display = collapsed ? 'none' : '';
+        tabsDiv.style.display = collapsed ? 'none' : '';
+        toggleBtn.textContent = collapsed ? 'Expandir' : 'Recolher';
+      });
+    });
+
+    /* ===== GLOBAL delegated handler for ALL "Adicionar/+/−" buttons ===== */
+    leftCol.addEventListener('click', (e)=>{
+      const btn=e.target.closest('button[data-action]');
+      if(!btn) return;
+
+      const action=btn.getAttribute('data-action');
+      const id=btn.getAttribute('data-id');
+      const card = btn.closest('.card');
+      const qtyInput = card ? card.querySelector(`input[data-qty="${CSS.escape(id)}"]`) : null;
+      let q=Math.max(1, Number(qtyInput && qtyInput.value || 1) || 1);
+
+      if(action==='minus'){ q=Math.max(1,q-1); if(qtyInput) qtyInput.value=q; return; }
+      if(action==='plus'){ q=q+1; if(qtyInput) qtyInput.value=q; return; }
+      if(action==='add'){
+        const item = ITEM_INDEX[id];
+        if(!item) return;
+        addToCart(item, q);
+        toast('Adicionado: ' + item.name);
+        return;
       }
     });
 
-    // Realtime view of the last 10 orders
-    (function subscribeMine(){
-      const {ordersCol, onSnapshot, query, orderBy} = window.__fb;
-      const q = query(ordersCol, orderBy("createdAtMs","desc"));
-      onSnapshot(q, (snap)=>{
-        const rows = [];
-        snap.forEach(d=> rows.push(d.data()));
-        const top = rows.slice(0, 10);
-        const root = document.getElementById("mine");
-        root.innerHTML = top.map(o=>\`
-          <div class="item">
-            <div class="row" style="justify-content:space-between;align-items:center">
-              <strong>Mesa \${o.table}</strong>
-              <span class="pill">\${o.confirmed ? 'confirmado' : 'pendente'}</span>
-            </div>
-            <div>Itens: \${o.items.join(", ")}</div>
-            <div class="muted">#\${o.orderId} · \${o.isReady ? 'pronto' : 'a preparar'}</div>
-          </div>
-        \`).join("");
-        try{
-          if (audioConfirm && top.some(o => o.confirmed)) {
-            audioConfirm.play().catch(()=>{});
-          }
-        }catch(e){}
+    /* ===== CART ===== */
+    let cart={};
+    function addToCart(item,qty){ qty=Math.max(1,Number(qty)||1); const ex=cart[item.id]; if(ex) ex.qty+=qty; else cart[item.id]={id:item.id,name:item.name,price:item.price||formatCVE(item.priceNum),priceNum:item.priceNum,qty}; renderCart(); }
+    function removeFromCart(id){ delete cart[id]; renderCart(); }
+    function totalCart(){ return Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0); }
+
+    function renderCart(){
+      // Desktop
+      cartList.innerHTML=''; let keys=Object.keys(cart);
+      if(keys.length===0){ cartList.innerHTML='<p class="muted">Seu carrinho está vazio.</p>'; }
+      else{
+        keys.forEach(k=>{
+          const it=cart[k];
+          const row=document.createElement('div'); row.className='card p-2 rounded-xl flex items-center justify-between gap-2';
+          row.innerHTML=`<div class="min-w-0"><div class="font-semibold">${escapeHtml(it.name)}</div><div class="muted text-xs">${it.qty} × ${escapeHtml(it.price)}</div></div>
+          <div class="flex items-center gap-2"><div class="muted text-sm">${formatCVE(it.priceNum*it.qty)}</div><button class="btn bg-slate-700 hover:bg-slate-600" data-remove="${it.id}">Remover</button></div>`;
+          row.querySelector('[data-remove]').addEventListener('click',()=>removeFromCart(it.id));
+          cartList.appendChild(row);
+        });
+      }
+      cartTotal.textContent=formatCVE(totalCart());
+
+      // Mobile
+      cartListMobile.innerHTML='';
+      keys = Object.keys(cart);
+      if(keys.length===0){ cartListMobile.innerHTML='<p class="muted">Seu carrinho está vazio.</p>'; }
+      else{
+        keys.forEach(k=>{
+          const it=cart[k];
+          const row=document.createElement('div'); row.className='card p-2 rounded-xl flex items-center justify-between gap-2';
+          row.innerHTML=`<div class="min-w-0"><div class="font-semibold">${escapeHtml(it.name)}</div><div class="muted text-xs">${it.qty} × ${escapeHtml(it.price)}</div></div>
+          <div class="flex items-center gap-2"><div class="muted text-sm">${formatCVE(it.priceNum*it.qty)}</div><button class="btn bg-slate-700 hover:bg-slate-600" data-remove="${it.id}">Remover</button></div>`;
+          row.querySelector('[data-remove]').addEventListener('click',()=>removeFromCart(it.id));
+          cartListMobile.appendChild(row);
+        });
+      }
+      const tot = formatCVE(totalCart());
+      cartTotalMobile.textContent = tot;
+      cartTotalSheet.textContent = tot;
+    }
+
+    function toast(msg){
+      const t=document.createElement('div');
+      t.textContent=msg;
+      t.style.position='fixed'; t.style.left='50%'; t.style.transform='translateX(-50%)';
+      t.style.bottom='calc(80px + env(safe-area-inset-bottom, 0px))';
+      t.style.background='#065f46'; t.style.border='1px solid #059669'; t.style.padding='.6rem .9rem';
+      t.style.borderRadius='.75rem'; t.style.zIndex='70';
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(),1800);
+    }
+
+    // Notes sync & sheet
+    function gatherNotes(){
+      const sheetOpen = cartSheet.classList.contains('open');
+      const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
+      if(sheetOpen) return m || d; return d || m;
+    }
+    function sendOrder(){
+      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+      const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
+
+      const items=keys.map(k=>({ pizzaType:cart[k].name, size:'', qty:Number(cart[k].qty)||1, notes:'' }));
+      const total = Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0);
+
+      const orders=getOrdersCompat();
+      orders.push({
+        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        table: String(selectedTable),
+        items,
+        createdAt: Date.now(),
+        notes: gatherNotes(),
+        confirmed: false,
+        totalCVE: total
       });
-    })();
+      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
+      try {
+        if (window.Parse && Parse.applicationId) {
+          const Order = Parse.Object.extend('Order');
+          const obj = new Order();
+          obj.set('orderId', String(orders[orders.length-1].id));
+          obj.set('table', String(orders[orders.length-1].table));
+          obj.set('items', orders[orders.length-1].items || []);
+          obj.set('notes', String(orders[orders.length-1].notes || ''));
+          obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
+          obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
+          obj.set('confirmed', false);
+          const acl = new Parse.ACL();
+          acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
+          obj.setACL(acl);
+          obj.save().then(()=>{
+            try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
+          }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
+        }
+      } catch(e){ try{ console.warn('Parse not available', e); }catch(e2){} }
+
+      setOrdersCompat(orders);
+      bcPost({type:'orders_updated'});
+
+      cart={}; renderCart(); if(notesDesktop) notesDesktop.value=''; notesMobile.value='';
+      if(cartSheet.classList.contains('open')) closeSheet();
+      alert('Pedido enviado ao staff para confirmação!');
+    }
+
+    const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
+    const closeSheet=()=>{ cartSheet.classList.remove('open'); cartSheet.setAttribute('aria-hidden','true'); };
+    document.getElementById('closeCartSheet').addEventListener('click', closeSheet);
+    openCartFab.addEventListener('click', openSheet);
+    if (sendBtnDesktop) sendBtnDesktop.addEventListener('click', sendOrder);
+    sendBtnMobile.addEventListener('click', sendOrder);
+    sendBtnSheet.addEventListener('click', sendOrder);
+
+    if (notesDesktop) notesDesktop.addEventListener('input', ()=>{ if(!cartSheet.classList.contains('open')) notesMobile.value = notesDesktop.value; });
+    notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
+
+    // Drag-to-close (mobile)
+    let startY=null, currentY=null;
+    cartSheet.addEventListener('touchstart', (e)=>{ if(e.touches.length===1){ startY=e.touches[0].clientY; }});
+    cartSheet.addEventListener('touchmove', (e)=>{ if(startY!=null){ currentY=e.touches[0].clientY; const dy=currentY-startY; if(dy>0) cartSheet.style.transform=`translateY(${Math.min(dy, window.innerHeight)}px)`; }});
+    cartSheet.addEventListener('touchend', ()=>{ if(startY!=null){ const dy=(currentY??startY)-startY; cartSheet.style.transform=''; if(dy>80) closeSheet(); startY=currentY=null; }});
+
+    // Build index
+    ITEM_INDEX = buildIndex();
+
+    // Init
+    renderCart();
   </script>
+
+
+
+
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
+    authDomain: "asabrancaff-aa13d.firebaseapp.com",
+    projectId: "asabrancaff-aa13d",
+    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
+    messagingSenderId: "1031914620871",
+    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+</script>
+
+
+
+
+
 </body>
 </html>

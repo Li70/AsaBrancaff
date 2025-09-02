@@ -3,52 +3,76 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Staff · Pedidos (Firebase)</title>
-  
-<style>
-  :root { color-scheme: light dark; --accent: #00897b; --bg:#0b0b0b; --card:#141414; --muted:#8a8a8a; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif; background: var(--bg); color: #fff; }
-  header { padding: 16px; background: #111; display: flex; gap: 12px; align-items:center; border-bottom: 1px solid #1e1e1e; position: sticky; top: 0; z-index: 5; }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  main { padding: 16px; display: grid; gap: 16px; max-width: 1100px; margin: 0 auto; }
-  .card { background: var(--card); border: 1px solid #1e1e1e; border-radius: 16px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
-  .row { display:flex; gap:12px; flex-wrap:wrap; }
-  input, textarea, select, button { background: #131313; color: #fff; border-radius: 10px; border: 1px solid #2a2a2a; padding: 10px 12px; font: inherit; }
-  button { background: var(--accent); border: 0; cursor: pointer; }
-  button.secondary { background: #2a2a2a; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .list { display: grid; gap: 10px; }
-  .item { border: 1px solid #262626; background: #121212; padding: 12px; border-radius: 12px; display: grid; gap: 8px; }
-  .pill { font-size:12px; background:#1e1e1e; padding:4px 8px; border-radius:999px; }
-  .split { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 800px){ .split { grid-template-columns: 1fr; } }
-</style>
+  <title>Staff – Pedidos em Tempo Real</title>
+ <script src="https://cdn.tailwindcss.com"></script> 
+<!-- <link rel="stylesheet" href="tailwind-lite.css"> -->
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); transition: box-shadow .2s, border-color .2s; }
+    .muted { color: rgba(255,255,255,0.7); }
+    .btn { padding:.5rem .85rem; border-radius:.75rem; font-weight:600; }
+    .pill{ font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,.08); }
+    .items li { list-style: disc; margin-left: 1.25rem; }
+    .toast { position: fixed; left: 50%; transform: translateX(-50%); top: 12px; background:#065f46; border:1px solid #059669; padding:.6rem .9rem; border-radius:.75rem; z-index:50; }
+    .bar { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; }
+    details summary { cursor: pointer; }
 
-</head>
-<body>
-  <header>
-    <h1>Staff</h1>
-    <span class="pill">Confirmação & Serviço</span>
-  </header>
+    /* Ready styling */
+    .card.ready { border-color: rgba(16,185,129,.6) !important; box-shadow: 0 0 0 2px rgba(16,185,129,.15); }
+    .pill-ready { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#052e2b; border:1px solid rgba(16,185,129,.6); color:#a7f3d0; }
+  </style>
 
-  <main class="split">
-    <section class="card">
-      <h2 style="margin:0 0 10px 0;">Por confirmar</h2>
-      <div id="pending" class="list"></div>
-    </section>
+  <script>
+  // --- Tiny UI helpers
+  function showToast(msg){
+    const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+    document.body.appendChild(t); setTimeout(()=>t.remove(), 2500);
+  }
 
-    <section class="card">
-      <h2 style="margin:0 0 10px 0;">Confirmados</h2>
-      <div id="confirmed" class="list"></div>
-    </section>
-  </main>
+  // --- Shared helpers: storage + channel + polling
+  (function(){
+    window.ORDERS_KEY='orders_simple_v4';
+    window.VERSION_KEY='orders_simple_v4_ver';
+    window.SERVED_KEY='orders_served';
+    window.SERVED_VERSION='orders_served_ver';
+    window.HISTORY_KEY='orders_history_v1';
 
-  
-<!-- Firebase bootstrap (shared) -->
+    window.lsGet=(k,f=null)=>{ try{const v=localStorage.getItem(k); return v===null?f:v;}catch{return f;} };
+    window.lsSet=(k,v)=>{ try{localStorage.setItem(k,v); return true;}catch{return false;} };
+
+    window.getOrders=()=>{ try{return JSON.parse(lsGet(ORDERS_KEY,'[]'))||[];}catch{return[];} };
+    window.setOrders=(arr)=>{ lsSet(ORDERS_KEY,JSON.stringify(arr)); lsSet(VERSION_KEY,String(Date.now())); };
+
+    window.getHistory=()=>{ try{return JSON.parse(lsGet(HISTORY_KEY,'[]'))||[];}catch{return[];} };
+    window.setHistory=(arr)=>{ lsSet(HISTORY_KEY,JSON.stringify(arr)); };
+
+    window.getServedMap=()=>{ try{return JSON.parse(lsGet(SERVED_KEY,'{}'))||{};}catch{return{};} };
+    window.setServedMap=(m)=>{ lsSet(SERVED_KEY,JSON.stringify(m)); lsSet(SERVED_VERSION,String(Date.now())); };
+
+    const channels=[]; try{ channels.push(new BroadcastChannel('orders_simple_v4')); }catch{}
+    window.bcPost=(msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
+
+    window.subscribeAll=function(onChange,{pollMs=900}={}){
+      channels.forEach(ch=>ch.onmessage=(e)=> onChange(e?.data||null));
+      window.addEventListener('storage',(e)=>{ if(!e.key) return;
+        if([ORDERS_KEY,VERSION_KEY,SERVED_VERSION,HISTORY_KEY].includes(e.key)) onChange(null); });
+      let lastV=lsGet(VERSION_KEY,'0'), lastS=lsGet(SERVED_VERSION,'0'), lastH=lsGet(HISTORY_KEY,'[]');
+      const t=setInterval(()=>{
+        const v=lsGet(VERSION_KEY,'0'), s=lsGet(SERVED_VERSION,'0'), h=lsGet(HISTORY_KEY,'[]');
+        if(v!==lastV || s!==lastS || h!==lastH){ lastV=v; lastS=s; lastH=h; onChange(null); }
+      }, pollMs);
+      return ()=>clearInterval(t);
+    };
+
+    window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
+  })();
+  </script>
+
+<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
   import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
@@ -60,93 +84,719 @@
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
-  window.firebaseConfig = firebaseConfig;
 
-  const app = initializeApp(window.firebaseConfig);
+  const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
   const auth = getAuth(app);
   const storage = getStorage(app);
-
-  window.__fb = { app, db, auth, storage, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp, sRef, getDownloadURL,
-    ordersCol: collection(db, "orders")
-  };
-  window.__fbReady = false;
-  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
   signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  // === Minimal Parse compatibility shim (Firestore-backed) ===
+  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
+
+  class _ParseObject {
+    constructor(className){
+      this.className = className;
+      this._data = {};
+      this.id = null;
+    }
+    set(k,v){ this._data[k]=v; }
+    get(k){ return this._data[k]; }
+    async save(){
+      // ensure defaults so `doesNotExist` can be emulated via `== null`
+      if (this.className==='Order'){
+        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
+        if (!('servedAt' in this._data)) this._data.servedAt = null;
+        if (!('confirmed' in this._data)) this._data.confirmed = false;
+      }
+      const cname = colNameFromClass(this.className);
+      const id = String(this._data.orderId || this.id || Date.now());
+      this.id = id;
+      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
+      return this;
+    }
+    async destroy(){
+      const cname = colNameFromClass(this.className);
+      if (!this.id) return;
+      await deleteDoc(doc(collection(db, cname), this.id));
+    }
+  }
+
+  const Parse = {};
+  Parse.applicationId = "firebase-shim";
+  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  Parse.serverURL = "";
+  Parse.liveQueryServerURL = "";
+  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
+
+  Parse.Object = {
+    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
+  };
+
+  Parse.Query = class {
+    constructor(Cls){
+      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
+      this._w = [];
+      this._order = null;
+      this._limit = 1000;
+    }
+    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    limit(n){ this._limit = n; return this; }
+    ascending(f){ this._order = ['asc', f]; return this; }
+    descending(f){ this._order = ['desc', f]; return this; }
+    _build(){
+      const cname = colNameFromClass(this.className);
+      let ref = collection(db, cname);
+      const terms = this._w.map(([f,op,v])=> where(f, op, v));
+      let qref = terms.length ? query(ref, ...terms) : ref;
+      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
+      return qref;
+    }
+    async find(){
+      const qref = this._build();
+      const snap = await getDocs(qref);
+      const arr = [];
+      snap.forEach(d=>{
+        const Obj = Parse.Object.extend(this.className);
+        const o = new Obj();
+        o.id = d.id; o._data = d.data() || {};
+        arr.push(o);
+      });
+      return arr.slice(0, this._limit);
+    }
+    async first(){
+      this.limit(1);
+      const a = await this.find();
+      return a[0]||null;
+    }
+    subscribe(){
+      const listeners = { create:[], update:[], delete:[] };
+      const unsub = onSnapshot(this._build(), (snap)=>{
+        snap.docChanges().forEach(ch=>{
+          const Obj = Parse.Object.extend(this.className);
+          const o = new Obj();
+          o.id = ch.doc.id; o._data = ch.doc.data() || {};
+          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+        });
+      });
+      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
+    }
+  };
+
+  // Expose for the rest of the page
+  window.Parse = Parse;
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
+</script>
+
+</head>
+<body class="p-4">
+  <!-- sound controls -->
+  <div class="bar">
+    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
+    <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
+  </div>
+
+  <!-- alert banner -->
+  <div id="alertBanner" class="hidden fixed left-1/2 -translate-x-1/2 bottom-16 bg-rose-700/90 border border-rose-500 rounded-xl px-4 py-2 text-sm z-40">Alerta</div>
+
+  <div class="max-w-6xl mx-auto">
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+      <h1 class="text-2xl font-bold">Staff – Pedidos em Tempo Real</h1>
+      <div class="flex items-center gap-2">
+        <input id="filterTable" type="number" min="1"
+               class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 w-28"
+               placeholder="Mesa #" />
+        <button id="clearTableBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar mesa</button>
+        <button id="clearAllBtn" class="btn bg-red-600 hover:bg-red-700">Limpar tudo</button>
+        <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
+      </div>
+    </header>
+
+    <section class="card p-3 rounded-2xl mb-3">
+      <div class="muted text-sm">
+        Pode confirmar as encomendas com o cliente se necessário. As encomendas confirmadas serao enviadas directamente para a cozinha.<br/>
+        A cozinha só vê pedidos <b>Confirmados</b>.
+      </div>
+    </section>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+      <section class="card p-3 rounded-2xl">
+        <h2 class="font-semibold mb-2">Pendentes <span id="countPend" class="pill">0</span></h2>
+        <div id="pending" class="space-y-2"></div>
+      </section>
+
+      <section class="card p-3 rounded-2xl sm:col-span-1 lg:col-span-2">
+        <h2 class="font-semibold mb-2">Confirmados <span id="countConf" class="pill">0</span></h2>
+        <div id="confirmed" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </section>
+    </div>
+
+    <!-- (Optional) Histórico escondido: deixe a estrutura intacta -->
+    <details class="card rounded-2xl p-3" style="display:none">
+      <summary class="font-semibold">Histórico (Hoje) — Total: <span id="histTotal">0$00</span></summary>
+      <div id="histList" class="mt-3 space-y-2"></div>
+    </details>
+  </div>
+
+  <!-- sounds -->
+  <audio id="alertSound" preload="auto" src="ready.mp3" loop></audio>
+  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
+
+  <script>
+  "use strict";
+
+  /* === PRICE INDEX (match client) === */
+  const PRICE_INDEX = {
+    "LEGS":200,"WINGS":200,"SWEET CHILLI WINGS":600,"BARBECUE WINGS":600,"NUGGETS":500,"POP CORNS":500,"FRIED CHICKEN":300,"SANDWICH":500,"MEIA DE FRANGO":600,
+    "COMBO 1":450,"COMBO 2":650,"COMBO 3":800,"COMBO 4":1000,
+    "CHICAGO":300,"ITALIAN":300,"MICHIGAN":300,"NEW YORK":300,"DODGER DOG":300,"CAROLINA":300,
+    "SWEET & SOUR SAUCE":50,"ALFREDO (CREMOSO CLÁSSICO)":50,"HONEY MUSTARD":50,"CHEESY SAUCE":50,"CREOLE TOMATO":50,"COLESLAW":50,"BUFFALO":50,
+    "COXINHA":60,"PASTEL":50,"BIFANAS À MODA DO PORTO":300,"MOELAS À PORTUGUESA":600,"LINGUIÇA":100,
+    "PEPERONI":800,"HAWAII-II":800,"ATUM":800,"FRANGO":800,"VEGETARIANO":800,
+    "S.C.P.":1000,"S.L.B":1000,"F.C.P.":1000,
+    "1 Pizza + Coca-Cola 1,5L":1200,"1 Pizza + Compal 1L":1250
+  };
+
+  /* === UI refs === */
+  const pendingDiv=document.getElementById('pending');
+  const confirmedDiv=document.getElementById('confirmed');
+  const countPend=document.getElementById('countPend');
+  const countConf=document.getElementById('countConf');
+  const filterInput=document.getElementById('filterTable');
+  const histList=document.getElementById('histList');
+  const histTotalEl=document.getElementById('histTotal');
+
+  const soundBtn=document.getElementById('soundBtn');
+  const ackBtn=document.getElementById('ackBtn');
+  const alertBanner=document.getElementById('alertBanner');
+  const alertEl=document.getElementById('alertSound');
+  const doneEl=document.getElementById('doneSound');
+
+  /* === Sound / alarm === */
+  let soundEnabled=false, audioCtx, fallbackLoop=null;
+  function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
+  function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
+  async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
+  function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
+  soundBtn.addEventListener('click', enableSound);
+  ackBtn.addEventListener('click', stopAlarm);
+  document.addEventListener('DOMContentLoaded', enableSound);
+  document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
+  document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
+
+  function startAlarm(msg){
+    if(!soundEnabled){ showBanner(msg); return; }
+    showBanner(msg);
+    alertEl.play().catch(()=>{
+      const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
+      fallbackLoop=setInterval(()=>{
+        const now=audioCtx.currentTime, g=audioCtx.createGain(), o1=audioCtx.createOscillator(), o2=audioCtx.createOscillator();
+        o1.type='square'; o2.type='square'; o1.frequency.value=800; o2.frequency.value=1600;
+        o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.45, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
+        o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
+      },1100);
+    });
+  }
+
+  async function playReadySound(){
+    if(!soundEnabled) return;
+    try { doneEl.currentTime = 0; await doneEl.play(); } catch {}
+  }
+
+  /* === utils/totals === */
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
+  function priceForName(name){ const k=String(name||'').trim(); return (k in PRICE_INDEX)? Number(PRICE_INDEX[k]):0; }
+  function computeOrderTotal(order){
+    if (typeof order.totalCVE==='number') return Number(order.totalCVE)||0;
+    let sum=0; for(const it of (order.items||[])){ sum += priceForName(it.pizzaType) * Number(it.qty||1); } return sum;
+  }
+
+  /* === render lists === */
+  function render(){
+    const tableFilter = Number(filterInput.value||'0') || null;
+    const all = getOrders().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+
+    const pend = all.filter(o=>!o.confirmed && (!tableFilter || Number(o.table)===tableFilter));
+    const conf = all.filter(o=> o.confirmed && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
+
+    pendingDiv.innerHTML=''; confirmedDiv.innerHTML='';
+    countPend.textContent=pend.length; countConf.textContent=conf.length;
+
+    // Pendentes
+    if (!pend.length){ pendingDiv.innerHTML='<p class="muted">Sem pendentes.</p>'; }
+    else pend.forEach(o=>{
+      const when=o.createdAt? new Date(o.createdAt).toLocaleTimeString() : '';
+      const items=(o.items||[]).map(i=>`${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`).join('<br>') || '(sem itens)';
+      const total=computeOrderTotal(o);
+      const card=document.createElement('div'); card.className='card p-3 rounded-xl';
+      card.innerHTML=`
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-semibold">Mesa ${esc(o.table)}</div>
+            <div class="muted text-sm leading-5">${items}</div>
+            ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
+            <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
+            <div class="muted text-xs mt-1">${when}</div>
+          </div>
+          <div class="flex flex-col gap-2">
+            <button class="btn bg-emerald-700 hover:bg-emerald-600" data-confirm="${o.id}">Confirmar</button>
+            <button class="btn bg-slate-700 hover:bg-slate-600" data-reject="${o.id}">Rejeitar</button>
+          </div>
+        </div>`;
+      card.querySelector('[data-confirm]').addEventListener('click',()=>confirmOrder(o.id));
+      card.querySelector('[data-reject]').addEventListener('click',()=>rejectOrder(o.id));
+      pendingDiv.appendChild(card);
+    });
+
+    // Confirmados (Servido limpa) — with persistent "Pedido pronto" if marked in Kitchen
+    const readyMap = getServedMap() || {};
+    if (!conf.length){
+      confirmedDiv.innerHTML='<p class="muted">Sem confirmados.</p>';
+    } else {
+      conf.forEach(o=>{
+        const when=o.confirmedAt? new Date(o.confirmedAt).toLocaleTimeString()
+                  : (o.createdAt? new Date(o.createdAt).toLocaleTimeString():'');
+        const items=(o.items||[]).map(i=>
+          `${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`
+        ).join('<br>') || '(sem itens)';
+        const total=computeOrderTotal(o);
+        const isReady = !!readyMap[String(o.id)];
+
+        const card=document.createElement('div');
+        card.className='card p-3 rounded-xl' + (isReady ? ' ready' : '');
+
+        card.innerHTML=`
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-semibold flex items-center gap-2">
+                <span>Mesa ${esc(o.table)}</span>
+               
+              </div>
+              <div class="muted text-sm leading-5">${items}</div>
+              ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
+              <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
+              <div class="muted text-xs mt-1">Confirmado: ${when}</div>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+              ${isReady ? `<div class="text-yellow-300 text-xs font-semibold">✔️ Pronto</div>` : `<div class="text-transparent text-xs select-none">.</div>`}
+              <button class="btn ${isReady ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-700 hover:bg-emerald-600'}" data-served="${o.id}">
+                Servido
+              </button>
+            </div>
+          </div>`;
+        card.querySelector('[data-served]').addEventListener('click',()=>markServedAndClear(o.id));
+        confirmedDiv.appendChild(card);
+      });
+    }
+  }
+
+  /* === History (today) === */
+  function isToday(ts){ const d=new Date(ts||Date.now()), n=new Date(); return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate(); }
+  function renderHistory(){
+    const histWrap = document.querySelector('details[style*="display:none"]'); // hidden
+    if(!histWrap) return;
+    const hist = getHistory().filter(h=>isToday(h.servedAt||h.createdAt));
+    const byTable=new Map(); let grand=0;
+    hist.forEach(h=>{
+      const t=String(h.table||'?'); const add=Number(h.totalNum||0);
+      if(!byTable.has(t)) byTable.set(t,{table:t,total:0,orders:0});
+      byTable.get(t).total+=add; byTable.get(t).orders+=1; grand+=add;
+    });
+    if(histList){
+      histList.innerHTML='';
+      if(byTable.size===0){ histList.innerHTML='<p class="muted">Sem registos hoje.</p>'; }
+      else {
+        [...byTable.values()].sort((a,b)=>Number(a.table)-Number(b.table)).forEach(row=>{
+          const div=document.createElement('div'); div.className='card p-2 rounded-xl flex items-center justify-between';
+          div.innerHTML=`<div><div class="font-semibold">Mesa ${row.table}</div><div class="muted text-xs">${row.orders} pedido(s)</div></div>
+                         <div class="font-semibold">${formatCVE(row.total)}</div>`;
+          histList.appendChild(div);
+        });
+      }
+      if(histTotalEl) histTotalEl.textContent=formatCVE(grand);
+    }
+  }
+
+  /* === Detetar novos pedidos (tocar) === */
+  let knownIds=new Set();
+  function detectNewOrdersAndMaybeAlarm(){
+    const idsNow=new Set(getOrders().map(o=>String(o.id)));
+    let newCount=0; idsNow.forEach(id=>{ if(!knownIds.has(id)) newCount++; });
+    knownIds=idsNow;
+    if(newCount>0) startAlarm(newCount===1?'Novo pedido recebido!':`${newCount} novos pedidos recebidos!`);
+  }
+
+  /* === Actions === */
+  function confirmOrder(id){
+    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
+    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
+    setOrders(all);
+    bcPost({type:'orders_updated'});
+    stopAlarm();
+    render();
+  }
+  function rejectOrder(id){
+    if(!confirm('Rejeitar este pedido?')) return;
+    const keep=getOrders().filter(o=>String(o.id)!==String(id));
+    setOrders(keep); bcPost({type:'orders_updated'}); render();
+  }
+
+  // SERVIDO: escreve no histórico + remove dos pedidos + notifica
+  function markServedAndClear(id){
+    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
+    const o = all[idx];
+
+    const totalNum = computeOrderTotal(o);
+    const entry = {
+      id: String(o.id),
+      table: String(o.table),
+      createdAt: o.createdAt || Date.now(),
+      confirmedAt: o.confirmedAt || Date.now(),
+      servedAt: Date.now(),
+      totalNum,
+      totalText: formatCVE(totalNum)
+    };
+
+    const hist=getHistory();
+    if (!hist.some(h=>String(h.id)===String(entry.id))) hist.push(entry);
+    setHistory(hist);
+
+    const keep = all.filter(x=>String(x.id)!==String(id));
+    setOrders(keep);
+
+    const map=getServedMap(); map[String(id)]=true; setServedMap(map);
+
+    bcPost({type:'served_update', id:String(id), served:true});
+    bcPost({type:'orders_updated'});
+
+    render();
+    renderHistory();
+  }
+
+  /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
+  let _knownServed = new Set();
+  function snapshotServedIds(){
+    try {
+      const m = getServedMap();
+      return new Set(Object.keys(m).filter(k => !!m[k]));
+    } catch { return new Set(); }
+  }
+ 
+
+  /* === subscriptions / polling === */
+  subscribeAll((evt)=>{
+    render(); 
+    detectNewOrdersAndMaybeAlarm(); 
+    renderHistory();
+
+    // Direct broadcast from Kitchen
+    if (evt && evt.type==='served_update' && evt.served){
+      showToast('Pedido pronto ✨');
+      playReadySound();
+      if (evt.id != null) _knownServed.add(String(evt.id)); // avoid double notify next tick
+    }
+
+    // Fallback for storage/poll-only
+    detectNewServedAndNotify();
+  }, {pollMs: 900});
+
+  // initial
+  render(); renderHistory();
+  knownIds=new Set(getOrders().map(o=>String(o.id)));
+  _knownServed = snapshotServedIds();
+  </script>
+
+
+
+
+
+
+
+<!-- STAFF_SERVED_VIRTUAL_V2 -->
+<script>
+(function(){
+  var SERVED_KEY = 'orders_served';
+  var SERVED_VERSION = 'orders_served_version';
+  var _get = null;
+  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
+  localStorage.getItem = function(k){
+    try{
+      if (k===SERVED_KEY){
+        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
+        return JSON.stringify(m);
+      }
+      if (k===SERVED_VERSION){
+        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
+        return String(v);
+      }
+    }catch(e){}
+    return _get ? _get(k) : null;
+  };
+})();
 </script>
 
 
-  <script type="module">
-    const $ = s=>document.querySelector(s);
+<!-- REMOVE_FILTERTABLE_V2 -->
+<script>
+(function(){
+  function run(){
+    try{
+      var el = document.getElementById('filterTable');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      var lbl = document.querySelector('label[for="filterTable"]');
+      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
+    }catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
 
-    let doneAudio = null;
-    (async () => { try {
-      const {storage, sRef, getDownloadURL} = window.__fb;
-      const url = await getDownloadURL(sRef(storage, "audio/done.mp3"));
-      doneAudio = new Audio(url);
-    } catch(e){} })();
 
-    function renderList(el, rows, type) {
-      el.innerHTML = rows.map(o=>\`
-        <div class="item">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <strong>Mesa \${o.table} (\${o.items.length} itens)</strong>
-            <span class="pill">\${o.isReady?'PRONTO':'—'}</span>
-          </div>
-          <div>Itens: \${o.items.join(', ')}</div>
-          <div class="row">
-            \${type==='pending' ? '<button class="confirm">Confirmar</button><button class="reject secondary">Rejeitar</button>' : '<button class="serve">Servido</button>'}
-          </div>
-          <div class="muted">#\${o.orderId} · \${new Date(o.createdAtMs).toLocaleTimeString()}</div>
-        </div>
-      \`).join("");
+<!-- STAFF_CLOUD_ONLY_V3B -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  const Order = Parse.Object.extend('Order');
+  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
+  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
 
-      Array.from(el.querySelectorAll(".confirm")).forEach((btn, i)=>btn.addEventListener("click", async (ev)=>{
-        const id = rows[i].orderId;
-        const {ordersCol, doc, updateDoc} = window.__fb;
-        await updateDoc(doc(ordersCol, id), { confirmed: true, confirmedAt: Date.now() });
-        try{ doneAudio && doneAudio.play().catch(()=>{}); }catch(e){}
-      }));
+  (function(){
+    const _get = localStorage.getItem.bind(localStorage);
+    window.__cloudList = []; window.__cloudVer = Date.now();
+    localStorage.getItem = function(k){
+      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
+      if (k===VERSION_KEY) return String(window.__cloudVer);
+      return _get(k);
+    };
+    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
+  })();
 
-      Array.from(el.querySelectorAll(".reject")).forEach((btn, i)=>btn.addEventListener("click", async (ev)=>{
-        const id = rows[i].orderId;
-        const {ordersCol, doc, updateDoc} = window.__fb;
-        await updateDoc(doc(ordersCol, id), { rejectedAt: Date.now() });
-      }));
+  function pickBetter(a,b){
+    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
+         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
+         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
+    return a;
+  }
+  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+  const cache=new Map(); const confirmedLatch=new Map();
 
-      Array.from(el.querySelectorAll(".serve")).forEach((btn, i)=>btn.addEventListener("click", async (ev)=>{
-        const id = rows[i].orderId;
-        const {ordersCol, doc, updateDoc} = window.__fb;
-        await updateDoc(doc(ordersCol, id), { servedAt: Date.now() });
-      }));
-    }
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
+    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
 
-    function live() {
-      const {ordersCol, onSnapshot, query, where} = window.__fb;
-      const pendingQ = query(ordersCol,
-        where("confirmed","==", false),
-        where("rejectedAt","==", null)
-      );
-      const confirmedQ = query(ordersCol,
-        where("confirmed","==", true),
-        where("servedAt","==", null),
-        where("rejectedAt","==", null)
-      );
+  function controlAlarm(list){
+    try{
+      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+      var prev = window.__prevHasUnconf || false;
+      window.__prevHasUnconf = hasUnconfirmed;
+      var el = document.getElementById('alertSound') || document.getElementById('readySound');
+      if (!el) return;
+      if (hasUnconfirmed && !prev){
+        try{
+          el.loop = true;
+          if (window.soundEnabled !== false){
+            var p = el.play();
+            if (p && typeof p.catch==='function'){ p.catch(function(){}); }
+          }
+        }catch(e){}
+      } else if (!hasUnconfirmed && prev){
+        try{ el.pause(); el.currentTime = 0; }catch(e){}
+      }
+    }catch(e){}
+  }
 
-      onSnapshot(pendingQ, (snap)=>{
-        const rows = []; snap.forEach(d=>rows.push(d.data()));
-        rows.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0));
-        renderList(document.getElementById("pending"), rows, "pending");
+  function flush(){
+    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
+    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){};
+    window.__applyCloudList(list);
+    controlAlarm(list);
+  }
+
+  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
+
+  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
+    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
+
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
+  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
+      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
+
+  (function(){
+    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
+    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
+    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
+    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
+  })();
+
+  initial(); live(); poll();
+})();
+</script>
+
+
+<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
+<script>
+(function() {
+  function attach() {
+    try {
+      var btn = document.getElementById('clearAllBtn');
+      if (!btn || btn.__wiredClearAllRemoveV1) return;
+      btn.__wiredClearAllRemoveV1 = true;
+      btn.addEventListener('click', function(ev) {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
+        try { 
+          if (typeof setOrders === 'function') setOrders([]);
+          if (typeof setServedMap === 'function') setServedMap({});
+          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
+          if (typeof render === 'function') render();
+        } catch(e){}
+      }, true);
+    } catch(e){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
+<script>
+(function(){
+  function attach(){
+    try{
+      var btn = document.getElementById('clearAllBtn');
+      if (!btn || btn.__wiredClearAllV2) return;
+      btn.__wiredClearAllV2 = true;
+      btn.addEventListener('click', function(ev){
+        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+        var ok = true;
+        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
+        if (!ok) return false;
+        (async function(){
+          // Optional: Cloud reject so they don't come back after refresh
+          if (window.Parse && Parse.applicationId) {
+            try{
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
+          }
+          // Local UI clear (always)
+          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
+          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
+          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
+          try{ if (typeof render==='function') render(); }catch(e){}
+        })();
+      }, true);
+    }catch(e){}
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- STAFF_ATUALIZAR_RELOAD_V1 -->
+<script>
+(function(){
+  function attach(){
+    try{
+      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+      nodes.forEach(function(n){
+        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+        if (t==='atualizar' || t==='actualizar' || n.id==='refreshBtn') {
+          if (n.__wiredRefreshV1) return;
+          n.__wiredRefreshV1 = true;
+          n.addEventListener('click', function(ev){
+            try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+            try{ location.reload(); }catch(e){}
+          }, true);
+        }
       });
+    }catch(e){}
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+  setInterval(attach, 1500);
+})();
+</script>
 
-      onSnapshot(confirmedQ, (snap)=>{
-        const rows = []; snap.forEach(d=>rows.push(d.data()));
-        rows.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0));
-        renderList(document.getElementById("confirmed"), rows, "confirmed");
-      });
-    }
-
-    live();
-  </script>
 </body>
 </html>
+
+
+
+
+
+
+<!-- STAFF_DOM_TWEAKS_V2 -->
+<script>
+(function(){
+  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+  function removeLimparMesa(){
+    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
+  }
+  function removeMesaField(){
+    try{
+      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
+        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
+        if (ph==='mesa'){ el.remove(); return; }
+        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
+        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
+      });
+    }catch(e){}
+  }
+  function run(){ removeLimparMesa(); removeMesaField(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
+</script>
+
+
+
+<!-- STAFF_CLEARALL_UNIFIED_V4 -->
+<script>
+(function(){
+  if (!(window.Parse && Parse.applicationId)) return;
+  var hooked = false;
+  function attach(){
+    if (hooked) return;
+    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
+    nodes.forEach(function(n){
+      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+      if (t==='limpar tudo'){
+        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
+        n.addEventListener('click', function(ev){
+          try{
+            var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
+            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
+          }catch(e){}
+          (async function(){
+            try{
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
+              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+              q.limit(1000);
+              var res = await q.find();
+              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
+              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
+              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
+            }catch(e){}
+          })();
+        }, true);
+      }
+    });
+  }
+  
+})();
+</script>
+
