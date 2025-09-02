@@ -563,4 +563,6 @@ function startAlarm(msg){
   document.addEventListener('orders:rendered', maybeStopAlarmWhenNoPending);
   setInterval(maybeStopAlarmWhenNoPending, 2000);
 })();
+
+function render(){ /* no-op (UI handled by Firestore-driven components) */ }
 </script>

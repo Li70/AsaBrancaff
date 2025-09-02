@@ -47,8 +47,7 @@
     if (!auth.currentUser) {
       signInAnonymously(auth).catch(console.error);
     }
-  }
-</script>
+  }</script>
 
 
 </head>
@@ -231,7 +230,7 @@
       // teste curto silencioso
       try { await cashEl.play(); setTimeout(()=>{ try{ cashEl.pause(); }catch{} }, 200); } catch {}
     }
-    async async function playSound(){
+    async function playSound(){
       if (!soundEnabled) return;
       try { cashEl.currentTime = 0; await cashEl.play(); return; } catch {}
       playFallback();
@@ -401,8 +400,7 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();
-})();
-</script>
+})();</script>
 
 
 <!-- KITCHEN_CLOUD_ONLY_V3B -->
@@ -479,8 +477,7 @@
   })();
 
   refreshAll(false); live(); poll();
-})();
-</script>
+})();</script>
 
 
 
@@ -563,7 +560,7 @@ fb.onSnapshot(qConf, (snap)=>{
   if (novos > 0) { try{ playSound(); }catch(e){} }
   knownIds = new Set(list.map(o=>String(o.id)));
 });
-</script>
+}}</script>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
@@ -579,8 +576,7 @@ fb.onSnapshot(qConf, (snap)=>{
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
   };
 
-  const app = initializeApp(firebaseConfig);
-</script>
+  const app = initializeApp(firebaseConfig);</script>
 
 
 </body>
