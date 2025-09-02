@@ -565,34 +565,33 @@ function sendOrder(){
 
 
 
+<!-- FIREBASE BOOTSTRAP (shared) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, doc, updateDoc,
-    serverTimestamp, onSnapshot, query, where, orderBy
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, setDoc, updateDoc, addDoc, deleteDoc,
+    onSnapshot, serverTimestamp, query, where, orderBy
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-  // --- Your project config ---
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
     authDomain: "asabrancaff-faebe.firebaseapp.com",
     projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com", // <-- fixed
+    storageBucket: "asabrancaff-faebe.appspot.com",
     messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
   };
 
-  // --- Initialize ---
   const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-
-  // Optional auth (matches rules above)
   const auth = getAuth(app);
-  signInAnonymously(auth).catch(console.error);
+  try { await signInAnonymously(auth); } catch (e) { console.warn('Anon auth failed', e); }
 
-  // Expose helpers so each page can use them
-  window.firebaseDB = { db, collection, addDoc, doc, updateDoc, serverTimestamp, onSnapshot, query, where, orderBy };
+  const db = getFirestore(app);
+  const ordersCol = collection(db, "orders");
+
+  // expose for your existing sendOrder() (which already uses window.__fb)
+  window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
 </script>
 
 
