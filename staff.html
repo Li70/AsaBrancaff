@@ -73,7 +73,9 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    const firebaseConfig = {
+  import { getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
       apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
       authDomain: "asabrancaff-faebe.firebaseapp.com",
       projectId: "asabrancaff-faebe",
@@ -84,7 +86,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const ordersCol = collection(db, "orders");
-    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
+    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy , getDocs };
   </script>
 <script type="module">
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -560,29 +562,28 @@ function computeOrderTotal(order){
       var btn = document.getElementById('clearAllBtn');
       if (!btn || btn.__wiredClearAllV2) return;
       btn.__wiredClearAllV2 = true;
-      btn.addEventListener('click', function(ev){
+      btn.addEventListener('click', async function(ev){
         try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
         var ok = true;
-        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
+        try{ ok = window.confirm('Quer mesmo apagar TODAS as encomendas? Esta ação não pode ser desfeita.'); }catch(e){ ok = true; }
         if (!ok) return false;
-        (async function(){
-          // Optional: Cloud reject so they don't come back after refresh
-          if (window.Parse && Parse.applicationId) {
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
-          }
-          // Local UI clear (always)
-          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
-          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
-          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-          try{ if (typeof render==='function') render(); }catch(e){}
-        })();
+        try{
+          // Wait for auth, then delete all docs in 'orders'
+          if (window.__authReady) { try { await window.__authReady; } catch(e){} }
+          var fb = window.__fb;
+          if (!fb || !fb.db) { console.warn('Firebase não pronto.'); return; }
+          const snap = await fb.getDocs(fb.query(fb.ordersCol));
+          const deletions = [];
+          snap.forEach(function(docSnap){
+            deletions.push(fb.deleteDoc(fb.doc(fb.db, 'orders', docSnap.id)));
+          });
+          await Promise.allSettled(deletions);
+          try{ alert('Todas as encomendas foram removidas.'); }catch(e){}
+        }catch(e){
+          console.warn('Falha ao limpar encomendas: ', e);
+          try{ alert('Falha ao limpar encomendas. Ver console.'); }catch(_){}
+        }
+        return false;
       }, true);
     }catch(e){}
   }
