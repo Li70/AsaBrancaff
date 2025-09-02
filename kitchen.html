@@ -511,7 +511,7 @@ const ordersDiv = document.getElementById('orders');
           </div>
           <div class="flex flex-col items-end gap-2">
             <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
-              <input type="checkbox" data-ready="\${esc(o.id)}" ${'${isServed? "checked": ""}'} /> Pronto
+              <input type="checkbox" data-ready="${esc(o.id)}" ${o.isReady ? "checked" : ""} /> Pronto
             </label>
           </div>
         </div>`;
@@ -540,7 +540,7 @@ const ordersDiv = document.getElementById('orders');
     if (novos>0){ try{ banner.classList.remove('hidden'); setTimeout(()=>banner.classList.add('hidden'), 2000); }catch{}; playSound(); }
     knownIds = new Set(list.map(o=>String(o.id)));
   });
-}}
+}
   if (window.__fb) init(); else {
     const t = setInterval(()=>{ if(window.__fb){ clearInterval(t); init(); } }, 50);
     setTimeout(()=> clearInterval(t), 8000);
