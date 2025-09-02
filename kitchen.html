@@ -69,7 +69,17 @@
       Novo pedido recebido!
     </div>
 
-    <div id="orders" class="space-y-3 mb-6"></div>
+    
+
+<!-- Histórico do dia -->
+<section id="historySection" class="card p-3 rounded-2xl mb-3">
+  <div class="flex items-center justify-between">
+    <h2 class="font-semibold">Histórico (Hoje)</h2>
+    <div class="text-sm">Total do dia: <strong id="histTotal">0$00</strong></div>
+  </div>
+  <div id="histList" class="mt-2"></div>
+</section>
+<div id="orders" class="space-y-3 mb-6"></div>
 
    
 
@@ -178,6 +188,9 @@
     }
 
     function renderHistory(){
+      const histList = document.getElementById('histList');
+      const histTotalEl = document.getElementById('histTotal');
+      if (!histList || !histTotalEl) return;
       const hist = getHistory().filter(h => isToday(h.servedAt || h.createdAt));
       histList.innerHTML = '';
       if (!hist.length){

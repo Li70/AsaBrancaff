@@ -197,10 +197,13 @@
   async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
   function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
-  ackBtn.addEventListener('click', stopAlarm);
+  ackBtn.addEventListener('click', ()=>{ try{ hideBanner(); }catch{} });
   document.addEventListener('DOMContentLoaded', enableSound);
   document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
   document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
+
+  // keep trying to enable sound until it succeeds
+  let autoUnlockTimer = setInterval(()=>{ if(!soundEnabled) enableSound(); else clearInterval(autoUnlockTimer); }, 1500);
 
   function startAlarm(msg){
     if(!soundEnabled){ showBanner(msg); return; }
@@ -260,7 +263,7 @@ function computeOrderTotal(order){
     const all = getOrders().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 
     const pend = all.filter(o=>!o.confirmed && (!tableFilter || Number(o.table)===tableFilter));
-    const conf = all.filter(o=> o.confirmed && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
+    const conf = all.filter(o=> o.confirmed && !o.served && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
 
     pendingDiv.innerHTML=''; confirmedDiv.innerHTML='';
     countPend.textContent=pend.length; countConf.textContent=conf.length;
@@ -303,7 +306,7 @@ function computeOrderTotal(order){
           `${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`
         ).join('<br>') || '(sem itens)';
         const total=computeOrderTotal(o);
-        const isReady = !!readyMap[String(o.id)];
+        const isReady = (o.isReady === true) || !!readyMap[String(o.id)];
 
         const card=document.createElement('div');
         card.className='card p-3 rounded-xl' + (isReady ? ' ready' : '');
@@ -578,7 +581,8 @@ function computeOrderTotal(order){
             deletions.push(fb.deleteDoc(fb.doc(fb.db, 'orders', docSnap.id)));
           });
           await Promise.allSettled(deletions);
-          try{ alert('Todas as encomendas foram removidas.'); }catch(e){}
+          try{ alert('Todas as encomendas foram removidas.'); try{ stopAlarm(); }catch{} }
+            catch(e){}
         }catch(e){
           console.warn('Falha ao limpar encomendas: ', e);
           try{ alert('Falha ao limpar encomendas. Ver console.'); }catch(_){}
@@ -678,7 +682,7 @@ function computeOrderTotal(order){
     if (window.__authReady) { try { await window.__authReady; } catch(e){} }
     try{
       const ref = fb.doc(fb.db, 'orders', String(id));
-      fb.updateDoc(ref, { isReady: true, readyAtMs: Date.now() });
+      await fb.updateDoc(ref, { served: true, servedAtMs: Date.now() });
     }catch(e){ console.warn('markServed cloud error', e); }
   };
 }
