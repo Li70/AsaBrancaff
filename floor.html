@@ -467,22 +467,76 @@
     });
 
     /* ===== CART ===== */
-    let cart={};
-    function addToCart(item, qty){
+let cart = {};
+function addToCart(item, qty){
   qty = Math.max(1, Number(qty) || 1);
-  const ex = cart[item.id];
-  const base = { id:item.id, name:item.name, category: (item.category||ITEM_INDEX[item.id]?.category||''), price:item.price||formatCVE(item.priceNum), priceNum:item.priceNum, qty };
-  if (ex){ ex.qty += qty; }
+  const existing = cart[item.id];
+  const category = item.category || (ITEM_INDEX && ITEM_INDEX[item.id] && ITEM_INDEX[item.id].category) || '';
+  const base = { id: item.id, name: item.name, category, price: item.price || formatCVE(item.priceNum), priceNum: item.priceNum || 0, qty };
+  if (existing){ existing.qty += qty; }
   else { cart[item.id] = base; }
   renderCart();
-}; renderCart(); }
-    function removeFromCart(id){ delete cart[id]; renderCart(); }
-    function totalCart(){ return Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0); }
+}
+function removeFromCart(id){ delete cart[id]; renderCart(); }
+function totalCart(){ return Object.values(cart).reduce((s,it)=> s + ((Number(it.priceNum)||0) * (Number(it.qty)||0)), 0); }
 
-    function renderCart(){
-      // Desktop
-      cartList.innerHTML=''; let keys=Object.keys(cart);
-      if(keys.length===0){ cartList.innerHTML='<p class="muted">Seu carrinho está vazio.</p>'; }
+function renderCart(){
+  // Desktop list
+  try{
+    cartList.innerHTML = '';
+    const keys = Object.keys(cart);
+    if (keys.length === 0){
+      cartList.innerHTML = '<p class="muted">Seu carrinho está vazio.</p>';
+    } else {
+      keys.forEach(k=>{
+        const it = cart[k];
+        const row = document.createElement('div');
+        row.className = 'card p-2 rounded-xl flex items-center justify-between gap-2';
+        row.innerHTML = `
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${escapeHtml(it.name)} ${it.category? `<span class="muted text-xs">(${escapeHtml(it.category)})</span>`:''}</div>
+            <div class="muted text-xs">${it.qty} × ${escapeHtml(it.price)}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="secondary hover:bg-slate-700" data-remove="${it.id}">Remover</button>
+          </div>`;
+        row.querySelector('[data-remove]').addEventListener('click', ()=> removeFromCart(it.id));
+        cartList.appendChild(row);
+      });
+    }
+    const tot = formatCVE(totalCart());
+    cartTotal.textContent = tot;
+  }catch{}
+
+  // Mobile list
+  try{
+    cartListMobile.innerHTML = '';
+    const keys2 = Object.keys(cart);
+    if (keys2.length === 0){
+      cartListMobile.innerHTML = '<p class="muted">Seu carrinho está vazio.</p>';
+    } else {
+      keys2.forEach(k=>{
+        const it = cart[k];
+        const row = document.createElement('div');
+        row.className = 'card p-2 rounded-xl flex items-center justify-between gap-2';
+        row.innerHTML = `
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${escapeHtml(it.name)} ${it.category? `<span class="muted text-xs">(${escapeHtml(it.category)})</span>`:''}</div>
+            <div class="muted text-xs">${it.qty} × ${escapeHtml(it.price)}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="secondary hover:bg-slate-700" data-remove="${it.id}">Remover</button>
+          </div>`;
+        row.querySelector('[data-remove]').addEventListener('click', ()=> removeFromCart(it.id));
+        cartListMobile.appendChild(row);
+      });
+    }
+    const tot2 = formatCVE(totalCart());
+    cartTotalMobile.textContent = tot2;
+    cartTotalSheet.textContent = tot2;
+  }catch{}
+}
+}
       else{
         keys.forEach(k=>{
           const it=cart[k];
@@ -532,7 +586,69 @@
       if(sheetOpen) return m || d; return d || m;
     }
     function sendOrder(){
-      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+  if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+  const keys = Object.keys(cart);
+  if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
+
+  // Build items for Staff/Kitchen
+  const items = keys.map(k => ({
+    name: cart[k].name,
+    pizzaType: cart[k].name,
+    category: cart[k].category || '',
+    size: '',
+    qty: Number(cart[k].qty) || 1,
+    notes: '',
+    price: Number(cart[k].priceNum) || 0
+  }));
+  const total = Object.values(cart).reduce((s,it)=> s + ((Number(it.priceNum)||0) * (Number(it.qty)||0)), 0);
+
+  // Local compat (if your UI relies on it)
+  const orders = getOrdersCompat();
+  orders.push({
+    id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    table: String(selectedTable),
+    items,
+    createdAt: Date.now(),
+    notes: gatherNotes(),
+    confirmed: false,
+    totalCVE: total
+  });
+  setOrdersCompat(orders);
+  bcPost({type:'orders_updated'});
+
+  // Firestore save
+  (async ()=>{
+    try{
+      for (let i=0;i<50 && !(window.__fb && window.__fbReady); i++) {
+        await new Promise(r=>setTimeout(r,200));
+      }
+      if (window.__fb){
+        const fb = window.__fb;
+        const payload = {
+          table: Number(selectedTable) || selectedTable || null,
+          items,
+          notes: gatherNotes(),
+          totalCVE: total,
+          createdAtMs: Date.now(),
+          confirmed: false,
+          confirmedAtMs: null,
+          isReady: false,
+          readyAtMs: null,
+          served: false,
+          servedAtMs: null
+        };
+        await fb.addDoc(fb.ordersCol, payload);
+      }
+    }catch(e){ console.warn('Firestore save failed', e); }
+  })();
+
+  // Reset UI
+  cart = {}; renderCart();
+  if (typeof notesDesktop!=='undefined' && notesDesktop) notesDesktop.value='';
+  if (typeof notesMobile!=='undefined' && notesMobile) notesMobile.value='';
+  if (cartSheet && cartSheet.classList && cartSheet.classList.contains('open')) closeSheet();
+  alert('Pedido enviado ao staff para confirmação!');
+}
       const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
       const items=keys.map(k=>({ pizzaType:cart[k].name, size:'', qty:Number(cart[k].qty)||1, notes:'' }));
