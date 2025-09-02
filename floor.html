@@ -115,7 +115,6 @@
     set(k,v){ this._data[k]=v; }
     get(k){ return this._data[k]; }
     async save(){
-      // ensure defaults so `doesNotExist` can be emulated via `== null`
       if (this.className==='Order'){
         if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
         if (!('servedAt' in this._data)) this._data.servedAt = null;
@@ -153,7 +152,7 @@
       this._limit = 1000;
     }
     equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; }
     limit(n){ this._limit = n; return this; }
     ascending(f){ this._order = ['asc', f]; return this; }
     descending(f){ this._order = ['desc', f]; return this; }
@@ -198,7 +197,6 @@
     }
   };
 
-  // Expose for the rest of the page
   window.Parse = Parse;
   window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
 </script>
