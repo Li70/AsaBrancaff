@@ -138,6 +138,33 @@
   window.Parse = Parse;
   window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
 </script>
+<script>
+  // Load audio from Firebase Storage (keep original element ids/sources)
+  (function(){
+    try{
+      const map = {
+        "cash.mp3": "audio/cash.mp3",
+        "ready.mp3": "audio/ready.mp3",
+        "done.mp3": "audio/done.mp3"
+      };
+      const els = Array.from(document.querySelectorAll('audio, source'));
+      const {storage, sRef, getDownloadURL} = window.__fb || {};
+      if (!storage || !getDownloadURL) return;
+      els.forEach(async el=>{
+        const src = el.getAttribute('src') || '';
+        const key = Object.keys(map).find(k => src.endsWith(k));
+        if (!key) return;
+        try{
+          const url = await getDownloadURL(sRef(storage, map[key]));
+          el.setAttribute('src', url);
+          const a = el.tagName.toLowerCase()==='audio' ? el : el.parentElement;
+          if (a && a.load) a.load();
+        }catch(e){}
+      });
+    }catch(e){}
+  })();
+</script>
+
 
 </head>
 <body class="p-4">
@@ -394,11 +421,26 @@
           label.className = 'flex items-center gap-2 text-sm cursor-pointer select-none';
           const checkbox = document.createElement('input');
           checkbox.type = 'checkbox'; checkbox.checked = isServed;
-          checkbox.addEventListener('change', () => {
-            servedMap[id] = checkbox.checked;
-            saveServed(servedMap);
-
-            notifyServed(id, checkbox.checked);
+          \1
+    // Fallback: also write isReady directly (Parse shim → Firestore)
+    try {
+      const Order = Parse.Object.extend('Order');
+      (async ()=>{
+        try{
+          const q = new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
+          const res = await q.find();
+          if (res && res.length){
+            for (const obj of res){
+              if (!!obj.get('isReady') !== !!checkbox.checked){
+                obj.set('isReady', !!checkbox.checked);
+                await obj.save();
+              }
+            }
+          }
+        }catch(e){}
+      })();
+    }catch(e){};
+    notifyServed(id, checkbox.checked);
             ensureHistoryEntry(o, checkbox.checked);   // <— regista no histórico
             render({withAlerts:false});
           });
