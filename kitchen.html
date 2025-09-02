@@ -503,22 +503,30 @@
 </script>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
   import { getFirestore, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
-  
+  const firebaseConfig = {
+  apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+  authDomain: "asabrancaff-faebe.firebaseapp.com",
+  projectId: "asabrancaff-faebe",
+  storageBucket: "asabrancaff-faebe.appspot.com",
+  messagingSenderId: "326390762122",
+  appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+};
+window.firebaseConfig = firebaseConfig;
 
   const app = initializeApp(window.firebaseConfig);
-  const db  = getFirestore(app);
-  const auth = getAuth(app);
+const db  = getFirestore(app);
+const auth = getAuth(app);
 
-  window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot,
-    ordersCol: collection(db, "orders")
-  };
-  window.__fbReady = false;
-  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
-  signInAnonymously(auth).catch(()=>{});
+window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot,
+  ordersCol: collection(db, "orders")
+};
+window.__fbReady = false;
+onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
+signInAnonymously(auth).catch(()=>{});
 </script>
 
 
