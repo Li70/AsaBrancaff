@@ -104,7 +104,6 @@
     set(k,v){ this._data[k]=v; }
     get(k){ return this._data[k]; }
     async save(){
-      // ensure defaults so `doesNotExist` can be emulated via `== null`
       if (this.className==='Order'){
         if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
         if (!('servedAt' in this._data)) this._data.servedAt = null;
@@ -142,7 +141,7 @@
       this._limit = 1000;
     }
     equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; }
     limit(n){ this._limit = n; return this; }
     ascending(f){ this._order = ['asc', f]; return this; }
     descending(f){ this._order = ['desc', f]; return this; }
@@ -187,10 +186,89 @@
     }
   };
 
-  // Expose for the rest of the page
   window.Parse = Parse;
   window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
 </script>
+<script>
+  // Add a small "Pronto" badge next to the Servido button when isReady=true
+  (function(){
+    function ensureBadge(btn){
+      try{
+        const card = btn.closest('.card') || btn.closest('div');
+        if (!card) return null;
+        let badge = card.querySelector('.ready-badge');
+        if (!badge){
+          badge = document.createElement('span');
+          badge.className = 'ready-badge text-yellow-300 text-xs font-semibold';
+          badge.style.marginRight = '8px';
+          // place before the 'Servido' button
+          btn.parentNode.insertBefore(badge, btn);
+        }
+        return badge;
+      }catch(e){ return null; }
+    }
+
+    function updateReadyIcons(map){
+      try{
+        document.querySelectorAll('[data-served]').forEach(btn=>{
+          const id = String(btn.getAttribute('data-served')||'');
+          if (!id) return;
+          const badge = ensureBadge(btn);
+          if (!badge) return;
+          const isReady = !!(map && map[id]);
+          badge.textContent = isReady ? 'Pronto' : '';
+          badge.style.display = isReady ? 'inline-block' : 'none';
+        });
+      }catch(e){}
+    }
+
+    try{
+      const Order = Parse.Object.extend('Order');
+      const q = new Parse.Query(Order);
+      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
+      const state = {};
+      function setItem(o){
+        const id = String(o.get('orderId') || o.id);
+        state[id] = !!o.get('isReady');
+        updateReadyIcons(state);
+      }
+      const sub = q.subscribe();
+      sub.on('create', setItem);
+      sub.on('update', setItem);
+      sub.on('delete', (o)=>{ const id=String(o.get('orderId')||o.id); delete state[id]; updateReadyIcons(state); });
+
+      // initial populate
+      (async ()=>{ try { (await q.find()).forEach(setItem); } catch(e){} })();
+
+      // also refresh icon map after every micro task (helps after UI rerender)
+      setInterval(()=>updateReadyIcons(state), 1000);
+    }catch(e){}
+  })();
+</script>
+
+<script>
+  // Load audio from Firebase Storage
+  (function(){
+    try{
+      const map = { "cash.mp3":"audio/cash.mp3", "ready.mp3":"audio/ready.mp3", "done.mp3":"audio/done.mp3" };
+      const els = Array.from(document.querySelectorAll('audio, source'));
+      const {storage, sRef, getDownloadURL} = window.__fb || {};
+      if (!storage || !getDownloadURL) return;
+      els.forEach(async el=>{
+        const src = el.getAttribute('src') || '';
+        const key = Object.keys(map).find(k => src.endsWith(k));
+        if (!key) return;
+        try{
+          const url = await getDownloadURL(sRef(storage, map[key]));
+          el.setAttribute('src', url);
+          const a = el.tagName.toLowerCase()==='audio' ? el : el.parentElement;
+          if (a && a.load) a.load();
+        }catch(e){}
+      });
+    }catch(e){}
+  })();
+</script>
+
 
 </head>
 <body class="p-4">
