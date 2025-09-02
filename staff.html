@@ -172,7 +172,7 @@
   const doneEl=document.getElementById('doneSound');
 
   /* === Sound / alarm === */
-  let soundEnabled=false, audioCtx, fallbackLoop=null;
+  let soundEnabled=true, audioCtx, fallbackLoop=null;
   function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
   function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
   async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
@@ -184,7 +184,7 @@
   document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
 
   function startAlarm(msg){
-    if(!soundEnabled){ showBanner(msg); return; }
+    if(!soundEnabled){ showBanner(msg); }
     showBanner(msg);
     alertEl.play().catch(()=>{
       const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
@@ -234,8 +234,6 @@ function computeOrderTotal(order){
   }
   return sum;
 }
-return sum;
-  }
 
   /* === render lists === */
   function render(){
