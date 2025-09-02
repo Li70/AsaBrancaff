@@ -69,7 +69,8 @@
   })();
   </script>
 
-<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
+
+<!-- Firebase (app/auth/firestore/storage) + Parse shim (Firestore-backed) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
@@ -104,7 +105,6 @@
     set(k,v){ this._data[k]=v; }
     get(k){ return this._data[k]; }
     async save(){
-      // ensure defaults so `doesNotExist` can be emulated via `== null`
       if (this.className==='Order'){
         if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
         if (!('servedAt' in this._data)) this._data.servedAt = null;
@@ -124,8 +124,7 @@
   }
 
   const Parse = {};
-  Parse.applicationId = "firebase-shim";
-  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  Parse.initialize = function(){};
   Parse.serverURL = "";
   Parse.liveQueryServerURL = "";
   Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
@@ -142,7 +141,7 @@
       this._limit = 1000;
     }
     equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; }
     limit(n){ this._limit = n; return this; }
     ascending(f){ this._order = ['asc', f]; return this; }
     descending(f){ this._order = ['desc', f]; return this; }
@@ -187,9 +186,8 @@
     }
   };
 
-  // Expose for the rest of the page
   window.Parse = Parse;
-  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
+  window.__fb = { app, db, auth, storage };
 </script>
 
 </head>
@@ -728,6 +726,93 @@
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- CLOUD_LIVE (auto-subscribe Firestore, ignore localStorage) -->
+<script>
+(function(){
+  window.__cloudOrders = window.__cloudOrders || [];
+  window.__readyMap    = window.__readyMap || {};
+
+  function _renderAll(){
+    try{ if (typeof render==='function') render(); }catch(e){}
+    try{ if (typeof renderHistory==='function') renderHistory(); }catch(e){}
+  }
+
+  try{ window.getOrders = function(){ return Array.from(window.__cloudOrders||[]); }; }catch(e){}
+  try{ window.getAllOrders = function(){ return Array.from(window.__cloudOrders||[]); }; }catch(e){}
+  try{ window.setOrders = function(_arr){}; }catch(e){}
+  try{
+    window.getServedMap = function(){ try{ return Object.assign({}, window.__readyMap||{}); }catch(e){ return {}; } };
+    window.setServedMap = function(map){ try{ window.__readyMap = Object.assign({}, map||{}); window.__staffServedMem = {map: window.__readyMap, ver: Date.now()}; }catch(e){} };
+  }catch(e){}
+
+  function normalize(o){
+    o=o||{}; if(!('orderId' in o)) o.orderId=String(o.id||''); if(!('id' in o)) o.id=Number(o.orderId||0); return o;
+  }
+  function applyRows(rows){
+    try{
+      const arr = rows.map(r=> normalize(r._data || r || {}));
+      window.__cloudOrders = arr;
+      const map = {};
+      arr.forEach(o=>{ map[String(o.orderId||o.id||'')] = !!(o.isReady || o.servedAt); });
+      window.__readyMap = map;
+      window.__staffServedMem = { map, ver: Date.now() };
+      _renderAll();
+    }catch(e){}
+  }
+
+  function start(){
+    try { if(!window.Parse) return; } catch(e) { return; }
+    try {
+      const Order = Parse.Object.extend('Order');
+      const q = new Parse.Query(Order);
+      q.limit(1000);
+      q.find().then(applyRows).catch(()=>{});
+      const sub = q.subscribe();
+      const onchg = ()=> q.find().then(applyRows).catch(()=>{});
+      try { sub.on('create', onchg); sub.on('update', onchg); sub.on('delete', onchg); } catch(e){}
+    } catch(e) { }
+  }
+
+  (function waitAuthThenStart(){
+    try {
+      const fb = window.__fb || {}, auth = fb.auth;
+      if (!auth || typeof auth.onAuthStateChanged !== 'function') { start(); return; }
+      auth.onAuthStateChanged(function(u){ if (u) start(); });
+    } catch(e) { start(); }
+  })();
+
+  // Staff actions write to Firestore
+  try {
+    window.confirmOrder = async function(id){
+      try {
+        const Order = Parse.Object.extend('Order'); const q=new Parse.Query(Order);
+        q.equalTo('orderId', String(id)); const row = await q.first(); if (!row) return;
+        row.set('confirmed', true); row.set('confirmedAt', Date.now()); row.set('status','confirmed');
+        await row.save();
+      } catch(e) {}
+    };
+    window.rejectOrder = async function(id){
+      try {
+        const Order = Parse.Object.extend('Order'); const q=new Parse.Query(Order);
+        q.equalTo('orderId', String(id)); const row = await q.first(); if (!row) return;
+        row.set('rejectedAt', Date.now()); row.set('status','rejected');
+        await row.save();
+      } catch(e) {}
+    };
+    window.markServedAndClear = async function(id){
+      try {
+        const Order = Parse.Object.extend('Order'); const q=new Parse.Query(Order);
+        q.equalTo('orderId', String(id)); const row = await q.first(); if (!row) return;
+        row.set('servedAt', Date.now()); row.set('isReady', true);
+        await row.save();
+      } catch(e) {}
+    };
+  } catch(e) {}
+
 })();
 </script>
 
