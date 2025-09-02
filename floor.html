@@ -78,39 +78,22 @@
   })();
   </script>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc,
-    onSnapshot, serverTimestamp, query, where, orderBy
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  <!-- CLOUD_PARSE_INIT_V1 -->
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL = "https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const ordersCol = collection(db, "orders");
-  window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
-</script>
-<script type="module">
-  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  if (window.__fb?.app) {
-    signInAnonymously(getAuth(window.__fb.app)).catch(console.error);
-  }
-</script>
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
     <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
       <h1 class="text-2xl font-bold">🍽️ Faça o seu pedido</h1>
-      <div class="muted text-sm">Selecione a mesa, escolha o que vai consumir e faça a sua encomenda.</div>
+      <div class="muted text-sm">Selecione a mesa, escolha o que vai consumir e passe a sua encomenda.</div>
     </header>
 
     <section class="card p-4 rounded-2xl mb-4">
@@ -142,7 +125,7 @@
         <div class="row mb-3"><span class="muted">Total</span><strong id="cartTotal">0$00</strong></div>
         <label class="muted text-sm">Observações (opcional)</label>
         <textarea id="notes" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
-        <button id="sendBtnDesktop" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3"> Enviar encomenda →</button>
+        <button id="sendBtnDesktop" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
         <p class="muted text-xs mt-2">A sua encomenda aguarda confirmação e sera tratada em breve.</p>
       </aside>
     </div>
@@ -335,22 +318,10 @@
       return out;
     }
     function buildIndex(){
-  const idx = {};
-  // Index PIZZAS with category
-  (PIZZAS||[]).forEach(cat => {
-    (cat.items||[]).forEach(it => {
-      idx[it.id] = Object.assign({}, it, { category: cat.category });
-    });
-  });
-  // Index MENU with category
-  (MENU||[]).forEach(cat => {
-    (cat.items||[]).forEach(it => {
-      // If duplicate id appears in MENU, prefer MENU's category
-      idx[it.id] = Object.assign({}, (idx[it.id]||it), { category: cat.category });
-    });
-  });
-  return idx;
-}
+      const idx={};
+      flattenItems([PIZZAS]).concat(flattenItems([MENU])).forEach(it=>{ idx[it.id]=it; });
+      return idx;
+    }
     let ITEM_INDEX = buildIndex();
 
     function itemRowHtml(item){
@@ -486,14 +457,7 @@
 
     /* ===== CART ===== */
     let cart={};
-    function addToCart(item, qty){
-  qty = Math.max(1, Number(qty) || 1);
-  const ex = cart[item.id];
-  const base = { id:item.id, name:item.name, category:item.category || '', price:item.price||formatCVE(item.priceNum), priceNum:item.priceNum, qty };
-  if (ex){ ex.qty += qty; }
-  else { cart[item.id] = base; }
-  renderCart();
-}; renderCart(); }
+    function addToCart(item,qty){ qty=Math.max(1,Number(qty)||1); const ex=cart[item.id]; if(ex) ex.qty+=qty; else cart[item.id]={id:item.id,name:item.name,price:item.price||formatCVE(item.priceNum),priceNum:item.priceNum,qty}; renderCart(); }
     function removeFromCart(id){ delete cart[id]; renderCart(); }
     function totalCart(){ return Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0); }
 
@@ -549,42 +513,51 @@
       const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
       if(sheetOpen) return m || d; return d || m;
     }
-    
+    function sendOrder(){
+      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+      const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
-async function sendOrder(){
-  if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
-  const keys = Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
+      const items=keys.map(k=>({ pizzaType:cart[k].name, size:'', qty:Number(cart[k].qty)||1, notes:'' }));
+      const total = Object.values(cart).reduce((s,it)=>s+(it.priceNum*it.qty),0);
 
-  const items = keys.map(k => ({
-  name: cart[k].name,
-  pizzaType: cart[k].name, // compat for older renderers
-  category: cart[k].category || '',
-  size: '',
-  qty: Number(cart[k].qty) || 1,
-  notes: '',
-  price: Number(cart[k].priceNum) || 0
-}));
+      const orders=getOrdersCompat();
+      orders.push({
+        id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        table: String(selectedTable),
+        items,
+        createdAt: Date.now(),
+        notes: gatherNotes(),
+        confirmed: false,
+        totalCVE: total
+      });
+      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
+      try {
+        if (window.Parse && Parse.applicationId) {
+          const Order = Parse.Object.extend('Order');
+          const obj = new Order();
+          obj.set('orderId', String(orders[orders.length-1].id));
+          obj.set('table', String(orders[orders.length-1].table));
+          obj.set('items', orders[orders.length-1].items || []);
+          obj.set('notes', String(orders[orders.length-1].notes || ''));
+          obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
+          obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
+          obj.set('confirmed', false);
+          const acl = new Parse.ACL();
+          acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
+          obj.setACL(acl);
+          obj.save().then(()=>{
+            try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
+          }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
+        }
+      } catch(e){ try{ console.warn('Parse not available', e); }catch(e2){} }
 
-  const total = Object.values(cart).reduce((s,it)=> s + ((Number(it.priceNum)||0)*(Number(it.qty)||1)), 0);
-  const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      setOrdersCompat(orders);
+      bcPost({type:'orders_updated'});
 
-  // Cloud only: Firestore write
-  try{
-    const fb = window.__fb;
-    if (fb){
-      const data = { id, table:String(selectedTable), items, notes:(notesDesktop?.value||notesMobile?.value||''), totalCVE:Math.round(total), createdAtMs:Date.now(), confirmed:false, isReady:false };
-      await fb.setDoc(fb.doc(fb.db, 'orders', id), data);
-    } else {
-      console.warn('Firebase not initialized.');
+      cart={}; renderCart(); if(notesDesktop) notesDesktop.value=''; notesMobile.value='';
+      if(cartSheet.classList.contains('open')) closeSheet();
+      alert('Pedido enviado ao staff para confirmação!');
     }
-  }catch(e){ console && console.warn && console.warn('Firebase save failed', e); }
-
-  cart = {}; renderCart();
-  try{ if(cartSheet?.classList?.contains('open')) cartSheet.classList.remove('open'); }catch{}
-  alert('Pedido enviado!');
-}
-
-
 
     const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
     const closeSheet=()=>{ cartSheet.classList.remove('open'); cartSheet.setAttribute('aria-hidden','true'); };
@@ -608,8 +581,119 @@ async function sendOrder(){
 
     // Init
     renderCart();
-
   </script>
+
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+      authDomain: "asabrancaff-faebe.firebaseapp.com",
+      projectId: "asabrancaff-faebe",
+      storageBucket: "asabrancaff-faebe.appspot.com",
+      messagingSenderId: "326390762122",
+      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const auth = getAuth(app);
+    const ordersRef = collection(db, "orders");
+
+    const listEl = document.getElementById("list");
+    const countsEl = document.getElementById("counts");
+    const cashEl = document.getElementById("cashSound");
+
+    // Prime sound (best effort)
+    let primed = false;
+    function primeSound(){
+      if (primed) return; primed = true;
+      cashEl.volume = 0;
+      cashEl.play().then(()=>cashEl.pause()).catch(()=>{});
+      cashEl.volume = 1;
+    }
+    async function playCash(){ primeSound(); try{ cashEl.currentTime = 0; await cashEl.play(); }catch{} }
+
+    function esc(s){ const d=document.createElement("div"); d.textContent=String(s??""); return d.innerHTML; }
+    function renderList(orders){
+      listEl.innerHTML = "";
+      if (!orders.length){
+        listEl.innerHTML = '<div class="card muted">Sem pedidos confirmados.</div>';
+        return;
+      }
+      for (const o of orders){
+        const el = document.createElement("div");
+        el.className = "card";
+        const items = (Array.isArray(o.items)?o.items:[]).map(i=>`<li>${esc(i.qty??1)} × ${esc(i.name||i.item||i.pizzaType||"")}${i.category? ` <span class=\"muted\">(${esc(i.category)})</span>` : ""}</li>`).join("") || '<li class="muted">—</li>';
+        el.innerHTML = `
+          <div class="row">
+            <strong>Mesa ${esc(o.table??"?")}</strong>
+            <label><input type="checkbox" data-action="ready" data-id="${o.id}" ${o.isReady?'checked':''}/> Pronto</label>
+          </div>
+          <ul class="items">${items}</ul>
+          ${o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : ''}
+        `;
+        listEl.appendChild(el);
+      }
+    }
+
+    // Checkbox handler
+    listEl.addEventListener("change", async (ev)=>{
+      const cb = ev.target.closest("input[type=checkbox][data-action=ready]");
+      if (!cb) return;
+      const id = cb.getAttribute("data-id");
+      const ref = doc(ordersRef, id);
+      const isReady = cb.checked;
+      try{
+        await updateDoc(ref, { isReady, readyAtMs: isReady ? Date.now() : null });
+      }catch(e){ console.error(e); }
+    });
+
+    let prevIds = new Set();
+
+    onAuthStateChanged(auth, (u)=>{
+      if (!u) return;
+      onSnapshot(ordersRef, (snap)=>{
+        const orders = [];
+        let newCount = 0;
+        const curIds = new Set();
+
+        snap.forEach(docSnap=>{
+          const d = docSnap.data()||{};
+          const o = {
+            id: String(docSnap.id),
+            table: d.table ?? null,
+            items: Array.isArray(d.items) ? d.items : [],
+            notes: d.notes || "",
+            createdAtMs: d.createdAtMs || 0,
+            confirmed: !!d.confirmed,
+            isReady: !!d.isReady,
+            served: !!d.served
+          };
+          // Kitchen lists only confirmed & not served
+          if (o.confirmed && !o.served){
+            orders.push(o);
+            curIds.add(o.id);
+            if (!prevIds.has(o.id)) newCount++;
+          }
+        });
+
+        orders.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0) || a.id.localeCompare(b.id));
+        renderList(orders);
+        countsEl.textContent = `Ativos: ${orders.length}`;
+
+        if (newCount > 0) playCash();
+        prevIds = curIds;
+      });
+    });
+
+    signInAnonymously(auth).catch(()=>{});
+  </script>
+
+
 
 
 
