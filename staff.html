@@ -1,867 +1,124 @@
+
 <!doctype html>
 <html lang="pt">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Staff – Pedidos em Tempo Real</title>
- <script src="https://cdn.tailwindcss.com"></script> 
-  <script type="module" src="/firebase.js"></script>
-<!-- <link rel="stylesheet" href="tailwind-lite.css"> -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Staff — Confirmar Pedidos</title>
   <style>
-    :root { color-scheme: dark; }
-    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
-    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); transition: box-shadow .2s, border-color .2s; }
-    .muted { color: rgba(255,255,255,0.7); }
-    .btn { padding:.5rem .85rem; border-radius:.75rem; font-weight:600; }
-    .pill{ font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,.08); }
-    .items li { list-style: disc; margin-left: 1.25rem; }
-    .toast { position: fixed; left: 50%; transform: translateX(-50%); top: 12px; background:#065f46; border:1px solid #059669; padding:.6rem .9rem; border-radius:.75rem; z-index:50; }
-    .bar { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; }
-    details summary { cursor: pointer; }
-
-    /* Ready styling */
-    .card.ready { border-color: rgba(16,185,129,.6) !important; box-shadow: 0 0 0 2px rgba(16,185,129,.15); }
-    .pill-ready { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#052e2b; border:1px solid rgba(16,185,129,.6); color:#a7f3d0; }
+    :root { --muted:#6b7280; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; margin: 24px; max-width: 1000px }
+    header a { margin-right: 12px; }
+    h2 { margin-top: 28px }
+    ul { padding-left: 18px }
+    li { margin: 8px 0 }
+    button { margin-left: 8px; padding: 6px 10px; cursor: pointer }
+    .muted { color: var(--muted); }
+    .badge { font-size: 12px; padding: 2px 6px; border-radius: 999px; border: 1px solid #e5e7eb; }
+    .ready { background: #ecfdf5; border-color:#a7f3d0; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin: 8px 0; }
   </style>
+</head>
+<body>
+  <header>
+    <a href="/floor.html">Floor</a> ·
+    <strong>Staff</strong> ·
+    <a href="/kitchen.html">Cozinha</a>
+  </header>
 
-  <script>
-  // --- Tiny UI helpers
-  function showToast(msg){
-    const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
-    document.body.appendChild(t); setTimeout(()=>t.remove(), 2500);
-  }
+  <h1>Posto do Staff</h1>
 
-  // --- Shared helpers: storage + channel + polling
-  (function(){
-    window.ORDERS_KEY='orders_simple_v4';
-    window.VERSION_KEY='orders_simple_v4_ver';
-    window.SERVED_KEY='orders_served';
-    window.SERVED_VERSION='orders_served_ver';
-    window.HISTORY_KEY='orders_history_v1';
+  <h2>Novos</h2>
+  <div id="newList"></div>
 
-    window.lsGet=(k,f=null)=>{ try{const v=localStorage.getItem(k); return v===null?f:v;}catch{return f;} };
-    window.lsSet=(k,v)=>{ try{localStorage.setItem(k,v); return true;}catch{return false;} };
+  <h2>Confirmados (a aguardar cozinha)</h2>
+  <div id="confirmedList"></div>
 
-    window.getOrders=()=>{ try{return JSON.parse(lsGet(ORDERS_KEY,'[]'))||[];}catch{return[];} };
-    window.setOrders=(arr)=>{ lsSet(ORDERS_KEY,JSON.stringify(arr)); lsSet(VERSION_KEY,String(Date.now())); };
-
-    window.getHistory=()=>{ try{return JSON.parse(lsGet(HISTORY_KEY,'[]'))||[];}catch{return[];} };
-    window.setHistory=(arr)=>{ lsSet(HISTORY_KEY,JSON.stringify(arr)); };
-
-    window.getServedMap=()=>{ try{return JSON.parse(lsGet(SERVED_KEY,'{}'))||{};}catch{return{};} };
-    window.setServedMap=(m)=>{ lsSet(SERVED_KEY,JSON.stringify(m)); lsSet(SERVED_VERSION,String(Date.now())); };
-
-    const channels=[]; try{ channels.push(new BroadcastChannel('orders_simple_v4')); }catch{}
-    window.bcPost=(msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
-
-    window.subscribeAll=function(onChange,{pollMs=900}={}){
-      channels.forEach(ch=>ch.onmessage=(e)=> onChange(e?.data||null));
-      window.addEventListener('storage',(e)=>{ if(!e.key) return;
-        if([ORDERS_KEY,VERSION_KEY,SERVED_VERSION,HISTORY_KEY].includes(e.key)) onChange(null); });
-      let lastV=lsGet(VERSION_KEY,'0'), lastS=lsGet(SERVED_VERSION,'0'), lastH=lsGet(HISTORY_KEY,'[]');
-      const t=setInterval(()=>{
-        const v=lsGet(VERSION_KEY,'0'), s=lsGet(SERVED_VERSION,'0'), h=lsGet(HISTORY_KEY,'[]');
-        if(v!==lastV || s!==lastS || h!==lastH){ lastV=v; lastS=s; lastH=h; onChange(null); }
-      }, pollMs);
-      return ()=>clearInterval(t);
-    };
-
-    window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
-  })();
-  </script>
-
+  <h2>Prontos</h2>
+  <div id="readyList"></div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import {
+      getFirestore, collection, doc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // Firebase config for asabrancaff-faebe
     const firebaseConfig = {
       apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
       authDomain: "asabrancaff-faebe.firebaseapp.com",
       projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.firebasestorage.app",
+      storageBucket: "asabrancaff-faebe.appspot.com",
       messagingSenderId: "326390762122",
       appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
     };
+
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const ordersCol = collection(db, "orders");
-    window.__fb = { app, db, ordersCol, addDoc, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
-  </script>
+    const db  = getFirestore(app);
+    signInAnonymously(getAuth(app)).catch(console.error);
 
-</head>
-<body class="p-4">
-  <!-- sound controls -->
-  <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
-    <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
-  </div>
+    const newList = document.getElementById('newList');
+    const confirmedList = document.getElementById('confirmedList');
+    const readyList = document.getElementById('readyList');
 
-  <!-- alert banner -->
-  <div id="alertBanner" class="hidden fixed left-1/2 -translate-x-1/2 bottom-16 bg-rose-700/90 border border-rose-500 rounded-xl px-4 py-2 text-sm z-40">Alerta</div>
+    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function itemLine(it){ const note = it.notes ? ` <span class="muted">(${esc(it.notes)})</span>` : ""; return `${Number(it.qty||1)} × ${esc(it.name||it.pizzaType||'')}${note}`; }
 
-  <div class="max-w-6xl mx-auto">
-    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-      <h1 class="text-2xl font-bold">Staff – Pedidos em Tempo Real</h1>
-      <div class="flex items-center gap-2">
-        <input id="filterTable" type="number" min="1"
-               class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 w-28"
-               placeholder="Mesa #" />
-        <button id="clearTableBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar mesa</button>
-        <button id="clearAllBtn" class="btn bg-red-600 hover:bg-red-700">Limpar tudo</button>
-        <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
-      </div>
-    </header>
-
-    <section class="card p-3 rounded-2xl mb-3">
-      <div class="muted text-sm">
-        Pode confirmar as encomendas com o cliente se necessário. As encomendas confirmadas serao enviadas directamente para a cozinha.<br/>
-        A cozinha só vê pedidos <b>Confirmados</b>.
-      </div>
-    </section>
-
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-      <section class="card p-3 rounded-2xl">
-        <h2 class="font-semibold mb-2">Pendentes <span id="countPend" class="pill">0</span></h2>
-        <div id="pending" class="space-y-2"></div>
-      </section>
-
-      <section class="card p-3 rounded-2xl sm:col-span-1 lg:col-span-2">
-        <h2 class="font-semibold mb-2">Confirmados <span id="countConf" class="pill">0</span></h2>
-        <div id="confirmed" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-      </section>
-    </div>
-
-    <!-- (Optional) Histórico escondido: deixe a estrutura intacta -->
-    <details class="card rounded-2xl p-3" style="display:none">
-      <summary class="font-semibold">Histórico (Hoje) — Total: <span id="histTotal">0$00</span></summary>
-      <div id="histList" class="mt-3 space-y-2"></div>
-    </details>
-  </div>
-
-  <!-- sounds -->
-  <audio id="alertSound" preload="auto" src="ready.mp3" loop></audio>
-  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
-
-  <script>
-  "use strict";
-
-  /* === PRICE INDEX (match client) === */
-  const PRICE_INDEX = {
-    "LEGS":200,"WINGS":200,"SWEET CHILLI WINGS":600,"BARBECUE WINGS":600,"NUGGETS":500,"POP CORNS":500,"FRIED CHICKEN":300,"SANDWICH":500,"MEIA DE FRANGO":600,
-    "COMBO 1":450,"COMBO 2":650,"COMBO 3":800,"COMBO 4":1000,
-    "CHICAGO":300,"ITALIAN":300,"MICHIGAN":300,"NEW YORK":300,"DODGER DOG":300,"CAROLINA":300,
-    "SWEET & SOUR SAUCE":50,"ALFREDO (CREMOSO CLÁSSICO)":50,"HONEY MUSTARD":50,"CHEESY SAUCE":50,"CREOLE TOMATO":50,"COLESLAW":50,"BUFFALO":50,
-    "COXINHA":60,"PASTEL":50,"BIFANAS À MODA DO PORTO":300,"MOELAS À PORTUGUESA":600,"LINGUIÇA":100,
-    "PEPERONI":800,"HAWAII-II":800,"ATUM":800,"FRANGO":800,"VEGETARIANO":800,
-    "S.C.P.":1000,"S.L.B":1000,"F.C.P.":1000,
-    "1 Pizza + Coca-Cola 1,5L":1200,"1 Pizza + Compal 1L":1250
-  };
-
-  /* === UI refs === */
-  const pendingDiv=document.getElementById('pending');
-  const confirmedDiv=document.getElementById('confirmed');
-  const countPend=document.getElementById('countPend');
-  const countConf=document.getElementById('countConf');
-  const filterInput=document.getElementById('filterTable');
-  const histList=document.getElementById('histList');
-  const histTotalEl=document.getElementById('histTotal');
-
-  const soundBtn=document.getElementById('soundBtn');
-  const ackBtn=document.getElementById('ackBtn');
-  const alertBanner=document.getElementById('alertBanner');
-  const alertEl=document.getElementById('alertSound');
-  const doneEl=document.getElementById('doneSound');
-
-  /* === Sound / alarm === */
-  let soundEnabled=false, audioCtx, fallbackLoop=null;
-  function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
-  function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
-  async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
-  function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
-  soundBtn.addEventListener('click', enableSound);
-  ackBtn.addEventListener('click', stopAlarm);
-  document.addEventListener('DOMContentLoaded', enableSound);
-  document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
-  document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
-
-  function startAlarm(msg){
-    if(!soundEnabled){ showBanner(msg); return; }
-    showBanner(msg);
-    alertEl.play().catch(()=>{
-      const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
-      fallbackLoop=setInterval(()=>{
-        const now=audioCtx.currentTime, g=audioCtx.createGain(), o1=audioCtx.createOscillator(), o2=audioCtx.createOscillator();
-        o1.type='square'; o2.type='square'; o1.frequency.value=800; o2.frequency.value=1600;
-        o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.45, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
-        o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
-      },1100);
-    });
-  }
-
-  async function playReadySound(){
-    if(!soundEnabled) return;
-    try { doneEl.currentTime = 0; await doneEl.play(); } catch {}
-  }
-
-  /* === utils/totals === */
-  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-  const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
-  function priceForName(name){ const k=String(name||'').trim(); return (k in PRICE_INDEX)? Number(PRICE_INDEX[k]):0; }
-  
-function computeOrderTotal(order){
-  if (order && typeof order.totalCVE === 'number' && isFinite(order.totalCVE)) {
-    return Number(order.totalCVE)||0;
-  }
-  function parseCVEFromText(txt){
-    try{
-      const digits = String(txt||'').replace(/\D/g,'');
-      if (!digits) return 0;
-      if (digits.length >= 4) return Math.round(Number(digits)/100);
-      return Number(digits);
-    }catch(e){ return 0; }
-  }
-  let sum = 0;
-  const items = Array.isArray(order && order.items) ? order.items : [];
-  for (const it of items){
-    const qty = Number(it && it.qty || 1) || 1;
-    let pn = 0;
-    if (it && typeof it.priceNum === 'number' && isFinite(it.priceNum) && it.priceNum > 0){
-      pn = Number(it.priceNum);
-    } else {
-      pn = parseCVEFromText(it && (it.price || it.pizzaType || it.name || it.label || it.desc));
-    }
-    sum += (Number(pn)||0) * qty;
-  }
-  return sum;
-}
-return sum;
-  }
-
-  /* === render lists === */
-  function render(){
-    const tableFilter = Number(filterInput.value||'0') || null;
-    const all = getOrders().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
-
-    const pend = all.filter(o=>!o.confirmed && (!tableFilter || Number(o.table)===tableFilter));
-    const conf = all.filter(o=> o.confirmed && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
-
-    pendingDiv.innerHTML=''; confirmedDiv.innerHTML='';
-    countPend.textContent=pend.length; countConf.textContent=conf.length;
-
-    // Pendentes
-    if (!pend.length){ pendingDiv.innerHTML='<p class="muted">Sem pendentes.</p>'; }
-    else pend.forEach(o=>{
-      const when=o.createdAt? new Date(o.createdAt).toLocaleTimeString() : '';
-      const items=(o.items||[]).map(i=>`${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`).join('<br>') || '(sem itens)';
-      const total=computeOrderTotal(o);
-      const card=document.createElement('div'); card.className='card p-3 rounded-xl';
-      card.innerHTML=`
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <div class="font-semibold">Mesa ${esc(o.table)}</div>
-            <div class="muted text-sm leading-5">${items}</div>
-            ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
-            <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
-            <div class="muted text-xs mt-1">${when}</div>
-          </div>
-          <div class="flex flex-col gap-2">
-            <button class="btn bg-emerald-700 hover:bg-emerald-600" data-confirm="${o.id}">Confirmar</button>
-            <button class="btn bg-slate-700 hover:bg-slate-600" data-reject="${o.id}">Rejeitar</button>
-          </div>
-        </div>`;
-      card.querySelector('[data-confirm]').addEventListener('click',()=>confirmOrder(o.id));
-      card.querySelector('[data-reject]').addEventListener('click',()=>rejectOrder(o.id));
-      pendingDiv.appendChild(card);
-    });
-
-    // Confirmados (Servido limpa) — with persistent "Pedido pronto" if marked in Kitchen
-    const readyMap = getServedMap() || {};
-    if (!conf.length){
-      confirmedDiv.innerHTML='<p class="muted">Sem confirmados.</p>';
-    } else {
-      conf.forEach(o=>{
-        const when=o.confirmedAt? new Date(o.confirmedAt).toLocaleTimeString()
-                  : (o.createdAt? new Date(o.createdAt).toLocaleTimeString():'');
-        const items=(o.items||[]).map(i=>
-          `${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`
-        ).join('<br>') || '(sem itens)';
-        const total=computeOrderTotal(o);
-        const isReady = !!readyMap[String(o.id)];
-
-        const card=document.createElement('div');
-        card.className='card p-3 rounded-xl' + (isReady ? ' ready' : '');
-
-        card.innerHTML=`
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <div class="font-semibold flex items-center gap-2">
-                <span>Mesa ${esc(o.table)}</span>
-               
-              </div>
-              <div class="muted text-sm leading-5">${items}</div>
-              ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
-              <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
-              <div class="muted text-xs mt-1">Confirmado: ${when}</div>
-            </div>
-            <div class="flex flex-col items-end gap-2">
-              ${isReady ? `<div class="text-yellow-300 text-xs font-semibold">✔️ Pronto</div>` : `<div class="text-transparent text-xs select-none">.</div>`}
-              <button class="btn ${isReady ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-700 hover:bg-emerald-600'}" data-served="${o.id}">
-                Servido
-              </button>
-            </div>
-          </div>`;
-        card.querySelector('[data-served]').addEventListener('click',()=>markServedAndClear(o.id));
-        confirmedDiv.appendChild(card);
-      });
-    }
-  }
-
-  /* === History (today) === */
-  function isToday(ts){ const d=new Date(ts||Date.now()), n=new Date(); return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate(); }
-  function renderHistory(){
-    const histWrap = document.querySelector('details[style*="display:none"]'); // hidden
-    if(!histWrap) return;
-    const hist = getHistory().filter(h=>isToday(h.servedAt||h.createdAt));
-    const byTable=new Map(); let grand=0;
-    hist.forEach(h=>{
-      const t=String(h.table||'?'); const add=Number(h.totalNum||0);
-      if(!byTable.has(t)) byTable.set(t,{table:t,total:0,orders:0});
-      byTable.get(t).total+=add; byTable.get(t).orders+=1; grand+=add;
-    });
-    if(histList){
-      histList.innerHTML='';
-      if(byTable.size===0){ histList.innerHTML='<p class="muted">Sem registos hoje.</p>'; }
-      else {
-        [...byTable.values()].sort((a,b)=>Number(a.table)-Number(b.table)).forEach(row=>{
-          const div=document.createElement('div'); div.className='card p-2 rounded-xl flex items-center justify-between';
-          div.innerHTML=`<div><div class="font-semibold">Mesa ${row.table}</div><div class="muted text-xs">${row.orders} pedido(s)</div></div>
-                         <div class="font-semibold">${formatCVE(row.total)}</div>`;
-          histList.appendChild(div);
+    function renderBucket(container, arr, actions=[]) {
+      container.innerHTML = '';
+      if (!arr.length){ container.innerHTML = '<p class="muted">—</p>'; return; }
+      arr.forEach(o=>{
+        const card = document.createElement('div');
+        card.className = 'card';
+        const items = (o.items||[]).map(itemLine).join('<br>');
+        const notes = o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : '';
+        const badge = o.isReady ? '<span class="badge ready">✔ Pronto</span>' : '';
+        card.innerHTML = `
+          <div><strong>Mesa ${esc(o.table)}</strong> ${badge}</div>
+          <div class="muted" style="font-size:12px">${new Date(o.createdAtMs||Date.now()).toLocaleTimeString()}</div>
+          <div style="margin-top:6px">${items}</div>
+          ${notes}
+          <div style="margin-top:8px"></div>
+        `;
+        const btnWrap = document.createElement('div');
+        actions.forEach(a=>{
+          const b = document.createElement('button');
+          b.textContent = a.label;
+          b.addEventListener('click', () => a.run(o));
+          btnWrap.appendChild(b);
         });
-      }
-      if(histTotalEl) histTotalEl.textContent=formatCVE(grand);
-    }
-  }
-
-  /* === Detetar novos pedidos (tocar) === */
-  let knownIds=new Set();
-  function detectNewOrdersAndMaybeAlarm(){
-    const idsNow=new Set(getOrders().map(o=>String(o.id)));
-    let newCount=0; idsNow.forEach(id=>{ if(!knownIds.has(id)) newCount++; });
-    knownIds=idsNow;
-    if(newCount>0) startAlarm(newCount===1?'Novo pedido recebido!':`${newCount} novos pedidos recebidos!`);
-  }
-
-  /* === Actions === */
-  function confirmOrder(id){
-    const all = getOrders();
-    const idx = all.findIndex(o=>String(o.id)===String(id));
-    if (idx<0) return;
-    all[idx].confirmed = true; all[idx].confirmedAt = Date.now();
-    setOrders(all);
-    bcPost({type:'orders_updated'});
-    // Only stop alarm if no unconfirmed orders remain
-    try{
-      const stillPending = getOrders().some(o=>!o.confirmed && !o.rejectedAt && !o.servedAt);
-      if (!stillPending) stopAlarm();
-    }catch(e){}
-    render();
-  }
-  function rejectOrder(id){
-    var ok = true;
-    try { ok = window.confirm('Rejeitar este pedido?'); } catch (e) { ok = false; }
-    if (!ok) return;
-    const keep = getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep);
-    bcPost({type:'orders_updated'});
-    render();
-  }
-
-  // SERVIDO: escreve no histórico + remove dos pedidos + notifica
-  function markServedAndClear(id){
-    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
-    const o = all[idx];
-
-    const totalNum = computeOrderTotal(o);
-    const entry = {
-      id: String(o.id),
-      table: String(o.table),
-      createdAt: o.createdAt || Date.now(),
-      confirmedAt: o.confirmedAt || Date.now(),
-      servedAt: Date.now(),
-      totalNum,
-      totalText: formatCVE(totalNum)
-    };
-
-    const hist=getHistory();
-    if (!hist.some(h=>String(h.id)===String(entry.id))) hist.push(entry);
-    setHistory(hist);
-
-    const keep = all.filter(x=>String(x.id)!==String(id));
-    setOrders(keep);
-
-    const map=getServedMap(); map[String(id)]=true; setServedMap(map);
-
-    bcPost({type:'served_update', id:String(id), served:true});
-    bcPost({type:'orders_updated'});
-
-    render();
-    renderHistory();
-  }
-
-  
-  /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
-  let _knownServed = new Set();
-  function snapshotServedIds(){
-    try {
-      const m = getServedMap();
-      return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch (e) {
-      return new Set();
-    }
-  }
-
-  // Detect newly marked-as-ready orders (from Kitchen/other devices) and notify once
-  function detectNewServedAndNotify(){
-    try {
-      const latest = snapshotServedIds();
-      let hasNew = false;
-      const all = (typeof getOrders==='function') ? getOrders() : [];
-      latest.forEach(function(id){
-        id = String(id);
-        if (!_knownServed.has(id)){
-          const o = all.find(function(x){ return String(x.id)===id; });
-          if (!o || o.confirmed) hasNew = true;
-        }
+        card.appendChild(btnWrap);
+        container.appendChild(card);
       });
-      if (hasNew){
-        showToast('Pedido pronto ✨');
-        playReadySound();
-      }
-      _knownServed = latest;
-    } catch (e) { /* no-op */ }
-  }
-
-/* === subscriptions / polling === */
-  subscribeAll((evt)=>{
-    render(); 
-    detectNewOrdersAndMaybeAlarm(); 
-    renderHistory();
-
-    // Direct broadcast from Kitchen
-    if (evt && evt.type==='served_update' && evt.served){
-      showToast('Pedido pronto ✨');
-      playReadySound();
-      if (evt.id != null) _knownServed.add(String(evt.id)); // avoid double notify next tick
     }
 
-    // Fallback for storage/poll-only
-    detectNewServedAndNotify();
-  }, {pollMs: 900});
+    // Live queries
+    const ordersCol = collection(db, 'orders');
 
-  // initial
-  render(); renderHistory();
-  knownIds=new Set(getOrders().map(o=>String(o.id)));
-  _knownServed = snapshotServedIds();
+    // New: not confirmed
+    onSnapshot(query(ordersCol, where('confirmed','==', false), orderBy('createdAtMs','asc')), snap => {
+      const arr = [];
+      snap.forEach(d=>{ const x = d.data(); arr.push({ id:d.id, ...x }); });
+      renderBucket(newList, arr, [
+        { label: 'Confirmar', run: (o)=> updateDoc(doc(db,'orders',o.id), { confirmed:true, confirmedAtMs: Date.now() }) },
+        { label: 'Rejeitar',  run: async (o)=> { if (confirm('Rejeitar este pedido?')) await deleteDoc(doc(db,'orders',o.id)); } }
+      ]);
+    });
+
+    // Confirmed: confirmed == true (filter out served client-side to avoid composite index)
+    onSnapshot(query(ordersCol, where('confirmed','==', true), orderBy('createdAtMs','asc')), snap => {
+      const confirmedArr = []; const readyArr = [];
+      snap.forEach(d=>{
+        const x = d.data(); const o = { id:d.id, ...x };
+        if (o.served) return; // hidden from both lists
+        if (o.isReady) readyArr.push(o); else confirmedArr.push(o);
+      });
+      renderBucket(confirmedList, confirmedArr);
+      renderBucket(readyList, readyArr, [
+        { label: 'Servido', run: (o)=> updateDoc(doc(db,'orders',o.id), { served:true, servedAtMs: Date.now() }) }
+      ]);
+    });
   </script>
-
-
-
-
-
-
-
-<!-- STAFF_SERVED_VIRTUAL_V2 -->
-<script>
-(function(){
-  var SERVED_KEY = 'orders_served';
-  var SERVED_VERSION = 'orders_served_version';
-  var _get = null;
-  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
-  localStorage.getItem = function(k){
-    try{
-      if (k===SERVED_KEY){
-        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
-        return JSON.stringify(m);
-      }
-      if (k===SERVED_VERSION){
-        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
-        return String(v);
-      }
-    }catch(e){}
-    return _get ? _get(k) : null;
-  };
-})();
-</script>
-
-
-<!-- REMOVE_FILTERTABLE_V2 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
-<script>
-(function() {
-  function attach() {
-    try {
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllRemoveV1) return;
-      btn.__wiredClearAllRemoveV1 = true;
-      btn.addEventListener('click', function(ev) {
-        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
-        try { 
-          if (typeof setOrders === 'function') setOrders([]);
-          if (typeof setServedMap === 'function') setServedMap({});
-          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
-          if (typeof render === 'function') render();
-        } catch(e){}
-      }, true);
-    } catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllV2) return;
-      btn.__wiredClearAllV2 = true;
-      btn.addEventListener('click', function(ev){
-        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-        var ok = true;
-        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
-        if (!ok) return false;
-        (async function(){
-          // Optional: Cloud reject so they don't come back after refresh
-          if (window.Parse && Parse.applicationId) {
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
-          }
-          // Local UI clear (always)
-          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
-          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
-          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-          try{ if (typeof render==='function') render(); }catch(e){}
-        })();
-      }, true);
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- STAFF_ATUALIZAR_RELOAD_V1 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-      nodes.forEach(function(n){
-        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-        if (t==='atualizar' || t==='actualizar' || n.id==='refreshBtn') {
-          if (n.__wiredRefreshV1) return;
-          n.__wiredRefreshV1 = true;
-          n.addEventListener('click', function(ev){
-            try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-            try{ location.reload(); }catch(e){}
-          }, true);
-        }
-      });
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-
-<!-- STAFF_FIREBASE_CLOUD_ONLY_V2 -->
-<script>
-(function(){
-  const fb = window.__fb;
-  if (!fb) { console.warn('Firebase not ready on Staff.'); return; }
-
-  // Source of truth: Firestore
-  window.__cloudList = [];
-
-  // Make getOrders() return cloud list everywhere in the page
-  window.getOrders = function(){
-    return Array.isArray(window.__cloudList) ? window.__cloudList : [];
-  };
-  // setOrders becomes a no-op (we never write local)
-  window.setOrders = function(){ /* cloud only */ };
-
-  // Subscribe to all orders, oldest first
-  const qAll = fb.query(fb.ordersCol, fb.orderBy('createdAtMs','asc'));
-  fb.onSnapshot(qAll, (snap)=>{
-    const list = [];
-    snap.forEach(doc => {
-      const d = doc.data()||{};
-      list.push({
-        id: d.id || doc.id,
-        table: d.table,
-        items: d.items || [],
-        notes: d.notes || '',
-        totalCVE: d.totalCVE,
-        createdAt: d.createdAtMs || Date.now(),
-        confirmed: !!d.confirmed,
-        confirmedAt: d.confirmedAtMs || null,
-        isReady: !!d.isReady,
-        readyAt: d.readyAtMs || null
-      });
-    });
-    window.__cloudList = list;
-    try{ if (typeof render==='function') render(); }catch(e){}
-  });
-
-  // Cloud-write actions
-  window.confirmOrder = function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
-    }catch(e){ console.warn('confirmOrder cloud error', e); }
-  };
-  window.rejectOrder = function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      const ok = window.confirm('Rejeitar este pedido?');
-      if (!ok) return;
-      fb.deleteDoc(ref);
-    }catch(e){ console.warn('rejectOrder cloud error', e); }
-  };
-  window.markServedAndClear = function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      fb.updateDoc(ref, { isReady: true, readyAtMs: Date.now() });
-    }catch(e){ console.warn('markServed cloud error', e); }
-  };
-})();
-</script>
-
-
-
-<!-- STAFF_DOM_TWEAKS_V2 -->
-<script>
-(function(){
-  function norm(t){ return (t||'').replace(/\s+/g,' ').trim().toLowerCase(); }
-  function removeLimparMesa(){
-    try{ Array.from(document.querySelectorAll('button, a')).forEach(function(n){ if (norm(n.textContent)==='limpar mesa'){ n.remove(); } }); }catch(e){}
-  }
-  function removeMesaField(){
-    try{
-      Array.from(document.querySelectorAll('input,textarea,select')).forEach(function(el){
-        var ph = (el.getAttribute('placeholder')||'').trim().toLowerCase();
-        if (ph==='mesa'){ el.remove(); return; }
-        var lbl = el.closest('label') || (el.previousElementSibling && el.previousElementSibling.tagName==='LABEL' ? el.previousElementSibling : null);
-        if (lbl && norm(lbl.textContent)==='mesa'){ try{ lbl.remove(); }catch(e){} try{ el.remove(); }catch(e){} }
-      });
-    }catch(e){}
-  }
-  function run(){ removeLimparMesa(); removeMesaField(); }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', run); else run();
-})();
-</script>
-
-
-
-<!-- STAFF_CLEARALL_UNIFIED_V4 -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  var hooked = false;
-  function attach(){
-    if (hooked) return;
-    var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-    nodes.forEach(function(n){
-      var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-      if (t==='limpar tudo'){
-        if (n.__wiredClearAll) return; n.__wiredClearAll = true; hooked = true;
-        n.addEventListener('click', function(ev){
-          try{
-            var ok = window.confirm('Quer mesmo apagar todas as encomendas?');
-            if (!ok){ ev.preventDefault(); ev.stopPropagation(); return false; }
-          }catch(e){}
-          (async function(){
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-              for (var j=0;j<res.length;j++){ try{ await res[j].destroy(); }catch(e){} }
-              try{ if (typeof window.__applyCloudList==='function') window.__applyCloudList([]); }catch(e){}
-            }catch(e){}
-          })();
-        }, true);
-      }
-    });
-  }
-  
-})();
-</script>
-
-
-  
-<!-- FIREBASE BOOTSTRAP (STAFF) -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import {
-    getFirestore, collection, doc, setDoc, updateDoc, deleteDoc,
-    onSnapshot, serverTimestamp, query, where, orderBy
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  try { await signInAnonymously(auth); } catch (e) { console.warn('Anon auth failed', e); }
-
-  const db = getFirestore(app);
-  const ordersCol = collection(db, "orders");
-  window.__fb = { app, db, ordersCol, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
-</script>
-
-<!-- FIREBASE BOOTSTRAP (STAFF) -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import {
-    getFirestore, collection, doc, setDoc, updateDoc, deleteDoc,
-    onSnapshot, serverTimestamp, query, where, orderBy
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73",
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  try { await signInAnonymously(auth); } catch (e) { console.warn('Anon auth failed', e); }
-
-  const db = getFirestore(app);
-  const ordersCol = collection(db, "orders");
-  window.__fb = { app, db, ordersCol, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, where, orderBy };
-</script>
-
-
-  
-<!-- STAFF — CLOUD ONLY glue (stream orders + actions) -->
-<script>
-(function(){
-  const fb = window.__fb;
-  if (!fb) { console.warn('Firebase not ready on Staff'); return; }
-
-  // Render helpers already in your file reuse getOrders()/render() – we’ll make getOrders() cloud-backed
-  window.__cloudList = [];
-
-  // getOrders() becomes cloud source of truth
-  window.getOrders = function(){ return Array.isArray(window.__cloudList) ? window.__cloudList : []; };
-  window.setOrders = function(){ /* no local writes; cloud only */ };
-
-  // Live query: we show all non-served orders, oldest first
-  const qAll = fb.query(fb.ordersCol, fb.where('served','==', false), fb.orderBy('createdAtMs','asc'));
-  fb.onSnapshot(qAll, (snap)=>{
-    const list = [];
-    snap.forEach(docSnap => {
-      const d = docSnap.data()||{};
-      list.push({
-        id: d.id || docSnap.id,
-        table: d.table,
-        items: d.items || [],
-        notes: d.notes || '',
-        totalCVE: d.totalCVE,
-        createdAt: d.createdAtMs || Date.now(),
-        confirmed: !!d.confirmed,
-        confirmedAt: d.confirmedAtMs || null,
-        isReady: !!d.isReady,
-        readyAt: d.readyAtMs || null,
-        served: !!d.served,
-        servedAt: d.servedAtMs || null
-      });
-    });
-    window.__cloudList = list;
-    try { if (typeof render === 'function') render(); } catch {}
-  });
-
-  // Cloud-write actions used by your buttons
-  window.confirmOrder = async function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      await fb.updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
-    }catch(e){ console.warn('confirmOrder cloud error', e); }
-  };
-
-  window.rejectOrder = async function(id){
-    try{
-      const ok = window.confirm('Rejeitar este pedido?'); if (!ok) return;
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      await fb.deleteDoc(ref);
-    }catch(e){ console.warn('rejectOrder cloud error', e); }
-  };
-
-  // Staff marks Served (kitchen marks Ready)
-  window.markServedAndClear = async function(id){
-    try{
-      const ref = fb.doc(fb.db, 'orders', String(id));
-      await fb.updateDoc(ref, { served: true, servedAtMs: Date.now() });
-      // your UI already removes served from the Confirmed list once it’s not returned by getOrders()
-    }catch(e){ console.warn('markServed cloud error', e); }
-  };
-
-  // OPTIONAL: if your render() was checking a local "readyMap", switch it to use o.isReady
-  // (If your existing render uses getServedMap, you can leave it; Cloud will still drive the lists.)
-})();
-</script>
-
-
-  
 </body>
 </html>
-
-
-
-
-
