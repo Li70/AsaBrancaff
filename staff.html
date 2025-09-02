@@ -1,215 +1,152 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Staff — Pedidos</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; margin:0; background:#111; color:#eee}
-    header{padding:12px 16px; background:#1b1b1b; position:sticky; top:0; z-index:10; display:flex; gap:12px; align-items:center}
-    .badge{background:#2a2a2a; padding:6px 10px; border-radius:999px; font-size:12px}
-    #banner{display:none; background:#0b3; color:#fff; padding:8px 12px; border-radius:8px; margin-left:auto}
-    main{padding:16px; display:grid; gap:12px}
-    .card{background:#1b1b1b; border:1px solid #2a2a2a; border-radius:12px; padding:12px}
-    .row{display:flex; justify-content:space-between; align-items:center; gap:12px}
-    .items{margin:8px 0 0 16px}
-    button{background:#2d6cdf; color:#fff; border:0; padding:8px 10px; border-radius:8px; cursor:pointer}
-    button.secondary{background:#444}
-    .muted{opacity:.7; font-size:12px}
-.danger{background:#b00020 !important}
-.success{background:#11a34a !important}
-  </style>
-  <script>
-    // Safe no-op guards (some older code references these)
-    window.render = window.render || function(){};
-    window.renderHistory = window.renderHistory || function(){};
-  </script>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Staff · Pedidos (Firebase)</title>
+  
+<style>
+  :root { color-scheme: light dark; --accent: #00897b; --bg:#0b0b0b; --card:#141414; --muted:#8a8a8a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif; background: var(--bg); color: #fff; }
+  header { padding: 16px; background: #111; display: flex; gap: 12px; align-items:center; border-bottom: 1px solid #1e1e1e; position: sticky; top: 0; z-index: 5; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  main { padding: 16px; display: grid; gap: 16px; max-width: 1100px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid #1e1e1e; border-radius: 16px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  input, textarea, select, button { background: #131313; color: #fff; border-radius: 10px; border: 1px solid #2a2a2a; padding: 10px 12px; font: inherit; }
+  button { background: var(--accent); border: 0; cursor: pointer; }
+  button.secondary { background: #2a2a2a; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .list { display: grid; gap: 10px; }
+  .item { border: 1px solid #262626; background: #121212; padding: 12px; border-radius: 12px; display: grid; gap: 8px; }
+  .pill { font-size:12px; background:#1e1e1e; padding:4px 8px; border-radius:999px; }
+  .split { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px){ .split { grid-template-columns: 1fr; } }
+</style>
+
 </head>
 <body>
   <header>
-    <div class="badge">Staff</div>
-    <div id="counts" class="badge">—</div>
-    <div id="banner">Pronto!</div>
-<button id="clearAllBtn" class="danger" style="margin-left:auto">Limpar tudo</button>
-    <audio id="readySound" preload="auto" loop>
-      <source src="/ready.mp3" type="audio/mpeg">
-      <source src="ready.mp3" type="audio/mpeg">
-    </audio>
-    <audio id="doneSound" preload="auto">
-      <source src="/done.mp3" type="audio/mpeg">
-      <source src="done.mp3" type="audio/mpeg">
-    </audio>
+    <h1>Staff</h1>
+    <span class="pill">Confirmação & Serviço</span>
   </header>
-  <main id="list"></main>
 
-  <!-- Firebase + realtime logic -->
+  <main class="split">
+    <section class="card">
+      <h2 style="margin:0 0 10px 0;">Por confirmar</h2>
+      <div id="pending" class="list"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px 0;">Confirmados</h2>
+      <div id="confirmed" class="list"></div>
+    </section>
+  </main>
+
+  
+<!-- Firebase bootstrap (shared) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  window.firebaseConfig = firebaseConfig;
+
+  const app = initializeApp(window.firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app);
+
+  window.__fb = { app, db, auth, storage, collection, doc, addDoc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp, sRef, getDownloadURL,
+    ordersCol: collection(db, "orders")
+  };
+  window.__fbReady = false;
+  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
+  signInAnonymously(auth).catch(()=>{});
+</script>
+
+
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, onSnapshot, doc, updateDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    const $ = s=>document.querySelector(s);
 
-    // --- Firebase config (from your project) ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-      authDomain: "asabrancaff-faebe.firebaseapp.com",
-      projectId: "asabrancaff-faebe",
-      storageBucket: "asabrancaff-faebe.appspot.com",
-      messagingSenderId: "326390762122",
-      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-    };
+    let doneAudio = null;
+    (async () => { try {
+      const {storage, sRef, getDownloadURL} = window.__fb;
+      const url = await getDownloadURL(sRef(storage, "audio/done.mp3"));
+      doneAudio = new Audio(url);
+    } catch(e){} })();
 
-    // --- Init ---
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
-    const auth = getAuth(app);
-    const ordersRef = collection(db, "orders");
-
-    // --- UI refs ---
-    const listEl = document.getElementById("list");
-    const countsEl = document.getElementById("counts");
-    const bannerEl = document.getElementById("banner");
-    const readyEl = document.getElementById("readySound");
-    const doneEl  = document.getElementById("doneSound");
-
-    // --- Sound helpers ---
-    let soundPrimed = false;
-    function primeSound() {
-      if (soundPrimed) return;
-      soundPrimed = true;
-      // try one quiet play/pause to unlock
-      readyEl.volume = 0; doneEl.volume = 0;
-      readyEl.play().then(()=>readyEl.pause()).catch(()=>{});
-      doneEl.play().then(()=>doneEl.pause()).catch(()=>{});
-      readyEl.volume = 1; doneEl.volume = 1;
-    }
-    function startReadyLoop() {
-      try{ readyEl.loop = true; }catch{}
-      primeSound();
-      try { readyEl.currentTime = 0; readyEl.play().catch(()=>{}); } catch{}
-    }
-    function stopReadyLoop() {
-      try { readyEl.pause(); readyEl.currentTime = 0; } catch{}
-    }
-    function playDoneOnce() {
-      primeSound();
-      try { doneEl.currentTime = 0; doneEl.play().catch(()=>{}); } catch{}
-      try {
-        bannerEl.textContent = "Pronto!";
-        bannerEl.style.display = "block";
-        setTimeout(()=> { bannerEl.style.display="none"; }, 2500);
-      } catch{}
-    }
-
-    // --- State for edge-triggered sounds ---
-    let prevPendingCount = 0;
-    let prevReadyIds = new Set();
-
-    // --- Render ---
-    function esc(s){ const d=document.createElement("div"); d.textContent=String(s??""); return d.innerHTML; }
-    function renderList(orders){
-      listEl.innerHTML = "";
-      if (!orders.length){
-        listEl.innerHTML = '<div class="card muted">Sem pedidos.</div>';
-        return;
-      }
-      for (const o of orders){
-        const li = document.createElement("div");
-        li.className = "card";
-        const items = (Array.isArray(o.items)?o.items:[]).map(i=>`<li>${esc(i.qty??1)} × ${esc(i.name||i.item||i.pizzaType||"")}${i.category? ` <span class=\"muted\">(${esc(i.category)})</span>` : ""}</li>`).join("") || '<li class="muted">—</li>';
-        li.innerHTML = `
-          <div class="row">
-            <strong>Mesa ${esc(o.table??"?")}</strong>
-            <div>
-              ${o.confirmed ? '' : `<button data-action="confirm" data-id="${o.id}">Confirmar</button>`}
-              <button class="success" data-action="served" data-id="${o.id}">Servido</button>
-            </div>
+    function renderList(el, rows, type) {
+      el.innerHTML = rows.map(o=>\`
+        <div class="item">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <strong>Mesa \${o.table} (\${o.items.length} itens)</strong>
+            <span class="pill">\${o.isReady?'PRONTO':'—'}</span>
           </div>
-          <ul class="items">${items}</ul>
-          ${o.notes ? `<div class="muted">Notas: ${esc(o.notes)}</div>` : ''}
-        `;
-        listEl.appendChild(li);
-      }
+          <div>Itens: \${o.items.join(', ')}</div>
+          <div class="row">
+            \${type==='pending' ? '<button class="confirm">Confirmar</button><button class="reject secondary">Rejeitar</button>' : '<button class="serve">Servido</button>'}
+          </div>
+          <div class="muted">#\${o.orderId} · \${new Date(o.createdAtMs).toLocaleTimeString()}</div>
+        </div>
+      \`).join("");
+
+      Array.from(el.querySelectorAll(".confirm")).forEach((btn, i)=>btn.addEventListener("click", async (ev)=>{
+        const id = rows[i].orderId;
+        const {ordersCol, doc, updateDoc} = window.__fb;
+        await updateDoc(doc(ordersCol, id), { confirmed: true, confirmedAt: Date.now() });
+        try{ doneAudio && doneAudio.play().catch(()=>{}); }catch(e){}
+      }));
+
+      Array.from(el.querySelectorAll(".reject")).forEach((btn, i)=>btn.addEventListener("click", async (ev)=>{
+        const id = rows[i].orderId;
+        const {ordersCol, doc, updateDoc} = window.__fb;
+        await updateDoc(doc(ordersCol, id), { rejectedAt: Date.now() });
+      }));
+
+      Array.from(el.querySelectorAll(".serve")).forEach((btn, i)=>btn.addEventListener("click", async (ev)=>{
+        const id = rows[i].orderId;
+        const {ordersCol, doc, updateDoc} = window.__fb;
+        await updateDoc(doc(ordersCol, id), { servedAt: Date.now() });
+      }));
     }
 
-    // --- Button actions (event delegation) ---
-    listEl.addEventListener("click", async (ev)=>{
-      const btn = ev.target.closest("button[data-action]");
-      if (!btn) return;
-      const id = btn.getAttribute("data-id");
-      const action = btn.getAttribute("data-action");
-      const ref = doc(ordersRef, id);
-      try {
-        if (action === "confirm") {
-          await updateDoc(ref, { confirmed: true, confirmedAtMs: Date.now() });
-        } else if (action === 'served') { await deleteDoc(ref); }
-      } catch (e) { console.error(e); }
-    });
+    function live() {
+      const {ordersCol, onSnapshot, query, where} = window.__fb;
+      const pendingQ = query(ordersCol,
+        where("confirmed","==", false),
+        where("rejectedAt","==", null)
+      );
+      const confirmedQ = query(ordersCol,
+        where("confirmed","==", true),
+        where("servedAt","==", null),
+        where("rejectedAt","==", null)
+      );
 
-    // --- Start realtime after auth ---
-    onAuthStateChanged(auth, (u)=>{
-      if (!u) return;
-      onSnapshot(ordersRef, (snap)=>{
-        const orders = [];
-        const readyNow = new Set();
-        let pendingCount = 0;
-
-        snap.forEach(docSnap=>{
-          const d = docSnap.data()||{};
-          const o = {
-            id: String(docSnap.id),
-            table: d.table ?? null,
-            items: Array.isArray(d.items) ? d.items : [],
-            notes: d.notes || "",
-            totalCVE: d.totalCVE || null,
-            createdAtMs: d.createdAtMs || 0,
-            confirmed: !!d.confirmed,
-            confirmedAtMs: d.confirmedAtMs || null,
-            isReady: !!d.isReady,
-            readyAtMs: d.readyAtMs || null,
-            served: !!d.served
-          };
-          if (!o.served) orders.push(o);
-          if (!o.confirmed) pendingCount++;
-          if (o.confirmed && !o.served && o.isReady === true) readyNow.add(o.id);
-        });
-
-        // Sort newest first for staff
-        orders.sort((a,b)=> (b.createdAtMs||0)-(a.createdAtMs||0) || b.id.localeCompare(a.id));
-
-        // Render
-        renderList(orders);
-        countsEl.textContent = `Pendentes: ${pendingCount} · Ativos: ${orders.length}`;
-
-        // Sounds
-        if (pendingCount > 0 && prevPendingCount === 0) startReadyLoop();
-        if (pendingCount === 0 && prevPendingCount > 0) stopReadyLoop();
-        prevPendingCount = pendingCount;
-
-        // Done sound for new readies
-        const newReady = [];
-        readyNow.forEach(id => { if (!prevReadyIds.has(id)) newReady.push(id); });
-        if (newReady.length > 0) playDoneOnce();
-        prevReadyIds = readyNow;
+      onSnapshot(pendingQ, (snap)=>{
+        const rows = []; snap.forEach(d=>rows.push(d.data()));
+        rows.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0));
+        renderList(document.getElementById("pending"), rows, "pending");
       });
-    });
 
-    // Kick off anon auth
-    signInAnonymously(auth).catch(()=>{});
-    /* CLEAR_ALL_WIRING */
-    (function(){
-      const btn = document.getElementById("clearAllBtn");
-      if (!btn) return;
-      btn.addEventListener("click", async ()=>{
-        const ok = window.confirm("Tem a certeza que quer apagar todas as encomendas?");
-        if (!ok) return;
-        try{
-          const snap = await getDocs(ordersRef);
-          const deletes = snap.docs.map(d => deleteDoc(d.ref));
-          await Promise.all(deletes);
-          try { readyEl.pause(); readyEl.currentTime = 0; } catch{}
-        }catch(e){ console.error(e); }
+      onSnapshot(confirmedQ, (snap)=>{
+        const rows = []; snap.forEach(d=>rows.push(d.data()));
+        rows.sort((a,b)=> (a.createdAtMs||0)-(b.createdAtMs||0));
+        renderList(document.getElementById("confirmed"), rows, "confirmed");
       });
-    })();
+    }
+
+    live();
   </script>
 </body>
 </html>
