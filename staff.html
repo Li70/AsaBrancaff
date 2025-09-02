@@ -206,7 +206,27 @@
   let autoUnlockTimer = setInterval(()=>{ if(!soundEnabled) enableSound(); else clearInterval(autoUnlockTimer); }, 1500);
 
   function startAlarm(msg){
-    if(!soundEnabled){ showBanner(msg); return; }
+  try{ if(!soundEnabled) enableSound(); }catch(e){}
+  showBanner(msg);
+  try {
+    alertEl.play().catch(()=>{
+      const Ctx=window.AudioContext||window.webkitAudioContext;
+      if(!audioCtx && Ctx) audioCtx=new Ctx();
+      if(!audioCtx) return;
+      // simple fallback beep loop
+      fallbackLoop = setInterval(()=>{
+        const now=audioCtx.currentTime;
+        const g=audioCtx.createGain(), o=audioCtx.createOscillator();
+        o.type='square'; o.frequency.value=880;
+        o.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.exponentialRampToValueAtTime(0.6, now+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now+0.4);
+        o.start(now); o.stop(now+0.42);
+      }, 600);
+    });
+  } catch(e){ /* ignore */ }
+}
     showBanner(msg);
     alertEl.play().catch(()=>{
       const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
