@@ -165,7 +165,12 @@
 </audio>
 
 
-  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
+  <audio id="doneSound" preload="auto">
+  <source src="/done.mp3" type="audio/mpeg">
+  <source src="done.mp3" type="audio/mpeg">
+  <source src="/assets/done.mp3" type="audio/mpeg">
+  <source src="/sounds/done.mp3" type="audio/mpeg">
+</audio>
 
   <script>
   "use strict";
@@ -198,11 +203,29 @@
   const doneEl=document.getElementById('doneSound');
 
   /* === Sound / alarm === */
+function playDone(msg){
+  try{ if(!soundEnabled) enableSound(); }catch(e){}
+  try {
+    if (msg) showBanner(msg);
+    if (doneEl) {
+      try { doneEl.currentTime = 0; if (typeof doneEl.load==='function') doneEl.load(); } catch(e){}
+      doneEl.play().catch(()=>{});
+    }
+  } catch(e){}
+  try { setTimeout(()=> hideBanner(), 3000); } catch(e){}
+}
+
   let soundEnabled=false, audioCtx, fallbackLoop=null;
   function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
   function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
   async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
-  function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
+  function stopAlarm(){
+  try{
+    alertEl.pause();
+    alertEl.currentTime = 0;
+  }catch(e){}
+  hideBanner();
+}catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
   soundBtn.addEventListener('click', enableSound);
   ackBtn.addEventListener('click', ()=>{ try{ hideBanner(); }catch{} });
   document.addEventListener('DOMContentLoaded', enableSound);
@@ -214,6 +237,16 @@
 
   function startAlarm(msg){
   try{ if(!soundEnabled) enableSound(); }catch(e){}
+  showBanner(msg);
+  try {
+    alertEl.loop = true;
+    alertEl.currentTime = 0;
+    if (typeof alertEl.load === 'function') alertEl.load();
+  } catch(e){}
+  try {
+    alertEl.play().catch(()=>{});
+  } catch(e){}
+}catch(e){}
   showBanner(msg);
   try {
     alertEl.play().catch(()=>{
@@ -479,6 +512,7 @@ function computeOrderTotal(order){
 
 let __lastPendingCount = 0;
 /* === subscriptions / polling === */
+  let __lastReadySet = new Set();
   subscribeAll((evt)=>{
     render(); 
     // Alarm behavior based on pending count
@@ -490,7 +524,20 @@ try {
   } else if (pendingCount === 0 && __lastPendingCount !== 0) {
     stopAlarm();
   }
-  __lastPendingCount = pendingCount;
+  __lastPendingCount = pendingCount;/* READY-DETECT */
+try {
+  const readyNow = new Set(
+    (typeof getOrders==='function')
+      ? getOrders().filter(o => o.confirmed && !o.served && (o.isReady === true)).map(o => String(o.id))
+      : []
+  );
+  let newReadyIds = [];
+  readyNow.forEach(id => { if (!__lastReadySet.has(id)) newReadyIds.push(id); });
+  if (newReadyIds.length > 0) {
+    playDone(newReadyIds.length === 1 ? 'Pronto!' : (newReadyIds.length + ' pedidos prontos!'));
+  }
+  __lastReadySet = readyNow;
+} catch(e) { /* no-op */ }
 } catch (e) { /* no-op */ }
 detectNewOrdersAndMaybeAlarm(); 
     renderHistory();
