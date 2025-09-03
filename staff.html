@@ -1,683 +1,50 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Staff – Pedidos em Tempo Real</title>
- <script src="https://cdn.tailwindcss.com"></script> 
-<!-- <link rel="stylesheet" href="tailwind-lite.css"> -->
-  <style>
-    :root { color-scheme: dark; }
-    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
-    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); transition: box-shadow .2s, border-color .2s; }
-    .muted { color: rgba(255,255,255,0.7); }
-    .btn { padding:.5rem .85rem; border-radius:.75rem; font-weight:600; }
-    .pill{ font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,.08); }
-    .items li { list-style: disc; margin-left: 1.25rem; }
-    .toast { position: fixed; left: 50%; transform: translateX(-50%); top: 12px; background:#065f46; border:1px solid #059669; padding:.6rem .9rem; border-radius:.75rem; z-index:50; }
-    .bar { position: fixed; right: 12px; bottom: 12px; display: flex; gap: 8px; align-items: center; }
-    details summary { cursor: pointer; }
-
-    /* Ready styling */
-    .card.ready { border-color: rgba(16,185,129,.6) !important; box-shadow: 0 0 0 2px rgba(16,185,129,.15); }
-    .pill-ready { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#052e2b; border:1px solid rgba(16,185,129,.6); color:#a7f3d0; }
-  </style>
-
-  <script>
-  // --- Tiny UI helpers
-  function showToast(msg){
-    const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
-    document.body.appendChild(t); setTimeout(()=>t.remove(), 2500);
-  }
-
-  // --- Shared helpers: storage + channel + polling
-  (function(){
-    window.ORDERS_KEY='orders_simple_v4';
-    window.VERSION_KEY='orders_simple_v4_ver';
-    window.SERVED_KEY='orders_served';
-    window.SERVED_VERSION='orders_served_ver';
-    window.HISTORY_KEY='orders_history_v1';
-
-    window.lsGet=(k,f=null)=>{ try{const v=localStorage.getItem(k); return v===null?f:v;}catch{return f;} };
-    window.lsSet=(k,v)=>{ try{localStorage.setItem(k,v); return true;}catch{return false;} };
-
-    window.getOrders=()=>{ try{return JSON.parse(lsGet(ORDERS_KEY,'[]'))||[];}catch{return[];} };
-    window.setOrders=(arr)=>{ lsSet(ORDERS_KEY,JSON.stringify(arr)); lsSet(VERSION_KEY,String(Date.now())); };
-
-    window.getHistory=()=>{ try{return JSON.parse(lsGet(HISTORY_KEY,'[]'))||[];}catch{return[];} };
-    window.setHistory=(arr)=>{ lsSet(HISTORY_KEY,JSON.stringify(arr)); };
-
-    window.getServedMap=()=>{ try{return JSON.parse(lsGet(SERVED_KEY,'{}'))||{};}catch{return{};} };
-    window.setServedMap=(m)=>{ lsSet(SERVED_KEY,JSON.stringify(m)); lsSet(SERVED_VERSION,String(Date.now())); };
-
-    const channels=[]; try{ channels.push(new BroadcastChannel('orders_simple_v4')); }catch{}
-    window.bcPost=(msg)=>channels.forEach(ch=>{ try{ ch.postMessage(msg); }catch{} });
-
-    window.subscribeAll=function(onChange,{pollMs=900}={}){
-      channels.forEach(ch=>ch.onmessage=(e)=> onChange(e?.data||null));
-      window.addEventListener('storage',(e)=>{ if(!e.key) return;
-        if([ORDERS_KEY,VERSION_KEY,SERVED_VERSION,HISTORY_KEY].includes(e.key)) onChange(null); });
-      let lastV=lsGet(VERSION_KEY,'0'), lastS=lsGet(SERVED_VERSION,'0'), lastH=lsGet(HISTORY_KEY,'[]');
-      const t=setInterval(()=>{
-        const v=lsGet(VERSION_KEY,'0'), s=lsGet(SERVED_VERSION,'0'), h=lsGet(HISTORY_KEY,'[]');
-        if(v!==lastV || s!==lastS || h!==lastH){ lastV=v; lastS=s; lastH=h; onChange(null); }
-      }, pollMs);
-      return ()=>clearInterval(t);
-    };
-
-    window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
-  })();
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-
-  <script>
-    try{
-      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
-      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
-  </script>
-
-
-
-</head>
-<body class="p-4">
-  <!-- sound controls -->
-  <div class="bar">
-    <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
-    <button id="ackBtn" class="btn bg-slate-700 hover:bg-slate-600 hidden">Reconhecer alerta</button>
-  </div>
-
-  <!-- alert banner -->
-  <div id="alertBanner" class="hidden fixed left-1/2 -translate-x-1/2 bottom-16 bg-rose-700/90 border border-rose-500 rounded-xl px-4 py-2 text-sm z-40">Alerta</div>
-
-  <div class="max-w-6xl mx-auto">
-    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-      <h1 class="text-2xl font-bold">Staff – Pedidos em Tempo Real</h1>
-      <div class="flex items-center gap-2">
-        <input id="filterTable" type="number" min="1"
-               class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 w-28"
-               placeholder="Mesa #" />
-        <button id="clearTableBtn" class="btn bg-slate-700 hover:bg-slate-600">Limpar mesa</button>
-        <button id="clearAllBtn" class="btn bg-red-600 hover:bg-red-700">Limpar tudo</button>
-        <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
-      </div>
-    </header>
-
-    <section class="card p-3 rounded-2xl mb-3">
-      <div class="muted text-sm">
-        Pode confirmar as encomendas com o cliente se necessário. As encomendas confirmadas serao enviadas directamente para a cozinha.<br/>
-        A cozinha só vê pedidos <b>Confirmados</b>.
-      </div>
-    </section>
-
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-      <section class="card p-3 rounded-2xl">
-        <h2 class="font-semibold mb-2">Pendentes <span id="countPend" class="pill">0</span></h2>
-        <div id="pending" class="space-y-2"></div>
-      </section>
-
-      <section class="card p-3 rounded-2xl sm:col-span-1 lg:col-span-2">
-        <h2 class="font-semibold mb-2">Confirmados <span id="countConf" class="pill">0</span></h2>
-        <div id="confirmed" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-      </section>
-    </div>
-
-    <!-- (Optional) Histórico escondido: deixe a estrutura intacta -->
-    <details class="card rounded-2xl p-3" style="display:none">
-      <summary class="font-semibold">Histórico (Hoje) — Total: <span id="histTotal">0$00</span></summary>
-      <div id="histList" class="mt-3 space-y-2"></div>
-    </details>
-  </div>
-
-  <!-- sounds -->
-  <audio id="alertSound" preload="auto" src="ready.mp3" loop></audio>
-  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
-
-  <script>
-  "use strict";
-
-  /* === PRICE INDEX (match client) === */
-  const PRICE_INDEX = {
-    "LEGS":200,"WINGS":200,"SWEET CHILLI WINGS":600,"BARBECUE WINGS":600,"NUGGETS":500,"POP CORNS":500,"FRIED CHICKEN":300,"SANDWICH":500,"MEIA DE FRANGO":600,
-    "COMBO 1":450,"COMBO 2":650,"COMBO 3":800,"COMBO 4":1000,
-    "CHICAGO":300,"ITALIAN":300,"MICHIGAN":300,"NEW YORK":300,"DODGER DOG":300,"CAROLINA":300,
-    "SWEET & SOUR SAUCE":50,"ALFREDO (CREMOSO CLÁSSICO)":50,"HONEY MUSTARD":50,"CHEESY SAUCE":50,"CREOLE TOMATO":50,"COLESLAW":50,"BUFFALO":50,
-    "COXINHA":60,"PASTEL":50,"BIFANAS À MODA DO PORTO":300,"MOELAS À PORTUGUESA":600,"LINGUIÇA":100,
-    "PEPERONI":800,"HAWAII-II":800,"ATUM":800,"FRANGO":800,"VEGETARIANO":800,
-    "S.C.P.":1000,"S.L.B":1000,"F.C.P.":1000,
-    "1 Pizza + Coca-Cola 1,5L":1200,"1 Pizza + Compal 1L":1250
-  };
-
-  /* === UI refs === */
-  const pendingDiv=document.getElementById('pending');
-  const confirmedDiv=document.getElementById('confirmed');
-  const countPend=document.getElementById('countPend');
-  const countConf=document.getElementById('countConf');
-  const filterInput=document.getElementById('filterTable');
-  const histList=document.getElementById('histList');
-  const histTotalEl=document.getElementById('histTotal');
-
-  const soundBtn=document.getElementById('soundBtn');
-  const ackBtn=document.getElementById('ackBtn');
-  const alertBanner=document.getElementById('alertBanner');
-  const alertEl=document.getElementById('alertSound');
-  const doneEl=document.getElementById('doneSound');
-
-  /* === Sound / alarm === */
-  let soundEnabled=false, audioCtx, fallbackLoop=null;
-  function showBanner(msg){ alertBanner.textContent=msg; alertBanner.classList.remove('hidden'); ackBtn.classList.remove('hidden'); }
-  function hideBanner(){ alertBanner.classList.add('hidden'); ackBtn.classList.add('hidden'); }
-  async function enableSound(){ soundEnabled = await unlockAudio(alertEl); try{ alertEl.currentTime=0; await alertEl.play(); setTimeout(()=>{ try{ alertEl.pause(); }catch{} }, 180);}catch{} }
-  function stopAlarm(){ try{ alertEl.pause(); alertEl.currentTime=0; }catch{} if(fallbackLoop){ clearInterval(fallbackLoop); fallbackLoop=null; } hideBanner(); }
-  soundBtn.addEventListener('click', enableSound);
-  ackBtn.addEventListener('click', stopAlarm);
-  document.addEventListener('DOMContentLoaded', enableSound);
-  document.addEventListener('pointerdown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
-  document.addEventListener('keydown', ()=>{ if(!soundEnabled) enableSound(); }, {once:true});
-
-  function startAlarm(msg){
-    if(!soundEnabled){ showBanner(msg); return; }
-    showBanner(msg);
-    alertEl.play().catch(()=>{
-      const Ctx=window.AudioContext||window.webkitAudioContext; if(!audioCtx && Ctx) audioCtx=new Ctx(); if(!audioCtx) return;
-      fallbackLoop=setInterval(()=>{
-        const now=audioCtx.currentTime, g=audioCtx.createGain(), o1=audioCtx.createOscillator(), o2=audioCtx.createOscillator();
-        o1.type='square'; o2.type='square'; o1.frequency.value=800; o2.frequency.value=1600;
-        o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.45, now+0.01); g.gain.exponentialRampToValueAtTime(0.0001, now+0.55);
-        o1.start(now); o2.start(now+0.08); o1.stop(now+0.57); o2.stop(now+0.57);
-      },1100);
-    });
-  }
-
-  async function playReadySound(){
-    if(!soundEnabled) return;
-    try { doneEl.currentTime = 0; await doneEl.play(); } catch {}
-  }
-
-  /* === utils/totals === */
-  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-  const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
-  function priceForName(name){ const k=String(name||'').trim(); return (k in PRICE_INDEX)? Number(PRICE_INDEX[k]):0; }
-  function computeOrderTotal(order){
-    if (typeof order.totalCVE==='number') return Number(order.totalCVE)||0;
-    let sum=0; for(const it of (order.items||[])){ sum += priceForName(it.pizzaType) * Number(it.qty||1); } return sum;
-  }
-
-  /* === render lists === */
-  function render(){
-    const tableFilter = Number(filterInput.value||'0') || null;
-    const all = getOrders().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
-
-    const pend = all.filter(o=>!o.confirmed && (!tableFilter || Number(o.table)===tableFilter));
-    const conf = all.filter(o=> o.confirmed && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
-
-    pendingDiv.innerHTML=''; confirmedDiv.innerHTML='';
-    countPend.textContent=pend.length; countConf.textContent=conf.length;
-
-    // Pendentes
-    if (!pend.length){ pendingDiv.innerHTML='<p class="muted">Sem pendentes.</p>'; }
-    else pend.forEach(o=>{
-      const when=o.createdAt? new Date(o.createdAt).toLocaleTimeString() : '';
-      const items=(o.items||[]).map(i=>`${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`).join('<br>') || '(sem itens)';
-      const total=computeOrderTotal(o);
-      const card=document.createElement('div'); card.className='card p-3 rounded-xl';
-      card.innerHTML=`
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <div class="font-semibold">Mesa ${esc(o.table)}</div>
-            <div class="muted text-sm leading-5">${items}</div>
-            ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
-            <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
-            <div class="muted text-xs mt-1">${when}</div>
-          </div>
-          <div class="flex flex-col gap-2">
-            <button class="btn bg-emerald-700 hover:bg-emerald-600" data-confirm="${o.id}">Confirmar</button>
-            <button class="btn bg-slate-700 hover:bg-slate-600" data-reject="${o.id}">Rejeitar</button>
-          </div>
-        </div>`;
-      card.querySelector('[data-confirm]').addEventListener('click',()=>confirmOrder(o.id));
-      card.querySelector('[data-reject]').addEventListener('click',()=>rejectOrder(o.id));
-      pendingDiv.appendChild(card);
-    });
-
-    // Confirmados (Servido limpa) — with persistent "Pedido pronto" if marked in Kitchen
-    const readyMap = getServedMap() || {};
-    if (!conf.length){
-      confirmedDiv.innerHTML='<p class="muted">Sem confirmados.</p>';
-    } else {
-      conf.forEach(o=>{
-        const when=o.confirmedAt? new Date(o.confirmedAt).toLocaleTimeString()
-                  : (o.createdAt? new Date(o.createdAt).toLocaleTimeString():'');
-        const items=(o.items||[]).map(i=>
-          `${i.qty||1} × ${esc(i.pizzaType||'')}${i.notes?` <span class="muted">(${esc(i.notes)})</span>`:''}`
-        ).join('<br>') || '(sem itens)';
-        const total=computeOrderTotal(o);
-        const isReady = !!readyMap[String(o.id)];
-
-        const card=document.createElement('div');
-        card.className='card p-3 rounded-xl' + (isReady ? ' ready' : '');
-
-        card.innerHTML=`
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <div class="font-semibold flex items-center gap-2">
-                <span>Mesa ${esc(o.table)}</span>
-               
-              </div>
-              <div class="muted text-sm leading-5">${items}</div>
-              ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
-              <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
-              <div class="muted text-xs mt-1">Confirmado: ${when}</div>
-            </div>
-            <div class="flex flex-col items-end gap-2">
-              ${isReady ? `<div class="text-yellow-300 text-xs font-semibold">✔️ Pronto</div>` : `<div class="text-transparent text-xs select-none">.</div>`}
-              <button class="btn ${isReady ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-700 hover:bg-emerald-600'}" data-served="${o.id}">
-                Servido
-              </button>
-            </div>
-          </div>`;
-        card.querySelector('[data-served]').addEventListener('click',()=>markServedAndClear(o.id));
-        confirmedDiv.appendChild(card);
-      });
-    }
-  }
-
-  /* === History (today) === */
-  function isToday(ts){ const d=new Date(ts||Date.now()), n=new Date(); return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate(); }
-  function renderHistory(){
-    const histWrap = document.querySelector('details[style*="display:none"]'); // hidden
-    if(!histWrap) return;
-    const hist = getHistory().filter(h=>isToday(h.servedAt||h.createdAt));
-    const byTable=new Map(); let grand=0;
-    hist.forEach(h=>{
-      const t=String(h.table||'?'); const add=Number(h.totalNum||0);
-      if(!byTable.has(t)) byTable.set(t,{table:t,total:0,orders:0});
-      byTable.get(t).total+=add; byTable.get(t).orders+=1; grand+=add;
-    });
-    if(histList){
-      histList.innerHTML='';
-      if(byTable.size===0){ histList.innerHTML='<p class="muted">Sem registos hoje.</p>'; }
-      else {
-        [...byTable.values()].sort((a,b)=>Number(a.table)-Number(b.table)).forEach(row=>{
-          const div=document.createElement('div'); div.className='card p-2 rounded-xl flex items-center justify-between';
-          div.innerHTML=`<div><div class="font-semibold">Mesa ${row.table}</div><div class="muted text-xs">${row.orders} pedido(s)</div></div>
-                         <div class="font-semibold">${formatCVE(row.total)}</div>`;
-          histList.appendChild(div);
-        });
-      }
-      if(histTotalEl) histTotalEl.textContent=formatCVE(grand);
-    }
-  }
-
-  /* === Detetar novos pedidos (tocar) === */
-  let knownIds=new Set();
-  function detectNewOrdersAndMaybeAlarm(){
-    const idsNow=new Set(getOrders().map(o=>String(o.id)));
-    let newCount=0; idsNow.forEach(id=>{ if(!knownIds.has(id)) newCount++; });
-    knownIds=idsNow;
-    if(newCount>0) startAlarm(newCount===1?'Novo pedido recebido!':`${newCount} novos pedidos recebidos!`);
-  }
-
-  /* === Actions === */
-  function confirmOrder(id){
-    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
-    all[idx].confirmed=true; all[idx].confirmedAt=Date.now();
-    setOrders(all);
-    bcPost({type:'orders_updated'});
-    stopAlarm();
-    render();
-  }
-  function rejectOrder(id){
-    if(!confirm('Rejeitar este pedido?')) return;
-    const keep=getOrders().filter(o=>String(o.id)!==String(id));
-    setOrders(keep); bcPost({type:'orders_updated'}); render();
-  }
-
-  // SERVIDO: escreve no histórico + remove dos pedidos + notifica
-  function markServedAndClear(id){
-    const all=getOrders(); const idx=all.findIndex(o=>String(o.id)===String(id)); if(idx<0) return;
-    const o = all[idx];
-
-    const totalNum = computeOrderTotal(o);
-    const entry = {
-      id: String(o.id),
-      table: String(o.table),
-      createdAt: o.createdAt || Date.now(),
-      confirmedAt: o.confirmedAt || Date.now(),
-      servedAt: Date.now(),
-      totalNum,
-      totalText: formatCVE(totalNum)
-    };
-
-    const hist=getHistory();
-    if (!hist.some(h=>String(h.id)===String(entry.id))) hist.push(entry);
-    setHistory(hist);
-
-    const keep = all.filter(x=>String(x.id)!==String(id));
-    setOrders(keep);
-
-    const map=getServedMap(); map[String(id)]=true; setServedMap(map);
-
-    bcPost({type:'served_update', id:String(id), served:true});
-    bcPost({type:'orders_updated'});
-
-    render();
-    renderHistory();
-  }
-
-  /* === Fallback: detect new "Servido" via localStorage diff (per-order) === */
-  let _knownServed = new Set();
-  function snapshotServedIds(){
-    try {
-      const m = getServedMap();
-      return new Set(Object.keys(m).filter(k => !!m[k]));
-    } catch { return new Set(); }
-  }
- 
-
-  /* === subscriptions / polling === */
-  subscribeAll((evt)=>{
-    render(); 
-    detectNewOrdersAndMaybeAlarm(); 
-    renderHistory();
-
-    // Direct broadcast from Kitchen
-    if (evt && evt.type==='served_update' && evt.served){
-      showToast('Pedido pronto ✨');
-      playReadySound();
-      if (evt.id != null) _knownServed.add(String(evt.id)); // avoid double notify next tick
-    }
-
-    // Fallback for storage/poll-only
-    detectNewServedAndNotify();
-  }, {pollMs: 900});
-
-  // initial
-  render(); renderHistory();
-  knownIds=new Set(getOrders().map(o=>String(o.id)));
-  _knownServed = snapshotServedIds();
-  </script>
-
-
-
-
-
-
-
-<!-- STAFF_SERVED_VIRTUAL_V2 -->
-<script>
-(function(){
-  var SERVED_KEY = 'orders_served';
-  var SERVED_VERSION = 'orders_served_version';
-  var _get = null;
-  try{ _get = localStorage.getItem.bind(localStorage);}catch(e){}
-  localStorage.getItem = function(k){
-    try{
-      if (k===SERVED_KEY){
-        var m = (window.__staffServedMem && window.__staffServedMem.map) ? window.__staffServedMem.map : {};
-        return JSON.stringify(m);
-      }
-      if (k===SERVED_VERSION){
-        var v = (window.__staffServedMem && window.__staffServedMem.ver) ? window.__staffServedMem.ver : Date.now();
-        return String(v);
-      }
-    }catch(e){}
-    return _get ? _get(k) : null;
-  };
-})();
-</script>
-
-
-<!-- REMOVE_FILTERTABLE_V2 -->
-<script>
-(function(){
-  function run(){
-    try{
-      var el = document.getElementById('filterTable');
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      var lbl = document.querySelector('label[for="filterTable"]');
-      if (lbl && lbl.parentNode) lbl.parentNode.removeChild(lbl);
-    }catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
-
-
-<!-- STAFF_CLOUD_ONLY_V3B -->
-<script>
-(function(){
-  if (!(window.Parse && Parse.applicationId)) return;
-  const Order = Parse.Object.extend('Order');
-  const ORDERS_KEY = (typeof window.ORDERS_KEY!=='undefined')? window.ORDERS_KEY : 'orders_simple_v4';
-  const VERSION_KEY = (typeof window.VERSION_KEY!=='undefined')? window.VERSION_KEY : 'orders_simple_v4_ver';
-
-  (function(){
-    const _get = localStorage.getItem.bind(localStorage);
-    window.__cloudList = []; window.__cloudVer = Date.now();
-    localStorage.getItem = function(k){
-      if (k===ORDERS_KEY) return JSON.stringify(window.__cloudList);
-      if (k===VERSION_KEY) return String(window.__cloudVer);
-      return _get(k);
-    };
-    window.__applyCloudList = function(list){ window.__cloudList=list; window.__cloudVer=Date.now(); try{ if (typeof render==='function') render(); }catch(e){} };
-  })();
-
-  function pickBetter(a,b){
-    try{ const ac=!!a.get('confirmed'), bc=!!b.get('confirmed'); if (ac!==bc) return ac? a:b;
-         const ar=!!a.get('isReady'), br=!!b.get('isReady'); if (ar!==br) return ar? a:b;
-         const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu? a:b; }catch(e){}
-    return a;
-  }
-  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
-  const cache=new Map(); const confirmedLatch=new Map();
-
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
-    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-
-  function controlAlarm(list){
-    try{
-      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
-      var prev = window.__prevHasUnconf || false;
-      window.__prevHasUnconf = hasUnconfirmed;
-      var el = document.getElementById('alertSound') || document.getElementById('readySound');
-      if (!el) return;
-      if (hasUnconfirmed && !prev){
-        try{
-          el.loop = true;
-          if (window.soundEnabled !== false){
-            var p = el.play();
-            if (p && typeof p.catch==='function'){ p.catch(function(){}); }
-          }
-        }catch(e){}
-      } else if (!hasUnconfirmed && prev){
-        try{ el.pause(); el.currentTime = 0; }catch(e){}
-      }
-    }catch(e){}
-  }
-
-  function flush(){
-    const list = Array.from(cache.values()).filter(o=>!o.servedAt && !o.rejectedAt).map(o=>{ const c=Object.assign({},o); if (confirmedLatch.get(String(o.id))) c.confirmed=true; return c; });
-    try{ window.__staffServedMem = window.__staffServedMem || {map:{},ver:Date.now()}; const m={}; list.forEach(o=>{ m[String(o.id)] = !!o.isReady; }); window.__staffServedMem.map = m; window.__staffServedMem.ver = Date.now(); }catch(e){};
-    window.__applyCloudList(list);
-    controlAlarm(list);
-  }
-
-  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
-
-  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
-    if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
-
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
-  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
-      const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
-
-  (function(){
-    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
-    const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
-    const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
-    const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
-  })();
-
-  initial(); live(); poll();
-})();
-</script>
-
-
-<!-- STAFF_CLEAR_ALL_REMOVE_V1 -->
-<script>
-(function() {
-  function attach() {
-    try {
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllRemoveV1) return;
-      btn.__wiredClearAllRemoveV1 = true;
-      btn.addEventListener('click', function(ev) {
-        try { ev.preventDefault(); ev.stopPropagation(); } catch(e){}
-        try { 
-          if (typeof setOrders === 'function') setOrders([]);
-          if (typeof setServedMap === 'function') setServedMap({});
-          if (typeof bcPost === 'function') bcPost({ type: 'orders_updated' });
-          if (typeof render === 'function') render();
-        } catch(e){}
-      }, true);
-    } catch(e){}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- STAFF_CLEAR_ALL_CONFIRM_REMOVE_V2 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var btn = document.getElementById('clearAllBtn');
-      if (!btn || btn.__wiredClearAllV2) return;
-      btn.__wiredClearAllV2 = true;
-      btn.addEventListener('click', function(ev){
-        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-        var ok = true;
-        try{ ok = window.confirm('Quer mesmo apagar todas as encomendas?'); }catch(e){ ok = true; }
-        if (!ok) return false;
-        (async function(){
-          // Optional: Cloud reject so they don't come back after refresh
-          if (window.Parse && Parse.applicationId) {
-            try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
-              q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-              q.limit(1000);
-              var res = await q.find();
-              for (var i=0;i<res.length;i++){ try{ res[i].set('rejectedAt', new Date()); await res[i].save(); }catch(e){} }
-            }catch(e){ console && console.warn && console.warn('[STAFF] clearAll cloud error', e); }
-          }
-          // Local UI clear (always)
-          try{ if (typeof setOrders==='function') setOrders([]); }catch(e){}
-          try{ if (typeof setServedMap==='function') setServedMap({}); }catch(e){}
-          try{ if (typeof bcPost==='function') bcPost({type:'orders_updated'}); }catch(e){}
-          try{ if (typeof render==='function') render(); }catch(e){}
-        })();
-      }, true);
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- STAFF_ATUALIZAR_RELOAD_V1 -->
-<script>
-(function(){
-  function attach(){
-    try{
-      var nodes = Array.from(document.querySelectorAll('button, a, .btn, .button'));
-      nodes.forEach(function(n){
-        var t = (n.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-        if (t==='atualizar' || t==='actualizar' || n.id==='refreshBtn') {
-          if (n.__wiredRefreshV1) return;
-          n.__wiredRefreshV1 = true;
-          n.addEventListener('click', function(ev){
-            try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
-            try{ location.reload(); }catch(e){}
-          }, true);
-        }
-      });
-    }catch(e){}
-  }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-  setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- Firestore Live Sync (Staff) - keeps existing layout -->
-<script>
-(function(){
-  if (window.__STAFF_SYNC_READY) return; window.__STAFF_SYNC_READY = true;
-
-  function toPlain(d){
-    const o = d && (typeof d.data==='function' ? d.data() : d) || {};
-    const id = String((d && d.id) || o.orderId || o.id || '');
-    return Object.assign({ id: Number(id)||id, orderId: id }, o);
-  }
-
-  function setLocalOrders(arr){
-    try{
-      if (typeof setOrders === 'function') setOrders(arr);
-      else localStorage.setItem('orders_simple_v4', JSON.stringify(arr));
-      localStorage.setItem('orders_simple_v4_ver', String(Date.now()));
-    }catch(e){}
-  }
-
-  function start(){
-    try{
-      const fb = window.__fb||{}; if(!fb.db || !fb.onSnapshot) return;
-      const qref = fb.query(fb.collection(fb.db,'orders'), fb.orderBy('createdAt'));
-      fb.onSnapshot(qref, (snap)=>{
-        const all=[]; snap.forEach(d=> all.push(toPlain(d)));
-        setLocalOrders(all);
-        try{ if(typeof detectNewServedAndNotify==='function') detectNewServedAndNotify(); }catch(e){}
-      });
-    }catch(e){ console.warn('staff sync error', e); }
-  }
-
-  async function updateOrder(id, patch){
-    try{
-      const fb = window.__fb||{}; if(!fb.db||!fb.updateDoc) return;
-      await fb.updateDoc(fb.doc(fb.db,'orders', String(id)), patch);
-    }catch(e){ console.warn('update error', e); }
-  }
-
-  document.addEventListener('click', (ev)=>{
-    const c = ev.target.closest('[data-confirm]'); if(c){ updateOrder(c.getAttribute('data-confirm'), { confirmed:true, confirmedAt: Date.now() }); }
-    const r = ev.target.closest('[data-reject]');  if(r){ updateOrder(r.getAttribute('data-reject'),  { rejectedAt: Date.now() }); }
-    const s = ev.target.closest('[data-served]');  if(s){ updateOrder(s.getAttribute('data-served'),  { servedAt: Date.now(), isReady:true }); }
-  }, true);
-
-  if (typeof window.detectNewServedAndNotify !== 'function') {
-    window.detectNewServedAndNotify = function(){};
-  }
-
-  start();
-})();
-</script>
-
-
-
-<!-- Firebase core using your config -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Staff</title>
+<style>
+  :root { --bg:#0b1020; --card:#111936; --muted:#7280a7; --ink:#e7ecff; --accent:#7aa2ff; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  header { position:sticky; top:0; z-index:5; padding:12px 16px; background:linear-gradient(180deg, rgba(11,16,32,.98), rgba(11,16,32,.65)); border-bottom:1px solid rgba(114,128,167,.25); display:flex; gap:12px; align-items:center; }
+  header h1 { font-size:18px; margin:0; flex:1; font-weight:700; letter-spacing:.2px; }
+  .wrap { max-width:1000px; margin: 16px auto; padding: 0 16px 24px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .card { background:var(--card); border:1px solid rgba(114,128,167,.25); border-radius:14px; padding:14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .pill { border:1px solid rgba(114,128,167,.35); padding:6px 10px; border-radius:999px; font-size:12px; color:#cdd6ff; }
+  .btn { background:#1b2a55; color:#e7ecff; border:1px solid rgba(114,128,167,.35); border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:600; }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--accent); color:#0a1022; border-color: transparent; }
+  .btn-warn { background:#ffb44d; color:#241400; border-color:transparent; }
+  .btn-ghost { background: transparent; color:#9fb1ff; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
+  .item { background: rgba(122,162,255,.08); border:1px dashed rgba(122,162,255,.35); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:6px; }
+  .item h4 { margin:0; font-size:14px; line-height:1.2; }
+  small.muted { color: var(--muted); }
+  .qty { display:flex; gap:6px; align-items:center; }
+  .qty button { width:28px; height:28px; border-radius:8px; }
+  .cart { display:flex; flex-direction:column; gap:8px; }
+  .cart-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; background:rgba(122,162,255,.07); border:1px solid rgba(114,128,167,.25); border-radius:10px; }
+  .total { font-size:16px; font-weight:800; }
+  .tabs { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
+  .tab { padding:8px 12px; border-radius:999px; border:1px solid rgba(114,128,167,.35); cursor:pointer; }
+  .tab.active { background:var(--accent); color:#0a1022; border-color:transparent; }
+  .order { padding:12px; border:1px solid rgba(114,128,167,.25); border-radius:12px; margin-bottom:10px; background:rgba(122,162,255,.06); }
+  .order h3 { margin:0 0 8px 0; font-size:15px; }
+  .badges { display:flex; gap:8px; align-items:center; }
+  .badge { padding:4px 8px; border-radius:999px; background:#223160; color:#c9d7ff; font-size:12px; border:1px solid rgba(114,128,167,.35) }
+  .ready { background:#2e7040; color:#eafff0; }
+  .new { background:#3d3a77; }
+  .confirmed { background:#3c5d99; }
+  .row-spread { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .muted { color:var(--muted); }
+  .note { margin-top:8px; font-size:12px; color:#cbd4ff; opacity:.9 }
+</style>
+<!-- Firebase core (your project) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
   const firebaseConfig = {
@@ -688,24 +55,88 @@
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
-  window.firebaseConfig = firebaseConfig;
-
-  const app = initializeApp(window.firebaseConfig);
-  const db  = getFirestore(app);
+  const app  = initializeApp(firebaseConfig);
+  const db   = getFirestore(app);
   const auth = getAuth(app);
-
-  window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
-        ordersCol: collection(db, "orders")
-      };
-  window.__fbReady = false;
-  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
   signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  // expose
+  window.__fb = { app, db, auth, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where };
 </script>
+</head>
+<body>
+<header>
+  <h1>Asa Branca · Staff</h1>
+  <div class="badges">
+    <span class="badge new">Novos</span>
+    <span class="badge confirmed">Confirmados</span>
+    <span class="badge ready">Prontos</span>
+  </div>
+  <button id="soundBtn" class="btn btn-ghost">🔊 ativar som</button>
+</header>
+<div class="wrap">
+  <div id="orders"></div>
+</div>
 
+<audio id="sndReady" src="ready.mp3" preload="auto"></audio>
+<audio id="sndDone"  src="done.mp3"  preload="auto"></audio>
 
+<script>
+(function(){
+  const fb = window.__fb;
+  let soundOk = false;
+  document.getElementById('soundBtn').addEventListener('click', ()=>{
+    document.getElementById('sndReady').play().catch(()=>{});
+    document.getElementById('sndDone').play().catch(()=>{});
+    soundOk = true;
+  });
+
+  const seen = new Set();
+  function rowHTML(o){
+    const items = (o.items||[]).map(it=>`<li>${it.qty}× ${it.name} <small class="muted">(${it.category})</small> — <strong>${(it.price||0)*it.qty}</strong> CVE</li>`).join('');
+    const total = (o.totalCVE != null) ? o.totalCVE : (o.items||[]).reduce((s,it)=>s+(it.price||0)*it.qty,0);
+    const ready = (o.status==='ready' || o.isReady);
+    const badges = [`<span class="badge ${o.status==='new'?'new': o.status==='confirmed'?'confirmed': ready?'ready':''}">${o.status||'new'}</span>`];
+    if (ready) badges.push(`<span class="badge ready">✓ pronto</span>`);
+    return `<div class="order">
+      <div class="row-spread">
+        <h3>#${o.orderId} · Mesa: <span class="pill">${o.table||'-'}</span></h3>
+        <div class="badges">${badges.join(' ')}</div>
+      </div>
+      <ul style="margin:8px 0 0 14px; padding:0 0 0 8px;">${items}</ul>
+      <div class="row-spread" style="margin-top:8px;">
+        <small class="note">${o.notes||''}</small>
+        <div><span class="total">Total: ${total} CVE</span></div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn btn-primary" data-confirm="${o.orderId}">Confirmar</button>
+        <button class="btn" data-served="${o.orderId}">Servido</button>
+      </div>
+    </div>`;
+  }
+
+  function render(list){ document.getElementById('orders').innerHTML = list.map(rowHTML).join(''); }
+
+  async function confirmOrder(id){ try { await fb.updateDoc(fb.doc(fb.db,'orders', String(id)), { status:'confirmed', confirmed:true, confirmedAt: Date.now() }); } catch(e){ console.warn('confirm error', e); } }
+  async function markServed(id){ try { await fb.updateDoc(fb.doc(fb.db,'orders', String(id)), { servedAt: Date.now(), isReady:true }); } catch(e){ console.warn('served error', e); } }
+
+  document.addEventListener('click', (ev)=>{
+    const c = ev.target.closest('[data-confirm]'); if(c) confirmOrder(c.getAttribute('data-confirm'));
+    const s = ev.target.closest('[data-served]');  if(s) markServed(s.getAttribute('data-served'));
+  }, true);
+
+  function handleSnapshot(snap){
+    const list = [];
+    snap.forEach(d=> { const o = Object.assign({}, d.data(), {orderId:d.id}); list.push(o); });
+    list.sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
+    for (const o of list){ if(!seen.has(o.orderId)){ if (o.status==='new' && soundOk) document.getElementById('sndReady').play().catch(()=>{}); seen.add(o.orderId); }}
+    snap.docChanges().forEach(ch=>{ if (ch.type==='modified'){ const o = Object.assign({}, ch.doc.data(), {orderId: ch.doc.id}); if ((o.status==='ready' || o.isReady) && soundOk) document.getElementById('sndDone').play().catch(()=>{}); } });
+    render(list);
+  }
+
+  const qref = fb.query(fb.collection(fb.db,'orders'));
+  fb.onSnapshot(qref, handleSnapshot);
+})();</script>
 </body>
 </html>
-
-
-
-
