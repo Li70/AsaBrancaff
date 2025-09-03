@@ -80,11 +80,19 @@
 
   <!-- CLOUD_PARSE_INIT_V1 -->
   <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-  
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL = "https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
 
+
+<!-- Firebase core (app + firestore + auth) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
@@ -99,9 +107,10 @@
   const auth = getAuth(app);
   signInAnonymously(auth).catch(()=>{});
   onAuthStateChanged(auth, ()=>{});
-  window.__fb = { app, db, auth, setDoc, doc, collection };
+  window.__fb = { app, db, auth, onSnapshot, collection, doc, setDoc, updateDoc, query, orderBy };
 </script>
 
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='6' fill='%2300A884'/%3E%3C/svg%3E'>
 </head>
 <body class="p-4 pb-28 lg:pb-4">
   <div class="max-w-7xl mx-auto">
@@ -433,10 +442,10 @@
 
       const toggleBtn = sec.querySelector(`[data-toggle="${slug}"]`);
 
-      // start EXPANDED by default (show all categories on load)
-      let collapsed = false;
-      gridDiv.style.display = '';
-      tabsDiv.style.display = '';
+      // start COLLAPSED by default for all other sections
+      let collapsed = true;
+      gridDiv.style.display = 'none';
+      tabsDiv.style.display = 'none';
       toggleBtn.textContent = 'Expandir';
 
       toggleBtn.addEventListener('click', ()=>{
@@ -527,7 +536,7 @@
       const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
       if(sheetOpen) return m || d; return d || m;
     }
-    async function sendOrder(){
+    function sendOrder(){
       if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
       const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
@@ -544,23 +553,45 @@
         confirmed: false,
         totalCVE: total
       });
-      // CLOUD_SAVE_ON_SEND_V1: save to Firestore
-try {
-  const fb = window.__fb||{}; const db=fb.db, setDoc=fb.setDoc, doc=fb.doc;
-  if (db && setDoc && doc) {
-    const o = orders[orders.length-1];
-    await setDoc(doc(db,'orders', String(o.id)), {
-      orderId: String(o.id),
-      table: String(o.table),
-      items: Array.isArray(o.items)? o.items : [],
-      notes: String(o.notes||''),
-      totalCVE: Number(o.totalCVE||0),
-      createdAt: Number(o.createdAt||Date.now()),
-      confirmed: false
-    }, { merge: true });
-  }
-} catch(e) { console.warn('Firestore save failed', e); }} catch(e) { console.warn('Firestore save failed', e); }
-notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
+      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
+      try {
+        if (window.Parse && Parse.applicationId) {
+          const Order = Parse.Object.extend('Order');
+          const obj = new Order();
+          obj.set('orderId', String(orders[orders.length-1].id));
+          obj.set('table', String(orders[orders.length-1].table));
+          obj.set('items', orders[orders.length-1].items || []);
+          obj.set('notes', String(orders[orders.length-1].notes || ''));
+          obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
+          obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
+          obj.set('confirmed', false);
+          const acl = new Parse.ACL();
+          acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
+          obj.setACL(acl);
+          obj.save().then(()=>{
+            try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
+          }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
+        }
+      } catch(e){ try{ console.warn('Parse not available', e); }catch(e2){} }
+
+      setOrdersCompat(orders);
+      bcPost({type:'orders_updated'});
+
+      cart={}; renderCart(); if(notesDesktop) notesDesktop.value=''; notesMobile.value='';
+      if(cartSheet.classList.contains('open')) closeSheet();
+      alert('Pedido enviado ao staff para confirmação!');
+    }
+
+    const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
+    const closeSheet=()=>{ cartSheet.classList.remove('open'); cartSheet.setAttribute('aria-hidden','true'); };
+    document.getElementById('closeCartSheet').addEventListener('click', closeSheet);
+    openCartFab.addEventListener('click', openSheet);
+    if (sendBtnDesktop) sendBtnDesktop.addEventListener('click', sendOrder);
+    sendBtnMobile.addEventListener('click', sendOrder);
+    sendBtnSheet.addEventListener('click', sendOrder);
+
+    if (notesDesktop) notesDesktop.addEventListener('input', ()=>{ if(!cartSheet.classList.contains('open')) notesMobile.value = notesDesktop.value; });
+    notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
 
     // Drag-to-close (mobile)
     let startY=null, currentY=null;
@@ -578,8 +609,25 @@ notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('ope
 
 
 
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
+    authDomain: "asabrancaff-aa13d.firebaseapp.com",
+    projectId: "asabrancaff-aa13d",
+    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
+    messagingSenderId: "1031914620871",
+    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
+  };
 
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+</script>
 
 
 
