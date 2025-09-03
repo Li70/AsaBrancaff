@@ -15,129 +15,10 @@
     .items li { list-style: disc; margin-left: 1.25rem; }
     details summary { cursor: pointer; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
 
-<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+  
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const auth = getAuth(app);
-  const storage = getStorage(app);
-  signInAnonymously(auth).catch(()=>{});
-  onAuthStateChanged(auth, ()=>{});
-
-  // === Minimal Parse compatibility shim (Firestore-backed) ===
-  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
-
-  class _ParseObject {
-    constructor(className){
-      this.className = className;
-      this._data = {};
-      this.id = null;
-    }
-    set(k,v){ this._data[k]=v; }
-    get(k){ return this._data[k]; }
-    async save(){
-      // ensure defaults so `doesNotExist` can be emulated via `== null`
-      if (this.className==='Order'){
-        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
-        if (!('servedAt' in this._data)) this._data.servedAt = null;
-        if (!('confirmed' in this._data)) this._data.confirmed = false;
-      }
-      const cname = colNameFromClass(this.className);
-      const id = String(this._data.orderId || this.id || Date.now());
-      this.id = id;
-      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
-      return this;
-    }
-    async destroy(){
-      const cname = colNameFromClass(this.className);
-      if (!this.id) return;
-      await deleteDoc(doc(collection(db, cname), this.id));
-    }
-  }
-
-  const Parse = {};
-  Parse.applicationId = "firebase-shim";
-  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
-  Parse.serverURL = "";
-  Parse.liveQueryServerURL = "";
-  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
-
-  Parse.Object = {
-    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
-  };
-
-  Parse.Query = class {
-    constructor(Cls){
-      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
-      this._w = [];
-      this._order = null;
-      this._limit = 1000;
-    }
-    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
-    limit(n){ this._limit = n; return this; }
-    ascending(f){ this._order = ['asc', f]; return this; }
-    descending(f){ this._order = ['desc', f]; return this; }
-    _build(){
-      const cname = colNameFromClass(this.className);
-      let ref = collection(db, cname);
-      const terms = this._w.map(([f,op,v])=> where(f, op, v));
-      let qref = terms.length ? query(ref, ...terms) : ref;
-      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
-      return qref;
-    }
-    async find(){
-      const qref = this._build();
-      const snap = await getDocs(qref);
-      const arr = [];
-      snap.forEach(d=>{
-        const Obj = Parse.Object.extend(this.className);
-        const o = new Obj();
-        o.id = d.id; o._data = d.data() || {};
-        arr.push(o);
-      });
-      return arr.slice(0, this._limit);
-    }
-    async first(){
-      this.limit(1);
-      const a = await this.find();
-      return a[0]||null;
-    }
-    subscribe(){
-      const listeners = { create:[], update:[], delete:[] };
-      const unsub = onSnapshot(this._build(), (snap)=>{
-        snap.docChanges().forEach(ch=>{
-          const Obj = Parse.Object.extend(this.className);
-          const o = new Obj();
-          o.id = ch.doc.id; o._data = ch.doc.data() || {};
-          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-        });
-      });
-      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
-    }
-  };
-
-  // Expose for the rest of the page
-  window.Parse = Parse;
-  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
-</script>
 
 </head>
 <body class="p-4">
@@ -578,6 +459,74 @@
   refreshAll(false); live(); poll();
 })();
 </script>
+
+
+<!-- Firestore Live Sync (Kitchen) - confirmed only -->
+<script>
+(function(){
+  if (window.__KITCH_SYNC_READY) return; window.__KITCH_SYNC_READY = true;
+
+  function toPlain(d){
+    const o = d && (typeof d.data==='function' ? d.data() : d) || {};
+    const id = String((d && d.id) || o.orderId || o.id || '');
+    return Object.assign({ id: Number(id)||id, orderId: id }, o);
+  }
+
+  function setLocal(arr){
+    try{
+      localStorage.setItem('orders_simple_v4', JSON.stringify(arr));
+      localStorage.setItem('orders_simple_v4_ver', String(Date.now()));
+    }catch(e){}
+  }
+
+  function start(){
+    try{
+      const fb = window.__fb||{}; if(!fb.db || !fb.onSnapshot) return;
+      const qref = fb.query(fb.collection(fb.db,'orders'), fb.where('confirmed','==', true), fb.orderBy('createdAt'));
+      fb.onSnapshot(qref, (snap)=>{
+        const all=[]; snap.forEach(d=> all.push(toPlain(d)));
+        setLocal(all);
+      });
+    }catch(e){ console.warn('kitchen sync error', e); }
+  }
+
+  start();
+})();
+</script>
+
+
+
+
+
+<!-- Firebase core using your config -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  window.firebaseConfig = firebaseConfig;
+
+  const app = initializeApp(window.firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+
+  window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
+        ordersCol: collection(db, "orders")
+      };
+  window.__fbReady = false;
+  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
+  signInAnonymously(auth).catch(()=>{});
+</script>
+
+
 
 </body>
 </html>

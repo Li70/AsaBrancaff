@@ -79,7 +79,14 @@
   </script>
 
   <!-- CLOUD_PARSE_INIT_V1 -->
-
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+  <script>
+    try{
+      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
+      Parse.serverURL = "https://parseapi.back4app.com";
+      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
+    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
+  </script>
 
 
 </head>
@@ -368,9 +375,7 @@
 
     // start COLLAPSED by default for Pizzas
     let pizzaCollapsed = true;
-    pizzaGridEl.style.display = 'none';
-    pizzaTabsEl.style.display = 'none';
-    document.getElementById('togglePizza').textContent = 'Expandir';
+    pizzaGridEl.style.display=''; pizzaTabsEl.style.display=''; document.getElementById('togglePizza').textContent='Recolher';
     document.getElementById('togglePizza').addEventListener('click',()=>{
       pizzaCollapsed = !pizzaCollapsed;
       pizzaGridEl.style.display = pizzaCollapsed ? 'none' : '';
@@ -414,10 +419,7 @@
       const toggleBtn = sec.querySelector(`[data-toggle="${slug}"]`);
 
       // start COLLAPSED by default for all other sections
-      let collapsed = true;
-      gridDiv.style.display = 'none';
-      tabsDiv.style.display = 'none';
-      toggleBtn.textContent = 'Expandir';
+      let collapsed=false; gridDiv.style.display=''; tabsDiv.style.display=''; toggleBtn.textContent='Recolher';
 
       toggleBtn.addEventListener('click', ()=>{
         collapsed = !collapsed;
@@ -507,7 +509,7 @@
       const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
       if(sheetOpen) return m || d; return d || m;
     }
-    async function sendOrder(){
+    function sendOrder(){
       if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
       const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
@@ -524,36 +526,10 @@
         confirmed: false,
         totalCVE: total
       });
-      
-// FIREBASE_SAVE: write order to Firestore (Back4App removed)
-try {
-  const fb = window.__fb || {};
-  const db = fb.db, doc = fb.doc, setDoc = fb.setDoc;
-  if (db && doc && setDoc) {
-    const o = orders[orders.length - 1] || {};
-    const payload = {
-      orderId: String(o.id || o.orderId || Date.now()),
-      table: String(o.table || ''),
-      items: Array.isArray(o.items) ? o.items : [],
-      notes: String(o.notes || ''),
-      totalCVE: Number(o.totalCVE || 0),
-      createdAt: Number(o.createdAt || Date.now()),
-      confirmed: !!o.confirmed,
-      confirmedAt: o.confirmedAt || null,
-      servedAt: o.servedAt || null,
-      isReady: !!o.isReady
-    };
-    await setDoc(doc(db, 'orders', payload.orderId), payload, { merge: true });
-  } else {
-    console.warn('Firebase not ready for save');
-  }
-} catch (e) {
-  console.warn('Firestore save failed', e);
-}
-// CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
+      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
       try {
-        if (window.Parse && 
-          const Order = 
+        if (window.Parse && Parse.applicationId) {
+          const Order = Parse.Object.extend('Order');
           const obj = new Order();
           obj.set('orderId', String(orders[orders.length-1].id));
           obj.set('table', String(orders[orders.length-1].table));
@@ -562,9 +538,9 @@ try {
           obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
           obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
           obj.set('confirmed', false);
-          const acl = new 
+          const acl = new Parse.ACL();
           acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
-          // removed Back4App ACL
+          obj.setACL(acl);
           obj.save().then(()=>{
             try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
           }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
@@ -605,13 +581,12 @@ try {
 
 
 
-<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
+
+<!-- Firebase (faebe) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
-
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
     authDomain: "asabrancaff-faebe.firebaseapp.com",
@@ -620,113 +595,21 @@ try {
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
-
-  const app = initializeApp(firebaseConfig);
+  window.firebaseConfig = firebaseConfig;
+  const app = initializeApp(window.firebaseConfig);
   const db  = getFirestore(app);
   const auth = getAuth(app);
-  const storage = getStorage(app);
+  window.__fb = { app, db, auth, collection, doc, addDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where,
+        ordersCol: collection(db, "orders")
+      };
+  window.__fbReady = false;
+  onAuthStateChanged(auth, (u)=>{ if (u) { window.__fbReady = true; } });
   signInAnonymously(auth).catch(()=>{});
-  onAuthStateChanged(auth, ()=>{});
-
-  // === Minimal Parse compatibility shim (Firestore-backed) ===
-  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
-
-  class _ParseObject {
-    constructor(className){
-      this.className = className;
-      this._data = {};
-      this.id = null;
-    }
-    set(k,v){ this._data[k]=v; }
-    get(k){ return this._data[k]; }
-    async save(){
-      // ensure defaults so `doesNotExist` can be emulated via `== null`
-      if (this.className==='Order'){
-        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
-        if (!('servedAt' in this._data)) this._data.servedAt = null;
-        if (!('confirmed' in this._data)) this._data.confirmed = false;
-      }
-      const cname = colNameFromClass(this.className);
-      const id = String(this._data.orderId || this.id || Date.now());
-      this.id = id;
-      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
-      return this;
-    }
-    async destroy(){
-      const cname = colNameFromClass(this.className);
-      if (!this.id) return;
-      await deleteDoc(doc(collection(db, cname), this.id));
-    }
-  }
-
-  const Parse = {};
-  
-   };
-  
-  
-  
-
-  
-    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
-  };
-
-  
-    constructor(Cls){
-      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
-      this._w = [];
-      this._order = null;
-      this._limit = 1000;
-    }
-    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
-    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
-    limit(n){ this._limit = n; return this; }
-    ascending(f){ this._order = ['asc', f]; return this; }
-    descending(f){ this._order = ['desc', f]; return this; }
-    _build(){
-      const cname = colNameFromClass(this.className);
-      let ref = collection(db, cname);
-      const terms = this._w.map(([f,op,v])=> where(f, op, v));
-      let qref = terms.length ? query(ref, ...terms) : ref;
-      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
-      return qref;
-    }
-    async find(){
-      const qref = this._build();
-      const snap = await getDocs(qref);
-      const arr = [];
-      snap.forEach(d=>{
-        const Obj = 
-        const o = new Obj();
-        o.id = d.id; o._data = d.data() || {};
-        arr.push(o);
-      });
-      return arr.slice(0, this._limit);
-    }
-    async first(){
-      this.limit(1);
-      const a = await this.find();
-      return a[0]||null;
-    }
-    subscribe(){
-      const listeners = { create:[], update:[], delete:[] };
-      const unsub = onSnapshot(this._build(), (snap)=>{
-        snap.docChanges().forEach(ch=>{
-          const Obj = 
-          const o = new Obj();
-          o.id = ch.doc.id; o._data = ch.doc.data() || {};
-          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
-        });
-      });
-      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
-    }
-  };
-
-  // Expose for the rest of the page
-  window.Parse = Parse;
-  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
 </script>
+
+
+
+
 
 
 </body>
