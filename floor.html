@@ -527,7 +527,7 @@
       const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
       if(sheetOpen) return m || d; return d || m;
     }
-    function sendOrder(){
+    async function sendOrder(){
       if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
       const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
@@ -559,7 +559,7 @@ try {
       confirmed: false
     }, { merge: true });
   }
-} catch(e) { console.warn('Firestore save failed', e); }} catch(e) { console.warn('Firestore save failed', e); }
+} catch(e) { console.warn('Firestore save failed', e); }
 notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
 
     // Drag-to-close (mobile)
