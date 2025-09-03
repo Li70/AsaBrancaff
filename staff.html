@@ -69,11 +69,13 @@
   })();
   </script>
 
-<!-- Firebase core (app + firestore + auth) -->
+<!-- Firebase (app/auth/firestore/storage) + Parse shim -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
     authDomain: "asabrancaff-faebe.firebaseapp.com",
@@ -82,16 +84,114 @@
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
+
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
   const auth = getAuth(app);
+  const storage = getStorage(app);
   signInAnonymously(auth).catch(()=>{});
   onAuthStateChanged(auth, ()=>{});
-  window.__fb = { app, db, auth, onSnapshot, collection, doc, setDoc, updateDoc, query, orderBy };
+
+  // === Minimal Parse compatibility shim (Firestore-backed) ===
+  function colNameFromClass(n){ return String(n)==='Order' ? 'orders' : String(n||'').toLowerCase(); }
+
+  class _ParseObject {
+    constructor(className){
+      this.className = className;
+      this._data = {};
+      this.id = null;
+    }
+    set(k,v){ this._data[k]=v; }
+    get(k){ return this._data[k]; }
+    async save(){
+      // ensure defaults so `doesNotExist` can be emulated via `== null`
+      if (this.className==='Order'){
+        if (!('rejectedAt' in this._data)) this._data.rejectedAt = null;
+        if (!('servedAt' in this._data)) this._data.servedAt = null;
+        if (!('confirmed' in this._data)) this._data.confirmed = false;
+      }
+      const cname = colNameFromClass(this.className);
+      const id = String(this._data.orderId || this.id || Date.now());
+      this.id = id;
+      await setDoc(doc(collection(db, cname), id), this._data, { merge: true });
+      return this;
+    }
+    async destroy(){
+      const cname = colNameFromClass(this.className);
+      if (!this.id) return;
+      await deleteDoc(doc(collection(db, cname), this.id));
+    }
+  }
+
+  const Parse = {};
+  Parse.applicationId = "firebase-shim";
+  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  
+  
+  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
+
+  Parse.Object = {
+    extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
+  };
+
+  Parse.Query = class {
+    constructor(Cls){
+      this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
+      this._w = [];
+      this._order = null;
+      this._limit = 1000;
+    }
+    equalTo(f,v){ this._w.push([f,'==',v]); return this; }
+    doesNotExist(f){ this._w.push([f,'==',null]); return this; } // relies on save() defaulting to nulls
+    limit(n){ this._limit = n; return this; }
+    ascending(f){ this._order = ['asc', f]; return this; }
+    descending(f){ this._order = ['desc', f]; return this; }
+    _build(){
+      const cname = colNameFromClass(this.className);
+      let ref = collection(db, cname);
+      const terms = this._w.map(([f,op,v])=> where(f, op, v));
+      let qref = terms.length ? query(ref, ...terms) : ref;
+      if (this._order) qref = query(qref, orderBy(this._order[1], this._order[0]));
+      return qref;
+    }
+    async find(){
+      const qref = this._build();
+      const snap = await getDocs(qref);
+      const arr = [];
+      snap.forEach(d=>{
+        const Obj = Parse.Object.extend(this.className);
+        const o = new Obj();
+        o.id = d.id; o._data = d.data() || {};
+        arr.push(o);
+      });
+      return arr.slice(0, this._limit);
+    }
+    async first(){
+      this.limit(1);
+      const a = await this.find();
+      return a[0]||null;
+    }
+    subscribe(){
+      const listeners = { create:[], update:[], delete:[] };
+      const unsub = onSnapshot(this._build(), (snap)=>{
+        snap.docChanges().forEach(ch=>{
+          const Obj = Parse.Object.extend(this.className);
+          const o = new Obj();
+          o.id = ch.doc.id; o._data = ch.doc.data() || {};
+          if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='modified'){ listeners.update.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+          else if (ch.type==='removed'){ listeners.delete.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
+        });
+      });
+      return { on: (evt,fn)=>{ if (listeners[evt]) listeners[evt].push(fn); }, unsubscribe: unsub };
+    }
+  };
+
+  // Expose for the rest of the page
+  window.Parse = Parse;
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, sRef, getDownloadURL };
 </script>
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='6' fill='%2300A884'/%3E%3C/svg%3E'>
-<script><!-- DETECT_STUB -->if(typeof window.detectNewServedAndNotify!=='function'){window.detectNewServedAndNotify=function(){try{}catch(e){}}}</script>
 </head>
 <body class="p-4">
   <!-- sound controls -->
@@ -487,7 +587,14 @@
   function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
   const cache=new Map(); const confirmedLatch=new Map();
 
-  /* toPlain removed; Firebase paths use snapshot data directly */);
+  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
+    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
+    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
+    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
+
+  function controlAlarm(list){
+    try{
+      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
       var prev = window.__prevHasUnconf || false;
       window.__prevHasUnconf = hasUnconfirmed;
       var el = document.getElementById('alertSound') || document.getElementById('readySound');
@@ -513,21 +620,18 @@
     controlAlarm(list);
   }
 
-  async function initial(){ /* cloud-only: handled by Firestore onSnapshot */ }); flush(); }catch(e){} }
+  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
+    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
 
-/* removed Back4App query; Firestore onSnapshot handles data */
- q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
+  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
     if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
 
-/* removed Back4App query; Firestore onSnapshot handles data */
- sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
-/* removed Back4App query; Firestore onSnapshot handles data */
- q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
+  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
+  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
       const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
 
   (function(){
-/* removed Back4App query; Firestore onSnapshot handles data */
- q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
+    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
     const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
     const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
     const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
@@ -580,7 +684,8 @@
           // Optional: Cloud reject so they don't come back after refresh
           if (window.Parse && Parse.applicationId) {
             try{
-              /* removed Back4App code: cloud-only */
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
               q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
               q.limit(1000);
               var res = await q.find();
@@ -623,6 +728,73 @@
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
+})();
+</script>
+
+
+<!-- CLOUD_SYNC_STAFF: live from Firestore (keeps existing UI/render) -->
+<script>
+(function(){
+  if (window.__CLOUD_SYNC_STAFF) return; window.__CLOUD_SYNC_STAFF = true;
+
+  function toPlain(d){
+    const o = d && (typeof d.data==='function' ? d.data() : d) || {};
+    const id = String(d && d.id || o.orderId || o.id || '');
+    return Object.assign({ id: Number(id)||id, orderId: id }, o);
+  }
+
+  function setLocalOrdersFromCloud(arr){
+    try{
+      if (typeof setOrders === 'function') setOrders(arr);
+      else if (typeof setOrdersCompat === 'function') setOrdersCompat(arr);
+      else localStorage.setItem('orders_simple_v4', JSON.stringify(arr));
+      localStorage.setItem('orders_simple_v4_ver', String(Date.now()));
+    }catch(e){}
+  }
+
+  function startSub(){
+    try{
+      const fb = window.__fb||{}; if(!fb.db || !fb.onSnapshot) return;
+      const qref = fb.query(fb.collection(fb.db,'orders'), fb.orderBy('createdAt'));
+      fb.onSnapshot(qref, (snap)=>{
+        const all=[]; snap.forEach(doc=> all.push(toPlain(doc)));
+        setLocalOrdersFromCloud(all);
+      });
+    }catch(e){ console.warn('staff sub error', e); }
+  }
+
+  async function updateOrder(id, patch){
+    const fb = window.__fb||{}; if(!fb.db || !fb.updateDoc) return;
+    try{ await fb.updateDoc(fb.doc(fb.db,'orders', String(id)), patch); }catch(e){ console.warn('update error', e); }
+  }
+  async function deleteOrder(id){
+    const fb = window.__fb||{}; if(!fb.db || !fb.deleteDoc) return;
+    try{ await fb.deleteDoc(fb.doc(fb.db,'orders', String(id))); }catch(e){ console.warn('delete error', e); }
+  }
+
+  document.addEventListener('click', (ev)=>{
+    const btnC = ev.target.closest('[data-confirm]');
+    const btnR = ev.target.closest('[data-reject]');
+    const btnS = ev.target.closest('[data-served]');
+    const btnL = ev.target.closest('#limparBtn');
+
+    if (btnC){ const id = btnC.getAttribute('data-confirm'); updateOrder(id, { confirmed:true, confirmedAt: Date.now() }); }
+    if (btnR){ const id = btnR.getAttribute('data-reject'); updateOrder(id, { rejectedAt: Date.now() }); }
+    if (btnS){ const id = btnS.getAttribute('data-served'); updateOrder(id, { servedAt: Date.now(), isReady:true }); }
+
+    if (btnL){
+      const yes = confirm('Quer mesmo remover todas as encomendas?');
+      if (yes){
+        try {
+          const arr = (typeof getOrders==='function') ? getOrders() : [];
+          arr.forEach(o=> deleteOrder(o.id||o.orderId));
+        } catch(e){}
+      }
+      ev.preventDefault();
+    }
+  }, true);
+
+  startSub();
 })();
 </script>
 
@@ -677,7 +849,8 @@
           }catch(e){}
           (async function(){
             try{
-              /* removed Back4App code: cloud-only */
+              var Order = Parse.Object.extend('Order');
+              var q = new Parse.Query(Order);
               q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
               q.limit(1000);
               var res = await q.find();
