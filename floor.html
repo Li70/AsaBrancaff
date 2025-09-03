@@ -79,6 +79,28 @@
   </script>
 
   <!-- CLOUD_PARSE_INIT_V1 -->
+  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
+  
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+  signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+  window.__fb = { app, db, auth, setDoc, doc, collection };
+</script>
 
 </head>
 <body class="p-4 pb-28 lg:pb-4">
@@ -522,45 +544,23 @@
         confirmed: false,
         totalCVE: total
       });
-      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
-      try {
-        if (window.Parse && Parse.applicationId) {
-          const Order = Parse.Object.extend('Order');
-          const obj = new Order();
-          obj.set('orderId', String(orders[orders.length-1].id));
-          obj.set('table', String(orders[orders.length-1].table));
-          obj.set('items', orders[orders.length-1].items || []);
-          obj.set('notes', String(orders[orders.length-1].notes || ''));
-          obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
-          obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
-          obj.set('confirmed', false);
-          const acl = new Parse.ACL();
-          acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
-          obj.setACL(acl);
-          obj.save().then(()=>{
-            try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
-          }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
-        }
-      } catch(e){ try{ console.warn('Parse not available', e); }catch(e2){} }
-
-      setOrdersCompat(orders);
-      bcPost({type:'orders_updated'});
-
-      cart={}; renderCart(); if(notesDesktop) notesDesktop.value=''; notesMobile.value='';
-      if(cartSheet.classList.contains('open')) closeSheet();
-      alert('Pedido enviado ao staff para confirmação!');
-    }
-
-    const openSheet=()=>{ cartSheet.classList.add('open'); cartSheet.setAttribute('aria-hidden','false'); if(notesDesktop) notesMobile.value = notesDesktop.value; };
-    const closeSheet=()=>{ cartSheet.classList.remove('open'); cartSheet.setAttribute('aria-hidden','true'); };
-    document.getElementById('closeCartSheet').addEventListener('click', closeSheet);
-    openCartFab.addEventListener('click', openSheet);
-    if (sendBtnDesktop) sendBtnDesktop.addEventListener('click', sendOrder);
-    sendBtnMobile.addEventListener('click', sendOrder);
-    sendBtnSheet.addEventListener('click', sendOrder);
-
-    if (notesDesktop) notesDesktop.addEventListener('input', ()=>{ if(!cartSheet.classList.contains('open')) notesMobile.value = notesDesktop.value; });
-    notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
+      // CLOUD_SAVE_ON_SEND_V1: save to Firestore
+try {
+  const fb = window.__fb||{}; const db=fb.db, setDoc=fb.setDoc, doc=fb.doc;
+  if (db && setDoc && doc) {
+    const o = orders[orders.length-1];
+    await setDoc(doc(db,'orders', String(o.id)), {
+      orderId: String(o.id),
+      table: String(o.table),
+      items: Array.isArray(o.items)? o.items : [],
+      notes: String(o.notes||''),
+      totalCVE: Number(o.totalCVE||0),
+      createdAt: Number(o.createdAt||Date.now()),
+      confirmed: false
+    }, { merge: true });
+  }
+} catch(e) { console.warn('Firestore save failed', e); }} catch(e) { console.warn('Firestore save failed', e); }
+notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
 
     // Drag-to-close (mobile)
     let startY=null, currentY=null;
