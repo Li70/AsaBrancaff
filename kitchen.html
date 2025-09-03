@@ -16,8 +16,7 @@
     details summary { cursor: pointer; }
   </style>
 
-
-<!-- Firebase core (App/Auth/Firestore) -->
+<!-- Firebase core (app + firestore + auth) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
@@ -38,6 +37,7 @@
   window.__fb = { app, db, auth, onSnapshot, collection, doc, setDoc, updateDoc, query, orderBy };
 </script>
 
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='6' fill='%2300A884'/%3E%3C/svg%3E'>
 </head>
 <body class="p-4">
   <div class="max-w-5xl mx-auto">
@@ -109,6 +109,8 @@
     const hideServedChk  = document.getElementById('hideServedChk');
     const clearServedBtn = document.getElementById('clearServedBtn');
     const histList       = document.getElementById('histList');
+if(!histList){ window.renderHistory = function(){}; }
+if(!histList){ window.renderHistory = function(){}; }
     const histTotalEl    = document.getElementById('histTotal');
 
     /* ====== Estado "Servido" (persistente) + versão ====== */
@@ -165,6 +167,12 @@
     }
 
     function renderHistory(){
+  var histList = document.getElementById('histList');
+  if(!histList){ return; }
+
+  var histList = document.getElementById('histList');
+  if(!histList){ return; }
+
       const hist = getHistory().filter(h => isToday(h.servedAt || h.createdAt));
       histList.innerHTML = '';
       if (!hist.length){
@@ -421,22 +429,12 @@
       window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
   })();
 
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-      createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-  function pickBetter(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
-  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+  /* toPlain removed; Firebase paths use snapshot data directly */function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
 
-  async function refreshAll(playAlerts){
-    try{
-      const q=new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      q.limit(1000);
-      const res=await q.find();
-      const best = coalesceById(res).map(toPlain);
-      window.__kApply(best, !!playAlerts);
-}catch(e){}
+  async function refreshAll(){ /* cloud-only: handled by Firestore onSnapshot */ }catch(e){}
   }
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
+/* removed Back4App query; Firestore onSnapshot handles data */
+ const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
   function poll(){ setInterval(()=>refreshAll(false), 5000); }
 
   function updateLocalReadyFromMap(map){
@@ -456,7 +454,8 @@
           for (const id in (map||{})){
             if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
             const ready = !!map[id];
-            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
+/* removed Back4App query; Firestore onSnapshot handles data */
+ q.limit(10);
             const res=await q.find();
             if (res && res.length){
               for (const obj of res){
@@ -479,32 +478,11 @@
 </script>
 
 
-<!-- CLOUD_ONLY_FIRESTORE (Kitchen) -->
-<script>
-(function(){
-  if (window.__CLOUD_WIRED_KITCH) return; window.__CLOUD_WIRED_KITCH = true;
-  window.__cloudOrders = window.__cloudOrders || []; window.__readyMap = window.__readyMap || {};
-  function renderAll(){ try{ if (typeof render==='function') render(); }catch(e){} try{ if (typeof renderHistory==='function') renderHistory(); }catch(e){} }
-  try{ window.getOrders = ()=>Array.from(window.__cloudOrders||[]); }catch(e){}
-  try{ window.getAllOrders = ()=>Array.from(window.__cloudOrders||[]); }catch(e){}
-  try{ window.setOrders = (_)=>{}; }catch(e){}
-  try{ window.getServedMap = ()=>Object.assign({}, window.__readyMap||{}); window.setServedMap = (m)=>{ window.__readyMap=Object.assign({},m||{});  }; }catch(e){}
-  function normalize(o,id){o=o||{}; if(!('orderId'in o))o.orderId=String(id||o.id||''); if(!('id'in o))o.id=Number(o.orderId||0); return o;}
-  function start(){
-    try{
-      const fb=window.__fb||{}; const db=fb.db, onS=fb.onSnapshot, col=fb.collection, q=fb.query, ob=fb.orderBy;
-      if(!db||!onS||!col){return;}
-      const qref=q(col(db,'orders'), ob('createdAt'));
-      onS(qref, (snap)=>{
-        const all=[]; snap.forEach(d=>all.push(normalize(d.data()||{}, d.id)));
-        const confirmed=all.filter(o=>!!(o.confirmed||o.confirmedAt||o.status==='confirmed')); window.__cloudOrders=confirmed; const map={}; confirmed.forEach(o=>{ map[String(o.orderId||o.id||'')] = !!(o.isReady||o.servedAt); }); window.__readyMap=map;
-        renderAll();
-      });
-    }catch(e){}
-  }
-  if(typeof window.detectNewServedAndNotify!=='function'){ window.detectNewServedAndNotify=function(){ try{ const map=window.__readyMap||{}; window._knownServed=window._knownServed||new Set(); Object.keys(map).forEach(id=>{ if(map[id] && !window._knownServed.has(id)){ try{ if(typeof showToast==='function') showToast('Pedido pronto ✨'); }catch(e){} try{ if(typeof playReadySound==='function') playReadySound(); }catch(e){} window._knownServed.add(id);} if(!map[id]){ try{ window._knownServed.delete(id); }catch(e){} }); }catch(e){} };}
-  (function waitAuth(){ try{ const a=(window.__fb||{}).auth; if(!a||typeof a.onAuthStateChanged!=='function'){ start(); return; } a.onAuthStateChanged(u=>{ if(u) start(); }); }catch(e){ start(); } })();
-})();
+<script><!-- AUDIO_RESUME_GUARD -->
+document.addEventListener('pointerdown', function _once(){ 
+  try{ if (window._audioCtx && window._audioCtx.state==='suspended') window._audioCtx.resume(); }catch(e){}
+  document.removeEventListener('pointerdown', _once);
+}, {once:true});
 </script>
 
 </body>
