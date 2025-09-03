@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
+<link rel="icon" href="data:,">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Cozinha</title>
@@ -77,8 +78,19 @@
 <audio id="sndCash" src="cash.mp3" preload="auto"></audio>
 
 <script>
-(function(){
-  const fb = window.__fb;
+(async function(){
+  async function waitForFB(){
+    if (window.__fb && window.__fb.db) return window.__fb;
+    return await new Promise((resolve)=>{
+      const started = Date.now();
+      const t = setInterval(()=>{
+        if (window.__fb && window.__fb.db){ clearInterval(t); resolve(window.__fb); }
+        else if (Date.now()-started>6000){ clearInterval(t); resolve(window.__fb||{}); }
+      }, 50);
+    });
+  }
+
+  const fb = await waitForFB();
   let soundOk=false;
   document.getElementById('soundBtn').addEventListener('click', ()=>{ document.getElementById('sndCash').play().catch(()=>{}); soundOk=true; });
 

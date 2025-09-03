@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
+<link rel="icon" href="data:,">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Cliente · Floor</title>
@@ -64,6 +65,159 @@
   // expose
   window.__fb = { app, db, auth, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where };
 </script>
+
+<!--(old block removed)-->
+<script>
+  // Original MENU from your earlier floor.html
+  const OLD_MENU = [{
+      category:'Fried Chicken',
+      items:[
+        { id:'legs', name:'LEGS', price:'200$00', priceNum:200 },
+        { id:'wings-plain', name:'WINGS', price:'200$00', priceNum:200 },
+        { id:'wings-sweet-chilli', name:'SWEET CHILLI WINGS', price:'600$00', priceNum:600 },
+        { id:'wings-bbq', name:'BARBECUE WINGS', price:'600$00', priceNum:600 },
+        { id:'nuggets', name:'NUGGETS', price:'500$00', priceNum:500 },
+        { id:'popcorn', name:'POP CORNS', price:'500$00', priceNum:500 },
+        { id:'fried-chicken', name:'FRIED CHICKEN', price:'300$00', priceNum:300 },
+        { id:'sandwich', name:'SANDWICH', price:'500$00', priceNum:500 },
+        { id:'meia-frango', name:'MEIA DE FRANGO', price:'600$00', priceNum:600 }
+      ];
+  function flattenOldMenu() {
+    const out = [];
+    for (const cat of OLD_MENU) {
+      const cname = cat.category;
+      const items = Array.isArray(cat.items) ? cat.items : [];
+      for (const it of items) {
+        out.push({
+          id: it.id || (cname+'-'+(it.name||'').toLowerCase().replace(/\s+/g,'-')),
+          category: cname,
+          name: it.name || '',
+          price: Number(it.priceNum || 0),
+          priceText: it.price || null
+        });
+      }
+    }
+    return out;
+  }
+  window.__DEFAULT_MENU_FROM_OLD__ = flattenOldMenu();
+</script>
+
+<!-- Seed from previous Floor MENU -->
+<script>
+  const OLD_MENU = [{
+      category:'Fried Chicken',
+      items:[
+        { id:'legs', name:'LEGS', price:'200$00', priceNum:200 },
+        { id:'wings-plain', name:'WINGS', price:'200$00', priceNum:200 },
+        { id:'wings-sweet-chilli', name:'SWEET CHILLI WINGS', price:'600$00', priceNum:600 },
+        { id:'wings-bbq', name:'BARBECUE WINGS', price:'600$00', priceNum:600 },
+        { id:'nuggets', name:'NUGGETS', price:'500$00', priceNum:500 },
+        { id:'popcorn', name:'POP CORNS', price:'500$00', priceNum:500 },
+        { id:'fried-chicken', name:'FRIED CHICKEN', price:'300$00', priceNum:300 },
+        { id:'sandwich', name:'SANDWICH', price:'500$00', priceNum:500 },
+        { id:'meia-frango', name:'MEIA DE FRANGO', price:'600$00', priceNum:600 }
+      ]
+    },{
+      category:'Combos',
+      items:[
+        { id:'combo1', name:'COMBO 1', desc:'1 PERNA · 1 ASA · 1 BATATA', price:'450$00', priceNum:450 },
+        { id:'combo2', name:'COMBO 2', desc:'2 PERNA · 1 ASA · 1 BATATA', price:'650$00', priceNum:650 },
+        { id:'combo3', name:'COMBO 3', desc:'3 PERNAS · 3 ASAS · 1 BATATA', price:'800$00', priceNum:800 },
+        { id:'combo4', name:'COMBO 4', desc:'4 PERNAS · 4 ASAS · 1 BATATA', price:'1000$00', priceNum:1000 },
+        { id:'pz-combo-coca', name:'PIZZA COMBO + Coca-Cola 1,5L', price:'1200$00', priceNum:1200 },
+        { id:'pz-combo-compal', name:'PIZZA COMBO + Compal 1L', price:'1250$00', priceNum:1250 },
+        { id:'shawarma-combo', name:'SHAWARMA COMBO', desc:'1 Shawarma + CocaCola 0,5L + Batata Frita', price:'650$00', priceNum:650 },
+        { id:'doner-combo', name:'DONER KEBAB COMBO', desc:'1 Doner Kebab + CocaCola 0,5L', price:'600$00', priceNum:600 }
+      ]
+    },{
+      category:'Hot Dog',
+      items:[
+        { id:'hot-chicago', name:'CHICAGO', price:'300$00', priceNum:300 },
+        { id:'hot-italian', name:'ITALIAN', price:'300$00', priceNum:300 },
+        { id:'hot-michigan', name:'MICHIGAN', price:'300$00', priceNum:300 },
+        { id:'hot-ny', name:'NEW YORK', price:'300$00', priceNum:300 },
+        { id:'hot-dodger', name:'DODGER DOG', price:'300$00', priceNum:300 },
+        { id:'hot-carolina', name:'CAROLINA', price:'300$00', priceNum:300 }
+      ]
+    },{
+      category:'Molhos',
+      items:[
+        { id:'sauce-sweet-sour', name:'SWEET & SOUR SAUCE', price:'50$00', priceNum:50 },
+        { id:'sauce-alfredo', name:'ALFREDO (CREMOSO CLÁSSICO)', price:'50$00', priceNum:50 },
+        { id:'sauce-honey-mustard', name:'HONEY MUSTARD', price:'50$00', priceNum:50 },
+        { id:'sauce-cheesy', name:'CHEESY SAUCE', price:'50$00', priceNum:50 },
+        { id:'sauce-creole', name:'CREOLE TOMATO', price:'50$00', priceNum:50 },
+        { id:'sauce-coleslaw', name:'COLESLAW', price:'50$00', priceNum:50 },
+        { id:'sauce-buffalo', name:'BUFFALO', price:'50$00', priceNum:50 }
+      ]
+    },{
+      category:'Salgados/Petiscos',
+      items:[
+        { id:'coxinha', name:'COXINHA', price:'60$00', priceNum:60 },
+        { id:'pastel', name:'PASTEL', price:'50$00', priceNum:50 },
+        { id:'bifanas', name:'BIFANAS À MODA DO PORTO', price:'300$00', priceNum:300 },
+        { id:'moelas', name:'MOELAS À PORTUGUESA', price:'600$00', priceNum:600 },
+        { id:'linguica', name:'LINGUIÇA', price:'100$00', priceNum:100 }
+      ]
+    },{
+      category:'Hambúrgueres',
+      items:[
+        { id:'burg-cheeseburger', name:'CLÁSSICO CHEESEBURGER', desc:'Pão, queijo, carne, ovo, molho big, batata, ketchup, maionese', price:'250$00', priceNum:250 },
+        { id:'burg-bigmac', name:'BIG MAC BURGER', desc:'2 carnes, queijo cheddar, alface, picles, tomate, cebola, molho big', price:'500$00', priceNum:500 },
+        { id:'burg-sweet', name:'SWEET BURGER', desc:'Queijo, bacon, cebola caramelizada, alface, molho burger', price:'450$00', priceNum:450 },
+        { id:'burg-xtudo', name:'BURGER X TUDO MODA DA CASA', desc:'Carne, queijo, ovo, batata, tomate, molhos', price:'300$00', priceNum:300 },
+        { id:'burg-completo', name:'HAMBÚRGUER COMPLETO', desc:'Carne, cebola caramelizada, queijo, bacon, maionese, batata', price:'550$00', priceNum:550 },
+        { id:'burg-crispy', name:'HAMBÚRGUER CRISPY', desc:'Frango, molho kfc, alface, tomate, molhos', price:'400$00', priceNum:400 }
+      ]
+    },{
+      category:'Shawarma',
+      items:[
+        { id:'shawarma-atum', name:'SHAWARMA DE ATUM', price:'400$00', priceNum:400 },
+        { id:'shawarma-galinha', name:'SHAWARMA DE GALINHA', price:'400$00', priceNum:400 },
+        { id:'shawarma-carne', name:'SHAWARMA DE CARNE', price:'300$00', priceNum:300 },
+        { id:'shawarma-veg', name:'SHAWARMA VEGETARIANO', price:'400$00', priceNum:400 },
+        { id:'doner', name:'DONER KEBAB', price:'500$00', priceNum:500 }
+      ]
+    },{
+      category:'Sumos Naturais',
+      items:[
+        { id:'sumo-cenoura', name:'CENOURA', price:'300$00', priceNum:300 },
+        { id:'sumo-papaia', name:'PAPAIA', price:'300$00', priceNum:300 },
+        { id:'sumo-melancia', name:'MELANCIA', price:'300$00', priceNum:300 },
+        { id:'sumo-laranja', name:'LARANJA', price:'300$00', priceNum:300 },
+        { id:'sumo-uva', name:'UVA', price:'300$00', priceNum:300 },
+        { id:'sumo-maca', name:'MAÇÃ', price:'300$00', priceNum:300 },
+        { id:'sumo-manga', name:'MANGA', price:'300$00', priceNum:300 },
+        { id:'sumo-banana', name:'BANANA', price:'300$00', priceNum:300 },
+        { id:'sumo-maracuja', name:'MARACUJÁ', price:'300$00', priceNum:300 },
+        { id:'sumo-kiwi', name:'KIWI', price:'300$00', priceNum:300 }
+      ]
+    },{
+      category:'Gelados',
+      items:[
+        { id:'gelado-cone', name:'GELADO DE CONE', price:'200$00', priceNum:200 },
+        { id:'gelado-copo', name:'GELADO DE COPO', price:'200$00', priceNum:200 }
+      ]
+    }];
+  function flattenOldMenu() {
+    const out = [];
+    for (const cat of OLD_MENU) {
+      const cname = cat.category;
+      const items = Array.isArray(cat.items) ? cat.items : [];
+      for (const it of items) {
+        out.push({
+          id: it.id || (cname+'-'+(it.name||'').toLowerCase().replace(/\s+/g,'-')),
+          category: cname,
+          name: it.name || '',
+          price: Number(it.priceNum || 0),
+          priceText: it.price || null
+        });
+      }
+    }
+    return out;
+  }
+  window.__DEFAULT_MENU_FROM_OLD__ = flattenOldMenu();
+</script>
 </head>
 <body>
 <header>
@@ -98,14 +252,25 @@
 
 <script>
 (function(){
-  const fb = window.__fb;
+  async function waitForFB(){
+    if (window.__fb && window.__fb.db) return window.__fb;
+    return await new Promise((resolve)=>{
+      const started = Date.now();
+      const t = setInterval(()=>{
+        if (window.__fb && window.__fb.db){ clearInterval(t); resolve(window.__fb); }
+        else if (Date.now()-started>6000){ clearInterval(t); resolve(window.__fb||{}); }
+      }, 50);
+    });
+  }
+
+  const fb = await waitForFB();
   let enabledSound = false;
   document.getElementById('soundBtn').addEventListener('click', ()=>{ 
     const a = document.getElementById('sndCash'); a.play().catch(()=>{});
     enabledSound = true; 
   });
 
-  const DEFAULT_MENU = [
+  const DEFAULT_MENU = (window.__DEFAULT_MENU_FROM_OLD__ && window.__DEFAULT_MENU_FROM_OLD__.length ? window.__DEFAULT_MENU_FROM_OLD__ : [
     {category:'Pizzas', name:'Margherita', price:450},
     {category:'Pizzas', name:'Pepperoni', price:550},
     {category:'Bebidas', name:'Coca-Cola', price:150},
@@ -114,6 +279,7 @@
   ];
 
   async function loadMenu(){
+    const fb = await waitForFB();
     const col = fb.collection(fb.db,'menu');
     const snap = await fb.getDocs(col);
     let items = [];
@@ -214,6 +380,7 @@
   }
 
   async function sendOrder(){
+    const fb = await waitForFB();
     if (cart.size===0) { alert('Carrinho vazio.'); return; }
     const o = makeOrderDoc();
     try{ 
