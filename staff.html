@@ -126,8 +126,8 @@
   const Parse = {};
   Parse.applicationId = "firebase-shim";
   Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
-  
-  
+  Parse.serverURL = "";
+  Parse.liveQueryServerURL = "";
   Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
 
   Parse.Object = {
@@ -728,73 +728,6 @@
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
   setInterval(attach, 1500);
-})();
-</script>
-
-
-<!-- CLOUD_SYNC_STAFF: live from Firestore (keeps existing UI/render) -->
-<script>
-(function(){
-  if (window.__CLOUD_SYNC_STAFF) return; window.__CLOUD_SYNC_STAFF = true;
-
-  function toPlain(d){
-    const o = d && (typeof d.data==='function' ? d.data() : d) || {};
-    const id = String(d && d.id || o.orderId || o.id || '');
-    return Object.assign({ id: Number(id)||id, orderId: id }, o);
-  }
-
-  function setLocalOrdersFromCloud(arr){
-    try{
-      if (typeof setOrders === 'function') setOrders(arr);
-      else if (typeof setOrdersCompat === 'function') setOrdersCompat(arr);
-      else localStorage.setItem('orders_simple_v4', JSON.stringify(arr));
-      localStorage.setItem('orders_simple_v4_ver', String(Date.now()));
-    }catch(e){}
-  }
-
-  function startSub(){
-    try{
-      const fb = window.__fb||{}; if(!fb.db || !fb.onSnapshot) return;
-      const qref = fb.query(fb.collection(fb.db,'orders'), fb.orderBy('createdAt'));
-      fb.onSnapshot(qref, (snap)=>{
-        const all=[]; snap.forEach(doc=> all.push(toPlain(doc)));
-        setLocalOrdersFromCloud(all);
-      });
-    }catch(e){ console.warn('staff sub error', e); }
-  }
-
-  async function updateOrder(id, patch){
-    const fb = window.__fb||{}; if(!fb.db || !fb.updateDoc) return;
-    try{ await fb.updateDoc(fb.doc(fb.db,'orders', String(id)), patch); }catch(e){ console.warn('update error', e); }
-  }
-  async function deleteOrder(id){
-    const fb = window.__fb||{}; if(!fb.db || !fb.deleteDoc) return;
-    try{ await fb.deleteDoc(fb.doc(fb.db,'orders', String(id))); }catch(e){ console.warn('delete error', e); }
-  }
-
-  document.addEventListener('click', (ev)=>{
-    const btnC = ev.target.closest('[data-confirm]');
-    const btnR = ev.target.closest('[data-reject]');
-    const btnS = ev.target.closest('[data-served]');
-    const btnL = ev.target.closest('#limparBtn');
-
-    if (btnC){ const id = btnC.getAttribute('data-confirm'); updateOrder(id, { confirmed:true, confirmedAt: Date.now() }); }
-    if (btnR){ const id = btnR.getAttribute('data-reject'); updateOrder(id, { rejectedAt: Date.now() }); }
-    if (btnS){ const id = btnS.getAttribute('data-served'); updateOrder(id, { servedAt: Date.now(), isReady:true }); }
-
-    if (btnL){
-      const yes = confirm('Quer mesmo remover todas as encomendas?');
-      if (yes){
-        try {
-          const arr = (typeof getOrders==='function') ? getOrders() : [];
-          arr.forEach(o=> deleteOrder(o.id||o.orderId));
-        } catch(e){}
-      }
-      ev.preventDefault();
-    }
-  }, true);
-
-  startSub();
 })();
 </script>
 

@@ -135,17 +135,17 @@
   }
 
   const Parse = {};
-  Parse.applicationId = "firebase-shim";
-  Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
+  
+   };
   
   
-  Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
+  
 
-  Parse.Object = {
+  
     extend: (clsName)=> class extends _ParseObject { constructor(){ super(clsName); } }
   };
 
-  Parse.Query = class {
+  
     constructor(Cls){
       this.className = (typeof Cls==='string') ? Cls : (new Cls()).className;
       this._w = [];
@@ -170,7 +170,7 @@
       const snap = await getDocs(qref);
       const arr = [];
       snap.forEach(d=>{
-        const Obj = Parse.Object.extend(this.className);
+        const Obj = 
         const o = new Obj();
         o.id = d.id; o._data = d.data() || {};
         arr.push(o);
@@ -186,7 +186,7 @@
       const listeners = { create:[], update:[], delete:[] };
       const unsub = onSnapshot(this._build(), (snap)=>{
         snap.docChanges().forEach(ch=>{
-          const Obj = Parse.Object.extend(this.className);
+          const Obj = 
           const o = new Obj();
           o.id = ch.doc.id; o._data = ch.doc.data() || {};
           if (ch.type==='added'){ listeners.create.forEach(fn=>{ try{ fn(o); }catch(e){} }); }
@@ -628,7 +628,7 @@
       const m = (notesMobile.value||'').trim(), d = (notesDesktop?.value||'').trim();
       if(sheetOpen) return m || d; return d || m;
     }
-    function sendOrder(){
+    async function sendOrder(){
       if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
       const keys=Object.keys(cart); if(keys.length===0){ alert('Adicione itens ao carrinho.'); return; }
 
@@ -645,10 +645,36 @@
         confirmed: false,
         totalCVE: total
       });
-      // CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
+      
+// FIREBASE_SAVE: write order to Firestore (Back4App removed)
+try {
+  const fb = window.__fb || {};
+  const db = fb.db, doc = fb.doc, setDoc = fb.setDoc;
+  if (db && doc && setDoc) {
+    const o = orders[orders.length - 1] || {};
+    const payload = {
+      orderId: String(o.id || o.orderId || Date.now()),
+      table: String(o.table || ''),
+      items: Array.isArray(o.items) ? o.items : [],
+      notes: String(o.notes || ''),
+      totalCVE: Number(o.totalCVE || 0),
+      createdAt: Number(o.createdAt || Date.now()),
+      confirmed: !!o.confirmed,
+      confirmedAt: o.confirmedAt || null,
+      servedAt: o.servedAt || null,
+      isReady: !!o.isReady
+    };
+    await setDoc(doc(db, 'orders', payload.orderId), payload, { merge: true });
+  } else {
+    console.warn('Firebase not ready for save');
+  }
+} catch (e) {
+  console.warn('Firestore save failed', e);
+}
+// CLOUD_SAVE_ON_SEND_V1: also send to Back4App (Parse)
       try {
-        if (window.Parse && Parse.applicationId) {
-          const Order = Parse.Object.extend('Order');
+        if (window.Parse && 
+          const Order = 
           const obj = new Order();
           obj.set('orderId', String(orders[orders.length-1].id));
           obj.set('table', String(orders[orders.length-1].table));
@@ -657,9 +683,9 @@
           obj.set('totalCVE', Number(orders[orders.length-1].totalCVE || 0));
           obj.set('createdAtMs', Number(orders[orders.length-1].createdAt || Date.now()));
           obj.set('confirmed', false);
-          const acl = new Parse.ACL();
+          const acl = new 
           acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true);
-          obj.setACL(acl);
+          // removed Back4App ACL
           obj.save().then(()=>{
             try{ if (typeof bcPost==='function') bcPost({ type:'orders_updated' }); }catch(e){}
           }).catch(e=>{ try{ console.warn('Cloud save failed', e); }catch(e2){} });
@@ -724,59 +750,6 @@
 
 
 
-
-
-<!-- CLOUD_SYNC_FLOOR: mirror local orders to Firestore (no UI changes) -->
-<script>
-(function(){
-  if (window.__CLOUD_SYNC_FLOOR) return; window.__CLOUD_SYNC_FLOOR = true;
-
-  function normalizeOrder(o){
-    if(!o) return null;
-    const id = String(o.id || o.orderId || Date.now());
-    return {
-      orderId: id,
-      table: String(o.table || ''),
-      items: Array.isArray(o.items) ? o.items : [],
-      notes: String(o.notes || ''),
-      totalCVE: Number(o.totalCVE || o.totalNum || 0),
-      createdAt: Number(o.createdAt || Date.now()),
-      confirmed: !!o.confirmed,
-      confirmedAt: o.confirmedAt || null,
-      servedAt: o.servedAt || null,
-      isReady: !!o.isReady
-    };
-  }
-
-  async function syncAllToCloud(){
-    try{
-      const fb = window.__fb||{}; if(!fb.db || !fb.setDoc || !fb.doc) return;
-      const arr = (typeof getOrdersCompat==='function') ? getOrdersCompat() : (Array.isArray(window.orders)? window.orders : []);
-      if (!arr || !arr.length) return;
-      for (const o of arr){
-        const n = normalizeOrder(o); if(!n) continue;
-        await fb.setDoc(fb.doc(fb.db,'orders', n.orderId), n, { merge:true });
-      }
-    }catch(e){ console.warn('Cloud sync error', e); }
-  }
-
-  try{
-    const prev = window.setOrdersCompat;
-    if (typeof prev === 'function'){
-      window.setOrdersCompat = function(v){ try{ prev(v); }catch(e){} try{ syncAllToCloud(); }catch(e){} };
-    }
-  }catch(e){}
-
-  ['sendBtnDesktop','sendBtnMobile','sendBtnSheet'].forEach(id=>{
-    try{
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('click', ()=> setTimeout(syncAllToCloud, 200));
-    }catch(e){}
-  });
-
-  setTimeout(syncAllToCloud, 500);
-})();
-</script>
 
 </body>
 </html>

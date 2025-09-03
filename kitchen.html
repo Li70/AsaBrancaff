@@ -73,8 +73,8 @@
   const Parse = {};
   Parse.applicationId = "firebase-shim";
   Parse.initialize = function(){ Parse.applicationId = "firebase-shim"; };
-  
-  
+  Parse.serverURL = "";
+  Parse.liveQueryServerURL = "";
   Parse.ACL = class { setPublicReadAccess(){ } setPublicWriteAccess(){ } };
 
   Parse.Object = {
@@ -576,44 +576,6 @@
   })();
 
   refreshAll(false); live(); poll();
-})();
-</script>
-
-
-<!-- CLOUD_SYNC_KITCHEN: live confirmed orders from Firestore -->
-<script>
-(function(){
-  if (window.__CLOUD_SYNC_KITCHEN) return; window.__CLOUD_SYNC_KITCHEN = true;
-
-  function toPlain(d){
-    const o = d && (typeof d.data==='function' ? d.data() : d) || {};
-    const id = String(d && d.id || o.orderId || o.id || '');
-    return Object.assign({ id: Number(id)||id, orderId: id }, o);
-  }
-
-  function setLocal(arr){
-    try{
-      localStorage.setItem('orders_simple_v4', JSON.stringify(arr));
-      localStorage.setItem('orders_simple_v4_ver', String(Date.now()));
-    }catch(e){}
-  }
-
-  function startSub(){
-    try{
-      const fb = window.__fb||{}; if(!fb.db || !fb.onSnapshot) return;
-      const qref = fb.query(
-        fb.collection(fb.db,'orders'),
-        fb.where('confirmed','==', true),
-        fb.orderBy('createdAt')
-      );
-      fb.onSnapshot(qref, (snap)=>{
-        const all=[]; snap.forEach(doc=> all.push(toPlain(doc)));
-        setLocal(all);
-      });
-    }catch(e){ console.warn('kitchen sub error', e); }
-  }
-
-  startSub();
 })();
 </script>
 
