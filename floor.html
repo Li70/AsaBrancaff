@@ -433,10 +433,10 @@
 
       const toggleBtn = sec.querySelector(`[data-toggle="${slug}"]`);
 
-      // start COLLAPSED by default for all other sections
-      let collapsed = true;
-      gridDiv.style.display = 'none';
-      tabsDiv.style.display = 'none';
+      // start EXPANDED by default (show all categories on load)
+      let collapsed = false;
+      gridDiv.style.display = '';
+      tabsDiv.style.display = '';
       toggleBtn.textContent = 'Expandir';
 
       toggleBtn.addEventListener('click', ()=>{
