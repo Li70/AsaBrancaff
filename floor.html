@@ -560,7 +560,7 @@ try {
     }, { merge: true });
   }
 } catch(e) { console.warn('Firestore save failed', e); }
-notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('open') && notesDesktop) notesDesktop.value = notesMobile.value; });
+notesMobile.addEventListener('input', ()=>{ try { if (notesDesktop) notesDesktop.value = notesMobile.value; } catch(e){} });
 
     // Drag-to-close (mobile)
     let startY=null, currentY=null;
@@ -578,25 +578,8 @@ notesMobile.addEventListener('input', ()=>{ if(cartSheet.classList.contains('ope
 
 
 
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
 
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyCVpnh3u3zVs1cmZh-LTwHnite60XSxFbQ",
-    authDomain: "asabrancaff-aa13d.firebaseapp.com",
-    projectId: "asabrancaff-aa13d",
-    storageBucket: "asabrancaff-aa13d.firebasestorage.app",
-    messagingSenderId: "1031914620871",
-    appId: "1:1031914620871:web:9df4a580400af8aea57be2"
-  };
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
 
 
 

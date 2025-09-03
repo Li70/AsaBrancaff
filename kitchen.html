@@ -477,5 +477,13 @@ if(!histList){ window.renderHistory = function(){}; }
 })();
 </script>
 
+
+<script><!-- AUDIO_RESUME_GUARD -->
+document.addEventListener('pointerdown', function _once(){ 
+  try{ if (window._audioCtx && window._audioCtx.state==='suspended') window._audioCtx.resume(); }catch(e){}
+  document.removeEventListener('pointerdown', _once);
+}, {once:true});
+</script>
+
 </body>
 </html>
