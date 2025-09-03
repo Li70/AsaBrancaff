@@ -15,16 +15,6 @@
     .items li { list-style: disc; margin-left: 1.25rem; }
     details summary { cursor: pointer; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-
-  <script>
-    try{
-      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
-      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
-  </script>
-
 
 <!-- Firebase core (app + firestore + auth) -->
 <script type="module">
@@ -120,6 +110,7 @@
     const clearServedBtn = document.getElementById('clearServedBtn');
     const histList       = document.getElementById('histList');
 if(!histList){ window.renderHistory = function(){}; }
+if(!histList){ window.renderHistory = function(){}; }
     const histTotalEl    = document.getElementById('histTotal');
 
     /* ====== Estado "Servido" (persistente) + versão ====== */
@@ -176,6 +167,9 @@ if(!histList){ window.renderHistory = function(){}; }
     }
 
     function renderHistory(){
+  var histList = document.getElementById('histList');
+  if(!histList){ return; }
+
   var histList = document.getElementById('histList');
   if(!histList){ return; }
 
@@ -435,22 +429,12 @@ if(!histList){ window.renderHistory = function(){}; }
       window.__kCloudList=list; window.__kCloudVer=Date.now(); try{ if (typeof render==='function') render({withAlerts:!!withAlerts}); }catch(e){} };
   })();
 
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''), confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-      createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()), servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-  function pickBetter(a,b){ try{ if (!!a.get('confirmed')!==!!b.get('confirmed')) return a.get('confirmed')?a:b; if (!!a.get('isReady')!==!!b.get('isReady')) return a.get('isReady')?a:b; const au=a.updatedAt? a.updatedAt.getTime():0, bu=b.updatedAt? b.updatedAt.getTime():0; if (au!==bu) return au>bu?a:b; }catch(e){} return a; }
-  function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
+  /* toPlain removed; Firebase paths use snapshot data directly */function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
 
-  async function refreshAll(playAlerts){
-    try{
-      const q=new Parse.Query(Order);
-      q.equalTo('confirmed', true); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
-      q.limit(1000);
-      const res=await q.find();
-      const best = coalesceById(res).map(toPlain);
-      window.__kApply(best, !!playAlerts);
-}catch(e){}
+  async function refreshAll(){ /* cloud-only: handled by Firestore onSnapshot */ }catch(e){}
   }
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
+/* removed Back4App query; Firestore onSnapshot handles data */
+ const ref=()=>refreshAll(true); sub.on('create', ref); sub.on('update', ref); sub.on('delete', ref);}catch(e){} }
   function poll(){ setInterval(()=>refreshAll(false), 5000); }
 
   function updateLocalReadyFromMap(map){
@@ -470,7 +454,8 @@ if(!histList){ window.renderHistory = function(){}; }
           for (const id in (map||{})){
             if (!Object.prototype.hasOwnProperty.call(map,id)) continue;
             const ready = !!map[id];
-            const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10);
+/* removed Back4App query; Firestore onSnapshot handles data */
+ q.limit(10);
             const res=await q.find();
             if (res && res.length){
               for (const obj of res){

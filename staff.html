@@ -68,16 +68,6 @@
     window.unlockAudio=async(el)=>{ try{ el.muted=false; el.volume=1; el.currentTime=0; await el.play(); el.pause(); el.currentTime=0; return true;}catch{return false;} };
   })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/parse/dist/parse.min.js"></script>
-
-  <script>
-    try{
-      Parse.initialize("90sppp5j95h77WJUAKKrSeVSFmRP2XgnUMxjzUaA", "B6F4JPeWDsVflznOWDEgD0IvVGxl2ZgtL5wycbcZ");
-      Parse.serverURL="https://parseapi.back4app.com";
-      Parse.liveQueryServerURL="wss://asabrancaff.b4a.io";
-    }catch(e){ console && console.warn && console.warn('Parse init failed', e); }
-  </script>
-
 
 <!-- Firebase core (app + firestore + auth) -->
 <script type="module">
@@ -496,14 +486,7 @@
   function coalesceById(list){ const m=new Map(); (list||[]).forEach(o=>{ const id=String(o.get('orderId')||o.id); const cur=m.get(id); m.set(id, cur? pickBetter(cur,o): o); }); return Array.from(m.values()); }
   const cache=new Map(); const confirmedLatch=new Map();
 
-  function toPlain(o){ return { id:String(o.get('orderId')||o.id), table:String(o.get('table')||''), items:o.get('items')||[], notes:String(o.get('notes')||''),
-    confirmed:!!o.get('confirmed'), isReady:!!o.get('isReady'),
-    createdAt:o.get('createdAtMs') || (o.createdAt? o.createdAt.getTime(): Date.now()),
-    servedAt:o.get('servedAt')? (new Date(o.get('servedAt')).getTime()) : null, rejectedAt:o.get('rejectedAt')? (new Date(o.get('rejectedAt')).getTime()) : null }; }
-
-  function controlAlarm(list){
-    try{
-      var hasUnconfirmed = (list||[]).some(function(o){ return !o.confirmed && !o.rejectedAt && !o.servedAt; });
+  /* toPlain removed; Firebase paths use snapshot data directly */);
       var prev = window.__prevHasUnconf || false;
       window.__prevHasUnconf = hasUnconfirmed;
       var el = document.getElementById('alertSound') || document.getElementById('readySound');
@@ -529,18 +512,21 @@
     controlAlarm(list);
   }
 
-  async function initial(){ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(1000);
-    const res=await q.find(); const best=coalesceById(res); best.forEach(o=>{ const p=toPlain(o); cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); flush(); }catch(e){} }
+  async function initial(){ /* cloud-only: handled by Firestore onSnapshot */ }); flush(); }catch(e){} }
 
-  async function refreshFamily(orderId){ try{ const q=new Parse.Query(Order); q.equalTo('orderId', String(orderId)); q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
+/* removed Back4App query; Firestore onSnapshot handles data */
+ q.limit(10); const fam=await q.find(); const best=coalesceById(fam); const o=best.length?best[0]:null;
     if (o){ const p=toPlain(o); if(p.servedAt||p.rejectedAt){ cache.delete(String(p.id)); confirmedLatch.delete(String(p.id)); } else { cache.set(String(p.id),p); if (p.confirmed) confirmedLatch.set(String(p.id),true);} } flush(); }catch(e){} }
 
-  async function live(){ try{ const q=new Parse.Query(Order); const sub=await q.subscribe(); sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
-  function poll(){ setInterval(async ()=>{ try{ const q=new Parse.Query(Order); q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
+/* removed Back4App query; Firestore onSnapshot handles data */
+ sub.on('create', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('update', o=>refreshFamily(o.get('orderId')||o.id)); sub.on('delete', o=>{ const id=String(o.get('orderId')||o.id); cache.delete(id); confirmedLatch.delete(id); flush(); }); }catch(e){} }
+/* removed Back4App query; Firestore onSnapshot handles data */
+ q.doesNotExist('rejectedAt'); q.limit(500); const res=await q.find(); const best=coalesceById(res);
       const next=new Map(); best.forEach(o=>{ const p=toPlain(o); next.set(p.id,p); if (p.confirmed) confirmedLatch.set(String(p.id),true); }); cache.clear(); next.forEach((v,k)=>cache.set(k,v)); flush(); }catch(e){} }, 5000); }
 
   (function(){
-    async function findObj(id){ const q=new Parse.Query(Order); q.equalTo('orderId', String(id)); q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
+/* removed Back4App query; Firestore onSnapshot handles data */
+ q.limit(10); const fam=await q.find(); return fam && fam.length? fam[0]: null; }
     const oc=window.confirmOrder; window.confirmOrder=function(id){(async()=>{try{let o=await findObj(id); if(!o){ o=new Order(); o.set('orderId', String(id)); const acl=new Parse.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); o.setACL(acl);} o.set('confirmed', true); o.set('confirmedAt', new Date()); await o.save();}catch(e){}})(); if (typeof oc==='function') return oc.apply(this, arguments);};
     const orj=window.rejectOrder; window.rejectOrder=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('rejectedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){}})(); if (typeof orj==='function') return orj.apply(this, arguments);};
     const os=window.markServedAndClear; window.markServedAndClear=function(id){(async()=>{try{let o=await findObj(id); if(o){ o.set('servedAt', new Date()); await o.save(); try{ await o.destroy(); }catch(e){} }}catch(e){} })(); if (typeof os==='function') return os.apply(this, arguments);};
@@ -593,8 +579,7 @@
           // Optional: Cloud reject so they don't come back after refresh
           if (window.Parse && Parse.applicationId) {
             try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
+              /* removed Back4App code: cloud-only */
               q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
               q.limit(1000);
               var res = await q.find();
@@ -691,8 +676,7 @@
           }catch(e){}
           (async function(){
             try{
-              var Order = Parse.Object.extend('Order');
-              var q = new Parse.Query(Order);
+              /* removed Back4App code: cloud-only */
               q.doesNotExist('servedAt'); q.doesNotExist('rejectedAt');
               q.limit(1000);
               var res = await q.find();
