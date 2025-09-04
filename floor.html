@@ -178,8 +178,11 @@ if (!window.__FLOOR_SEND_BOUND__) {
       await addDoc(collection(db,'orders'), { orderId, table:String(sel), items, notes, totalCVE, confirmed:false, isReady:false, servedAt:null, rejectedAt:null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       cart.clear(); renderCart(); document.getElementById('notes').value=''; alert('Pedido enviado ao staff para confirmação!');
     }catch(e){ console.warn(e); alert('Falha ao enviar o pedido. Verifique a internet.'); }
-  });
-}
+  }
+    sendBtnDesktop?.addEventListener('click', sendOrder);
+    sendBtnMobile?.addEventListener('click', async ()=>{ await sendOrder(); closeDrawer(); });
+  }
+
 </script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
