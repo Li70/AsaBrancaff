@@ -1,138 +1,240 @@
+
 <!doctype html>
 <html lang="pt">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Resumo do Dia</title>
+  <title>Resumo do dia</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { color-scheme: dark; }
     body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
-    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
-    .btn { padding:.6rem .9rem; border-radius:.9rem; font-weight:700; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); border-radius: 16px; }
+    .btn { padding:.65rem 1rem; border-radius:.9rem; font-weight:700; }
     .pill { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,0.08); }
-    .table{ background:#111a34; border:1px solid rgba(255,255,255,0.08); border-radius:12px; display:flex; align-items:center; justify-content:center; height:56px; font-weight:700; cursor:pointer; transition:.15s; -webkit-tap-highlight-color: transparent; }
-    .table.active{ outline:4px solid #22c55e; }
-    .muted { opacity:.75; }
+    .muted { opacity:.76; }
+    a { color:#34d399; text-decoration: underline; }
   </style>
-
 </head>
-<body class="p-6">
-  <div class="max-w-3xl mx-auto space-y-4">
-    <h1 class="text-2xl font-bold">Resumo do Dia</h1>
-    <p class="muted">Protegido por palavra-passe. Configure em Firestore: <code>settings/resumo</code> → <code>{ sha256: "&lt;hash-hex&gt;" }</code>.</p>
+<body class="p-4">
+  <div class="max-w-5xl mx-auto space-y-4">
+    <header class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold">📊 Resumo do dia</h1>
+      <span id="tz" class="muted text-sm"></span>
+    </header>
 
-    <div id="login" class="card p-4 rounded-2xl space-y-3">
-      <label class="block text-sm muted">Palavra-passe</label>
-      <input id="pwd" type="password" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Introduza a palavra-passe" />
-      <button id="enter" class="btn bg-emerald-700 hover:bg-emerald-600">Entrar</button>
-      <div id="msg" class="text-sm text-rose-300"></div>
-    </div>
+    <section id="loginCard" class="card p-4">
+      <h2 class="font-semibold mb-2">Protegido por palavra-passe</h2>
+      <p class="muted mb-3">Introduza a palavra-passe para ver o resumo de hoje.</p>
+      <div class="flex gap-2 items-center">
+        <input id="pw" type="password" class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 w-64" placeholder="Palavra-passe" />
+        <button id="enterBtn" class="btn bg-emerald-600 hover:bg-emerald-700">Entrar</button>
+      </div>
+      <p id="loginMsg" class="text-rose-400 text-sm mt-2"></p>
+      </section>
 
-    <div id="content" class="hidden space-y-4">
-      <section class="card p-4 rounded-2xl">
-        <div class="flex items-center justify-between">
-          <span class="muted">Total faturado (hoje)</span>
-          <strong id="grandTotal">0$00</strong>
-        </div>
-      </section>
-      <section class="card p-4 rounded-2xl">
-        <h2 class="font-semibold mb-2">Servidos hoje</h2>
-        <div id="servedList" class="space-y-2"></div>
-      </section>
-    </div>
+    <section id="errorCard" class="hidden card p-4">
+      <h2 class="font-semibold mb-2">❗ Não foi possível ligar</h2>
+      <p id="errText" class="text-rose-300 text-sm"></p>
+    </section>
+
+    <section id="sumCard" class="hidden card p-4">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h2 class="font-semibold">Hoje <span id="rangeLbl" class="pill"></span></h2>
+        <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        <div class="card p-3"><div class="muted text-xs">Encomendas</div><div id="cardCount" class="text-2xl font-extrabold">—</div></div>
+        <div class="card p-3"><div class="muted text-xs">Confirmadas</div><div id="cardConf" class="text-2xl font-extrabold">—</div></div>
+        <div class="card p-3"><div class="muted text-xs">Servidas</div><div id="cardServ" class="text-2xl font-extrabold">—</div></div>
+        <div class="card p-3"><div class="muted text-xs">Total (CVE)</div><div id="cardTotal" class="text-2xl font-extrabold">—</div></div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="muted text-left">
+            <tr><th class="p-2">Hora</th><th class="p-2">Mesa</th><th class="p-2">Estado</th><th class="p-2">Itens</th><th class="p-2">Total</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
-  
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+  <script>
+    document.getElementById('tz').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const auth = getAuth(app);
-  const storage = getStorage(app);
-  signInAnonymously(auth).catch(()=>{});
-  onAuthStateChanged(auth, ()=>{});
-
-  window.__fb = { app, db, auth, storage, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp, sRef, getDownloadURL };
-</script>
-
-
-  <script type="module">
-    const FB = window.__fb || {}; const { db, getDoc, doc, onSnapshot, collection, auth } = FB;
+    async function sha256Hex(s){
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+      return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
+    }
     const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 
-    async function ensureAuth(){
+    const loginCard = document.getElementById('loginCard');
+    const sumCard = document.getElementById('sumCard');
+    const errorCard = document.getElementById('errorCard');
+    const errText = document.getElementById('errText');
+    const loginMsg = document.getElementById('loginMsg');
+
+  </script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+
+    // --- Firebase init ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+      authDomain: "asabrancaff-faebe.firebaseapp.com",
+      projectId: "asabrancaff-faebe",
+      storageBucket: "asabrancaff-faebe.appspot.com",
+      messagingSenderId: "326390762122",
+      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const auth = getAuth(app);
+    signInAnonymously(auth).catch(()=>{});
+
+    let HASH_DOC = { hash: null };
+    async function getHash(){
       try{
-        if (auth.currentUser) return auth.currentUser;
-        const mod = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js');
-        const cred = await mod.signInAnonymously(auth);
-        return cred.user;
+        const snap = await getDoc(doc(db,'settings','resumo.sha256'));
+        if (!snap.exists()){
+          throw new Error("Configuração em falta (settings/resumo.sha256)");
+        }
+        HASH_DOC = snap.data() || {};
+        window.HASH_DOC = HASH_DOC;
+        if (!HASH_DOC.hash || typeof HASH_DOC.hash !== 'string' || HASH_DOC.hash.length < 10){
+          throw new Error("Campo 'hash' em settings/resumo.sha256 inválido.");
+        }
+        return HASH_DOC.hash;
       }catch(e){
-        console.warn('Auth error: enable Anonymous Sign-in in Firebase Console', e);
+        const msg = (e && e.code === 'permission-denied')
+          ? "Permissões em falta para ler settings/resumo.sha256. Verifique as Regras do Firestore e se o Anonymous Auth está ativo."
+          : (e.message || String(e));
+        document.getElementById('errorCard').classList.remove('hidden');
+        document.getElementById('errText').textContent = msg;
         throw e;
       }
     }
 
-    async function sha256hex(str){
-      const enc = new TextEncoder().encode(str);
-      const buf = await crypto.subtle.digest('SHA-256', enc);
-      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-    }
-    async function getHash(){
-      try{ const snap=await getDoc(doc(collection(db,'settings'),'resumo')); return snap.exists()? String(snap.data().sha256||'') : ''; }catch(e){ console.warn(e); return ''; }
+    // Date range for "today" (local timezone)
+    function todayRange(){
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0,0,0,0);
+      const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0,0,0,0);
+      return { start, end };
     }
 
-    const login = document.getElementById('login'); const content = document.getElementById('content');
-    const msg = document.getElementById('msg'); const pwd = document.getElementById('pwd');
+    function computeTotal(o){
+      if (typeof o.totalCVE === 'number') return Number(o.totalCVE)||0;
+      let s=0; (o.items||[]).forEach(i=> s += Number(i.unitPrice||0)*Number(i.qty||1)); return s;
+    }
 
-    document.getElementById('enter').addEventListener('click', async ()=>{
-      msg.textContent='';
-      await ensureAuth();
-      const stored = await getHash();
-      if(!stored){ msg.textContent='Configuração em falta (settings/resumo.sha256).'; return; }
-      const inputHash = await sha256hex(pwd.value||'');
-      if (inputHash !== stored){ msg.textContent='Palavra-passe inválida.'; return; }
-      login.classList.add('hidden'); content.classList.remove('hidden');
-      await ensureAuth();
-      startSummary();
+    async function loadSummary(){
+      const { start, end } = todayRange();
+      const rangeLbl = document.getElementById('rangeLbl');
+      rangeLbl.textContent = `${start.toLocaleDateString()} 00:00 – ${end.toLocaleDateString()} 00:00`;
+
+      const q = query(
+        collection(db,'orders'),
+        where('createdAt','>=', start),
+        where('createdAt','<', end),
+        orderBy('createdAt','desc')
+      );
+      const snap = await getDocs(q);
+      const rows = []; snap.forEach(d=> rows.push({ id:d.id, ...d.data() }));
+
+      const tbody = document.getElementById('rows'); tbody.innerHTML='';
+      let count=0, conf=0, serv=0, total=0;
+      rows.forEach(o=>{
+        count++;
+        if (o.confirmed) conf++;
+        if (o.servedAt) serv++;
+        total += computeTotal(o);
+
+        const when = o.createdAt?.toDate ? o.createdAt.toDate().toLocaleTimeString() : '';
+        const itemsHtml = (o.items||[]).map(i => {
+          const qty = Number(i.qty||1);
+          const name = esc(i.name||'');
+          const cat  = i.category ? `<span class="pill">${esc(i.category)}</span>` : '';
+          return `${qty}× ${name} ${cat}`;
+        }).join('<br>');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="p-2">${when}</td>
+                        <td class="p-2">${esc(o.table||'')}</td>
+                        <td class="p-2">${o.servedAt? 'Servido' : (o.confirmed? 'Confirmado' : 'Pendente')}</td>
+                        <td class="p-2">${itemsHtml}</td>
+                        <td class="p-2 font-semibold">${formatCVE(computeTotal(o))}</td>`;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('cardCount').textContent = count;
+      document.getElementById('cardConf').textContent  = conf;
+      document.getElementById('cardServ').textContent  = serv;
+      document.getElementById('cardTotal').textContent = formatCVE(total);
+    }
+    window.loadSummary = loadSummary;
+
+    onAuthStateChanged(auth, async (user)=>{
+      if (!user) return;
+      try { await getHash(); } catch { return; } // show error card already
+      // enable login
+      const enterBtn = document.getElementById('enterBtn');
+      enterBtn.addEventListener('click', async ()=>{
+        const pw = document.getElementById('pw').value || '';
+        const entered = await (await import('../')).default; // dummy to force top-level await? (ignored)
+      });
     });
 
-    function computeTotal(o){ if (typeof o.totalCVE === 'number') return Number(o.totalCVE)||0; let s=0; (o.items||[]).forEach(i=> s += Number(i.unitPrice||0)*Number(i.qty||1)); return s; }
+    // Hook login button without top-level await
+    document.getElementById('enterBtn').addEventListener('click', async ()=>{
+      try{
+        const pw = document.getElementById('pw').value || '';
+        if (!HASH_DOC.hash){
+          await getHash(); // ensure we fetched
+        }
+        const digest = await (await import('https://cdn.skypack.dev/sha256-wasm?min')).sha256(pw); // fallback tiny lib
+      }catch{ /* fallback to native */ }
+    });
+  </script>
 
-    function startSummary(){
-      const grandEl = document.getElementById('grandTotal'); const listEl = document.getElementById('servedList');
-      const start = new Date(); start.setHours(0,0,0,0);
-      onSnapshot(collection(db,'orders'), (snap)=>{
-        const served = []; let total=0;
-        snap.forEach(docSnap=>{ const d=docSnap.data(); if (d.servedAt && d.servedAt.toDate && d.servedAt.toDate() >= start){ served.push(d); total += Number(d.totalCVE||computeTotal(d)||0); } });
-        grandEl.textContent = formatCVE(total);
-        listEl.innerHTML='';
-        served.sort((a,b)=> (b.servedAt?.seconds||0)-(a.servedAt?.seconds||0));
-        served.forEach(o=>{
-          const div=document.createElement('div'); div.className='flex items-start justify-between gap-3 p-2 bg-slate-800 rounded-xl';
-          const items=(o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>');
-          const when=o.servedAt?.toDate?o.servedAt.toDate().toLocaleTimeString():'';
-          div.innerHTML=`<div><div class="font-semibold">Mesa ${esc(o.table)}</div><div class="muted text-sm leading-5">${items}</div><div class="muted text-xs mt-1">${when}</div></div><div class="font-bold">${formatCVE(Number(o.totalCVE||computeTotal(o)||0))}</div>`;
-          listEl.appendChild(div);
-        });
-      }, (err)=>{
-        msg.textContent = 'Permissões insuficientes para ler pedidos. Ver regras do Firestore.';
-        console.error(err);
-      });
+  <script>
+  // Final login glue WITHOUT external libs; compares sha256 and loads table
+  (function(){
+    async function sha256Hex(s){
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+      return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('');
     }
+    async function doLogin(){
+      const msg = document.getElementById('loginMsg');
+      msg.textContent = '';
+      try{
+        if (!window.HASH_DOC || !window.HASH_DOC.hash){
+          // HASH_DOC is module scope; but if module failed, fallback: inform user
+          msg.textContent = 'Não foi possível verificar configuração. Veja a secção ⚙️ acima.';
+          return;
+        }
+        const pw = document.getElementById('pw').value || '';
+        const h = await sha256Hex(pw);
+        if (h !== window.HASH_DOC.hash){
+          msg.textContent = 'Palavra-passe incorreta.';
+          return;
+        }
+        document.getElementById('loginCard').classList.add('hidden');
+        document.getElementById('sumCard').classList.remove('hidden');
+        // call loadSummary from module via global function proxy
+        if (window.loadSummary) await window.loadSummary();
+      }catch(e){
+        msg.textContent = 'Erro no login. Verifique a configuração.';
+        console.warn(e);
+      }
+    }
+    document.getElementById('enterBtn').addEventListener('click', doLogin);
+    window.doLogin = doLogin;
+  })();
   </script>
 </body>
 </html>

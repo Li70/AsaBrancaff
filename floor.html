@@ -44,7 +44,7 @@
         <label class="muted text-sm">Observações (opcional)</label>
         <textarea id="notesDesktop" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
         <button id="sendBtnDesktop" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Enviar encomenda →</button>
-        <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
+        <p class="muted text-xs mt-2 text-center">O seu pedido aguarda confirmacao</p>
       </aside>
     </div>
   </div>
@@ -74,7 +74,7 @@
           <label class="muted text-sm">Observações (opcional)</label>
           <textarea id="notesMobile" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
           <button id="sendBtnMobile" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Enviar encomenda →</button>
-          <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
+          <p class="muted text-xs mt-2 text-center">O seu pedido aguarda confirmacao</p>
         </div>
       </div>
     </div>
@@ -189,7 +189,7 @@
         const list = (Array.isArray(window.__BUILTIN_MENU__) ? window.__BUILTIN_MENU__ : []).slice().sort((a,b)=> (orderPref.indexOf(a.category) === -1 ? 999 : orderPref.indexOf(a.category)) - (orderPref.indexOf(b.category) === -1 ? 999 : orderPref.indexOf(b.category)));
         menuCol.innerHTML='';
         list.forEach(renderCategory);
-        if (status) status.textContent = 'A usar menu integrado (carregue menu.json ao Storage para atualizar).';
+        if (status) status.textContent = '';
       }catch(e){ console.warn('Failed to render builtin menu', e); if (status) status.textContent='Falha a carregar o menu.'; }
     })();
 
