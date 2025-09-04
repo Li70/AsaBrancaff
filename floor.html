@@ -1,53 +1,162 @@
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="pt">
 <head>
-<link rel="icon" href="data:,">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cliente · Floor</title>
-<style>
-  :root { --bg:#0b1020; --card:#111936; --muted:#7280a7; --ink:#e7ecff; --accent:#7aa2ff; }
-  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-  header { position:sticky; top:0; z-index:5; padding:12px 16px; background:linear-gradient(180deg, rgba(11,16,32,.98), rgba(11,16,32,.65)); border-bottom:1px solid rgba(114,128,167,.25); display:flex; gap:12px; align-items:center; }
-  header h1 { font-size:18px; margin:0; flex:1; font-weight:700; letter-spacing:.2px; }
-  .wrap { max-width:1000px; margin: 16px auto; padding: 0 16px 24px; }
-  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-  .card { background:var(--card); border:1px solid rgba(114,128,167,.25); border-radius:14px; padding:14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
-  .pill { border:1px solid rgba(114,128,167,.35); padding:6px 10px; border-radius:999px; font-size:12px; color:#cdd6ff; }
-  .btn { background:#1b2a55; color:#e7ecff; border:1px solid rgba(114,128,167,.35); border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:600; }
-  .btn:active { transform: translateY(1px); }
-  .btn-primary { background: var(--accent); color:#0a1022; border-color: transparent; }
-  .btn-warn { background:#ffb44d; color:#241400; border-color:transparent; }
-  .btn-ghost { background: transparent; color:#9fb1ff; }
-  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
-  .item { background: rgba(122,162,255,.08); border:1px dashed rgba(122,162,255,.35); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:6px; }
-  .item h4 { margin:0; font-size:14px; line-height:1.2; }
-  small.muted { color: var(--muted); }
-  .qty { display:flex; gap:6px; align-items:center; }
-  .qty button { width:28px; height:28px; border-radius:8px; }
-  .cart { display:flex; flex-direction:column; gap:8px; }
-  .cart-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; background:rgba(122,162,255,.07); border:1px solid rgba(114,128,167,.25); border-radius:10px; }
-  .total { font-size:16px; font-weight:800; }
-  .tabs { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
-  .tab { padding:8px 12px; border-radius:999px; border:1px solid rgba(114,128,167,.35); cursor:pointer; }
-  .tab.active { background:var(--accent); color:#0a1022; border-color:transparent; }
-  .order { padding:12px; border:1px solid rgba(114,128,167,.25); border-radius:12px; margin-bottom:10px; background:rgba(122,162,255,.06); }
-  .order h3 { margin:0 0 8px 0; font-size:15px; }
-  .badges { display:flex; gap:8px; align-items:center; }
-  .badge { padding:4px 8px; border-radius:999px; background:#223160; color:#c9d7ff; font-size:12px; border:1px solid rgba(114,128,167,.35) }
-  .ready { background:#2e7040; color:#eafff0; }
-  .new { background:#3d3a77; }
-  .confirmed { background:#3c5d99; }
-  .row-spread { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .muted { color:var(--muted); }
-  .note { margin-top:8px; font-size:12px; color:#cbd4ff; opacity:.9 }
-</style>
-<!-- Firebase core (your project) -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Cliente – Pedido</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
+    .btn  { padding:.6rem .9rem; border-radius:.9rem; font-weight:700; }
+    .muted{ color:rgba(255,255,255,.75) }
+    .pill { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,.08); }
+  </style>
+
+<body class="p-4 pb-28">
+  <div class="max-w-6xl mx-auto">
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+      <h1 class="text-2xl font-bold">🍽️ Faça o seu pedido</h1>
+      <div class="muted text-sm">Selecione a mesa, escolha produtos por categoria e envie para o staff.</div>
+    </header>
+
+    <!-- Mesa -->
+    <section class="card p-4 rounded-2xl mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-semibold">Indique o número da sua mesa</h2>
+        <span class="muted text-sm">Mesa selecionada: <span id="selectedTable" class="font-semibold">Nenhuma</span></span>
+      </div>
+      <div id="floor" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2"></div>
+    </section>
+
+    <div class="grid lg:grid-cols-[2fr_1fr] gap-4">
+      <div id="menuCol" class="space-y-4">
+        <!-- Categorias e Itens serão injetados via JS -->
+      </div>
+
+      <aside class="card p-4 rounded-2xl sticky top-4 h-fit">
+        <h2 class="text-lg font-semibold mb-2">🧺 Carrinho</h2>
+        <div id="cartList" class="space-y-2 mb-3"></div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="muted">Total</span><strong id="cartTotal">0$00</strong>
+        </div>
+        <label class="muted text-sm">Observações (opcional)</label>
+        <textarea id="notes" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700"
+          placeholder="Sem cebola, extra queijo..."></textarea>
+        <button id="sendBtn" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
+        <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ===== Simple dataset (send unitPrice so Staff can somar sem catálogos locais) =====
+    const CATS = [
+      { name:'🍕 Pizzas', items:[
+        {id:'pz-peperoni', name:'PEPERONI', priceNum:800, price:'800$00'},
+        {id:'pz-hawaii-ii', name:'HAWAII-II', priceNum:800, price:'800$00'},
+        {id:'pz-atum', name:'ATUM', priceNum:800, price:'800$00'}
+      ]},
+      { name:'🍔 Hambúrgueres', items:[
+        {id:'burg-cheeseburger', name:'CLÁSSICO CHEESEBURGER', priceNum:250, price:'250$00'},
+        {id:'burg-bigmac', name:'BIG MAC BURGER', priceNum:500, price:'500$00'}
+      ]},
+      { name:'🍗 Fried Chicken', items:[
+        {id:'legs', name:'LEGS', priceNum:200, price:'200$00'},
+        {id:'wings-plain', name:'WINGS', priceNum:200, price:'200$00'},
+        {id:'fried-chicken', name:'FRIED CHICKEN', priceNum:300, price:'300$00'}
+      ]},
+      { name:'🌯 Shawarma', items:[
+        {id:'shawarma-galinha', name:'SHAWARMA DE GALINHA', priceNum:400, price:'400$00'},
+        {id:'doner', name:'DONER KEBAB', priceNum:500, price:'500$00'}
+      ]},
+      { name:'🥤 Bebidas', items:[
+        {id:'coca15', name:'Coca-Cola 1,5L', priceNum:250, price:'250$00'},
+        {id:'compal1', name:'Compal 1L', priceNum:300, price:'300$00'}
+      ]},
+    ];
+
+    const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
+    const cart = {};
+    let selectedTable = null;
+
+    function byId(id){ return document.getElementById(id); }
+
+    // mesas 1..24
+    const floor = byId('floor');
+    for(let i=1;i<=24;i++){
+      const b = document.createElement('button');
+      b.className='table bg-slate-800 hover:bg-slate-700 rounded-xl h-12 font-bold';
+      b.textContent = i;
+      b.addEventListener('click', ()=>{ selectedTable = i; byId('selectedTable').textContent = i; document.querySelectorAll('.table').forEach(x=>x.classList.remove('outline')); b.classList.add('outline','outline-emerald-500'); });
+      floor.appendChild(b);
+    }
+
+    // render catálogo
+    const menuCol = byId('menuCol');
+    CATS.forEach(cat=>{
+      const sec = document.createElement('section');
+      sec.className='card p-4 rounded-2xl';
+      sec.innerHTML = `<div class="flex items-center justify-between mb-3"><h2 class="text-lg font-semibold">${cat.name}</h2></div>`;
+      const list = document.createElement('div');
+      list.className='space-y-2';
+      cat.items.forEach(it=>{
+        const row = document.createElement('div');
+        row.className='flex items-center justify-between gap-3';
+        row.innerHTML = `<div><div class="font-extrabold">${it.name}</div><div class="muted text-sm">${it.price}</div></div>`;
+        const right = document.createElement('div');
+        const btn = document.createElement('button');
+        btn.className='btn bg-slate-700 hover:bg-slate-600';
+        btn.textContent = 'Adicionar';
+        btn.addEventListener('click', ()=>addToCart(it));
+        right.appendChild(btn);
+        row.appendChild(right);
+        list.appendChild(row);
+      });
+      sec.appendChild(list);
+      menuCol.appendChild(sec);
+    });
+
+    function addToCart(it){
+      const key = it.id;
+      cart[key] = cart[key] || { name: it.name, qty: 0, unitPrice: it.priceNum };
+      cart[key].qty += 1;
+      renderCart();
+    }
+
+    function renderCart(){
+      const wrap = byId('cartList'); wrap.innerHTML='';
+      let total = 0;
+      Object.keys(cart).forEach(k=>{
+        const it = cart[k];
+        total += (it.unitPrice||0) * (it.qty||0);
+        const div = document.createElement('div');
+        div.className='flex items-center justify-between gap-3 p-2 bg-slate-800 rounded-xl';
+        div.innerHTML = `<div><div class="font-semibold">${it.qty} × ${it.name}</div><div class="muted text-xs">${formatCVE(it.unitPrice)}</div></div>`;
+        const minus = document.createElement('button'); minus.className='btn bg-slate-700'; minus.textContent='-';
+        const plus  = document.createElement('button'); plus.className='btn bg-slate-700'; plus.textContent='+';
+        minus.addEventListener('click', ()=>{ it.qty=Math.max(0,(it.qty||0)-1); if(it.qty===0) delete cart[k]; renderCart(); });
+        plus.addEventListener('click', ()=>{ it.qty=(it.qty||0)+1; renderCart(); });
+        const box = document.createElement('div'); box.className='flex gap-2'; box.appendChild(minus); box.appendChild(plus);
+        div.appendChild(box);
+        wrap.appendChild(div);
+      });
+      byId('cartTotal').textContent = formatCVE(total);
+    }
+  </script>
+
+  
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { 
+    getFirestore, collection, doc, setDoc, addDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc 
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
+  // Using the same public config you shared in your files (client keys; safe for web apps)
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
     authDomain: "asabrancaff-faebe.firebaseapp.com",
@@ -56,342 +165,53 @@
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
-  const app  = initializeApp(firebaseConfig);
-  const db   = getFirestore(app);
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
   const auth = getAuth(app);
+  const storage = getStorage(app);
   signInAnonymously(auth).catch(()=>{});
   onAuthStateChanged(auth, ()=>{});
 
-  // expose
-  window.__fb = { app, db, auth, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where };
+  // Expose for the page
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, addDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc, sRef, getDownloadURL };
 </script>
 
-<!--(old block removed)-->
-<script>
-  // Original MENU from your earlier floor.html
-  const OLD_MENU = [{
-      category:'Fried Chicken',
-      items:[
-        { id:'legs', name:'LEGS', price:'200$00', priceNum:200 },
-        { id:'wings-plain', name:'WINGS', price:'200$00', priceNum:200 },
-        { id:'wings-sweet-chilli', name:'SWEET CHILLI WINGS', price:'600$00', priceNum:600 },
-        { id:'wings-bbq', name:'BARBECUE WINGS', price:'600$00', priceNum:600 },
-        { id:'nuggets', name:'NUGGETS', price:'500$00', priceNum:500 },
-        { id:'popcorn', name:'POP CORNS', price:'500$00', priceNum:500 },
-        { id:'fried-chicken', name:'FRIED CHICKEN', price:'300$00', priceNum:300 },
-        { id:'sandwich', name:'SANDWICH', price:'500$00', priceNum:500 },
-        { id:'meia-frango', name:'MEIA DE FRANGO', price:'600$00', priceNum:600 }
-      ];
-  function flattenOldMenu() {
-    const out = [];
-    for (const cat of OLD_MENU) {
-      const cname = cat.category;
-      const items = Array.isArray(cat.items) ? cat.items : [];
-      for (const it of items) {
-        out.push({
-          id: it.id || (cname+'-'+(it.name||'').toLowerCase().replace(/\s+/g,'-')),
-          category: cname,
-          name: it.name || '',
-          price: Number(it.priceNum || 0),
-          priceText: it.price || null
-        });
-      }
+
+  <script type="module">
+    const { db, addDoc, collection, serverTimestamp } = window.__fb;
+
+    function gatherItems(){
+      return Object.keys(cart).map(k=>{
+        const it = cart[k]; return { name: it.name, qty: Number(it.qty||1), unitPrice: Number(it.unitPrice||0) };
+      });
     }
-    return out;
-  }
-  window.__DEFAULT_MENU_FROM_OLD__ = flattenOldMenu();
-</script>
 
-<!-- Seed from previous Floor MENU -->
-<script>
-  const OLD_MENU = [{
-      category:'Fried Chicken',
-      items:[
-        { id:'legs', name:'LEGS', price:'200$00', priceNum:200 },
-        { id:'wings-plain', name:'WINGS', price:'200$00', priceNum:200 },
-        { id:'wings-sweet-chilli', name:'SWEET CHILLI WINGS', price:'600$00', priceNum:600 },
-        { id:'wings-bbq', name:'BARBECUE WINGS', price:'600$00', priceNum:600 },
-        { id:'nuggets', name:'NUGGETS', price:'500$00', priceNum:500 },
-        { id:'popcorn', name:'POP CORNS', price:'500$00', priceNum:500 },
-        { id:'fried-chicken', name:'FRIED CHICKEN', price:'300$00', priceNum:300 },
-        { id:'sandwich', name:'SANDWICH', price:'500$00', priceNum:500 },
-        { id:'meia-frango', name:'MEIA DE FRANGO', price:'600$00', priceNum:600 }
-      ]
-    },{
-      category:'Combos',
-      items:[
-        { id:'combo1', name:'COMBO 1', desc:'1 PERNA · 1 ASA · 1 BATATA', price:'450$00', priceNum:450 },
-        { id:'combo2', name:'COMBO 2', desc:'2 PERNA · 1 ASA · 1 BATATA', price:'650$00', priceNum:650 },
-        { id:'combo3', name:'COMBO 3', desc:'3 PERNAS · 3 ASAS · 1 BATATA', price:'800$00', priceNum:800 },
-        { id:'combo4', name:'COMBO 4', desc:'4 PERNAS · 4 ASAS · 1 BATATA', price:'1000$00', priceNum:1000 },
-        { id:'pz-combo-coca', name:'PIZZA COMBO + Coca-Cola 1,5L', price:'1200$00', priceNum:1200 },
-        { id:'pz-combo-compal', name:'PIZZA COMBO + Compal 1L', price:'1250$00', priceNum:1250 },
-        { id:'shawarma-combo', name:'SHAWARMA COMBO', desc:'1 Shawarma + CocaCola 0,5L + Batata Frita', price:'650$00', priceNum:650 },
-        { id:'doner-combo', name:'DONER KEBAB COMBO', desc:'1 Doner Kebab + CocaCola 0,5L', price:'600$00', priceNum:600 }
-      ]
-    },{
-      category:'Hot Dog',
-      items:[
-        { id:'hot-chicago', name:'CHICAGO', price:'300$00', priceNum:300 },
-        { id:'hot-italian', name:'ITALIAN', price:'300$00', priceNum:300 },
-        { id:'hot-michigan', name:'MICHIGAN', price:'300$00', priceNum:300 },
-        { id:'hot-ny', name:'NEW YORK', price:'300$00', priceNum:300 },
-        { id:'hot-dodger', name:'DODGER DOG', price:'300$00', priceNum:300 },
-        { id:'hot-carolina', name:'CAROLINA', price:'300$00', priceNum:300 }
-      ]
-    },{
-      category:'Molhos',
-      items:[
-        { id:'sauce-sweet-sour', name:'SWEET & SOUR SAUCE', price:'50$00', priceNum:50 },
-        { id:'sauce-alfredo', name:'ALFREDO (CREMOSO CLÁSSICO)', price:'50$00', priceNum:50 },
-        { id:'sauce-honey-mustard', name:'HONEY MUSTARD', price:'50$00', priceNum:50 },
-        { id:'sauce-cheesy', name:'CHEESY SAUCE', price:'50$00', priceNum:50 },
-        { id:'sauce-creole', name:'CREOLE TOMATO', price:'50$00', priceNum:50 },
-        { id:'sauce-coleslaw', name:'COLESLAW', price:'50$00', priceNum:50 },
-        { id:'sauce-buffalo', name:'BUFFALO', price:'50$00', priceNum:50 }
-      ]
-    },{
-      category:'Salgados/Petiscos',
-      items:[
-        { id:'coxinha', name:'COXINHA', price:'60$00', priceNum:60 },
-        { id:'pastel', name:'PASTEL', price:'50$00', priceNum:50 },
-        { id:'bifanas', name:'BIFANAS À MODA DO PORTO', price:'300$00', priceNum:300 },
-        { id:'moelas', name:'MOELAS À PORTUGUESA', price:'600$00', priceNum:600 },
-        { id:'linguica', name:'LINGUIÇA', price:'100$00', priceNum:100 }
-      ]
-    },{
-      category:'Hambúrgueres',
-      items:[
-        { id:'burg-cheeseburger', name:'CLÁSSICO CHEESEBURGER', desc:'Pão, queijo, carne, ovo, molho big, batata, ketchup, maionese', price:'250$00', priceNum:250 },
-        { id:'burg-bigmac', name:'BIG MAC BURGER', desc:'2 carnes, queijo cheddar, alface, picles, tomate, cebola, molho big', price:'500$00', priceNum:500 },
-        { id:'burg-sweet', name:'SWEET BURGER', desc:'Queijo, bacon, cebola caramelizada, alface, molho burger', price:'450$00', priceNum:450 },
-        { id:'burg-xtudo', name:'BURGER X TUDO MODA DA CASA', desc:'Carne, queijo, ovo, batata, tomate, molhos', price:'300$00', priceNum:300 },
-        { id:'burg-completo', name:'HAMBÚRGUER COMPLETO', desc:'Carne, cebola caramelizada, queijo, bacon, maionese, batata', price:'550$00', priceNum:550 },
-        { id:'burg-crispy', name:'HAMBÚRGUER CRISPY', desc:'Frango, molho kfc, alface, tomate, molhos', price:'400$00', priceNum:400 }
-      ]
-    },{
-      category:'Shawarma',
-      items:[
-        { id:'shawarma-atum', name:'SHAWARMA DE ATUM', price:'400$00', priceNum:400 },
-        { id:'shawarma-galinha', name:'SHAWARMA DE GALINHA', price:'400$00', priceNum:400 },
-        { id:'shawarma-carne', name:'SHAWARMA DE CARNE', price:'300$00', priceNum:300 },
-        { id:'shawarma-veg', name:'SHAWARMA VEGETARIANO', price:'400$00', priceNum:400 },
-        { id:'doner', name:'DONER KEBAB', price:'500$00', priceNum:500 }
-      ]
-    },{
-      category:'Sumos Naturais',
-      items:[
-        { id:'sumo-cenoura', name:'CENOURA', price:'300$00', priceNum:300 },
-        { id:'sumo-papaia', name:'PAPAIA', price:'300$00', priceNum:300 },
-        { id:'sumo-melancia', name:'MELANCIA', price:'300$00', priceNum:300 },
-        { id:'sumo-laranja', name:'LARANJA', price:'300$00', priceNum:300 },
-        { id:'sumo-uva', name:'UVA', price:'300$00', priceNum:300 },
-        { id:'sumo-maca', name:'MAÇÃ', price:'300$00', priceNum:300 },
-        { id:'sumo-manga', name:'MANGA', price:'300$00', priceNum:300 },
-        { id:'sumo-banana', name:'BANANA', price:'300$00', priceNum:300 },
-        { id:'sumo-maracuja', name:'MARACUJÁ', price:'300$00', priceNum:300 },
-        { id:'sumo-kiwi', name:'KIWI', price:'300$00', priceNum:300 }
-      ]
-    },{
-      category:'Gelados',
-      items:[
-        { id:'gelado-cone', name:'GELADO DE CONE', price:'200$00', priceNum:200 },
-        { id:'gelado-copo', name:'GELADO DE COPO', price:'200$00', priceNum:200 }
-      ]
-    }];
-  function flattenOldMenu() {
-    const out = [];
-    for (const cat of OLD_MENU) {
-      const cname = cat.category;
-      const items = Array.isArray(cat.items) ? cat.items : [];
-      for (const it of items) {
-        out.push({
-          id: it.id || (cname+'-'+(it.name||'').toLowerCase().replace(/\s+/g,'-')),
-          category: cname,
-          name: it.name || '',
-          price: Number(it.priceNum || 0),
-          priceText: it.price || null
-        });
-      }
+    function gatherTotal(items){
+      return items.reduce((s,it)=> s + (Number(it.unitPrice||0) * Number(it.qty||1)), 0);
     }
-    return out;
-  }
-  window.__DEFAULT_MENU_FROM_OLD__ = flattenOldMenu();
-</script>
-</head>
-<body>
-<header>
-  <h1>Asa Branca · Cliente</h1>
-  <button id="soundBtn" class="btn btn-ghost">🔊 ativar som</button>
-</header>
-<div class="wrap">
-  <div class="row card" style="gap:8px;">
-    <label>Mesa/Takeaway: <input id="tableInput" class="pill" placeholder="Ex: M12 ou TakeAway" /></label>
-    <label>Observações: <input id="notesInput" class="pill" placeholder="Sem cebola, extra queijo…" style="min-width:260px"/></label>
-  </div>
 
-  <div class="card" style="margin-top:12px;">
-    <div class="row-spread">
-      <div class="tabs" id="catTabs"></div>
-      <button id="sendBtn" class="btn btn-primary">Enviar pedido</button>
-    </div>
-    <div id="itemsGrid" class="grid" style="margin-top:10px;"></div>
-  </div>
-
-  <div class="card" style="margin-top:12px;">
-    <h3>Carrinho</h3>
-    <div id="cart" class="cart"></div>
-    <div class="row-spread">
-      <div></div>
-      <div class="total">Total: <span id="totalCVE">0</span> CVE</div>
-    </div>
-  </div>
-</div>
-
-<audio id="sndCash" src="cash.mp3" preload="auto"></audio>
-
-<script>
-(function(){
-  async function waitForFB(){
-    if (window.__fb && window.__fb.db) return window.__fb;
-    return await new Promise((resolve)=>{
-      const started = Date.now();
-      const t = setInterval(()=>{
-        if (window.__fb && window.__fb.db){ clearInterval(t); resolve(window.__fb); }
-        else if (Date.now()-started>6000){ clearInterval(t); resolve(window.__fb||{}); }
-      }, 50);
+    document.getElementById('sendBtn').addEventListener('click', async ()=>{
+      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+      const items = gatherItems();
+      if(items.length===0){ alert('Adicione itens ao carrinho.'); return; }
+      const notes = (document.getElementById('notes').value||'').trim();
+      const orderId = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+      const totalCVE = gatherTotal(items);
+      try{
+        await addDoc(collection(db, 'orders'), {
+          orderId, table: String(selectedTable), items, notes,
+          totalCVE, confirmed: false, isReady: false, servedAt: null, rejectedAt: null,
+          createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+        Object.keys(cart).forEach(k=>delete cart[k]); renderCart(); document.getElementById('notes').value='';
+        alert('Pedido enviado ao staff para confirmação!');
+      }catch(e){
+        alert('Falha ao enviar o pedido. Verifique a internet.');
+        console.warn(e);
+      }
     });
-  }
+  </script>
 
-  const fb = await waitForFB();
-  let enabledSound = false;
-  document.getElementById('soundBtn').addEventListener('click', ()=>{ 
-    const a = document.getElementById('sndCash'); a.play().catch(()=>{});
-    enabledSound = true; 
-  });
-
-  const DEFAULT_MENU = (window.__DEFAULT_MENU_FROM_OLD__ && window.__DEFAULT_MENU_FROM_OLD__.length ? window.__DEFAULT_MENU_FROM_OLD__ : [
-    {category:'Pizzas', name:'Margherita', price:450},
-    {category:'Pizzas', name:'Pepperoni', price:550},
-    {category:'Bebidas', name:'Coca-Cola', price:150},
-    {category:'Bebidas', name:'Água', price:80},
-    {category:'Sobremesas', name:'Mousse', price:300}
-  ];
-
-  async function loadMenu(){
-    const fb = await waitForFB();
-    const col = fb.collection(fb.db,'menu');
-    const snap = await fb.getDocs(col);
-    let items = [];
-    snap.forEach(d=> items.push(Object.assign({id:d.id}, d.data())));
-    if (items.length===0) { // seed once
-      for (const it of DEFAULT_MENU) { await fb.addDoc(col, it); }
-      const snap2 = await fb.getDocs(col); items = []; snap2.forEach(d=> items.push(Object.assign({id:d.id}, d.data())));
-    }
-    return items;
-  }
-
-  function groupByCategory(items){
-    const cats = new Map();
-    for (const it of items) { if(!cats.has(it.category)) cats.set(it.category, []); cats.get(it.category).push(it); }
-    return cats;
-  }
-
-  const cart = new Map();
-  function addItem(it){ const k = it.id; const cur = cart.get(k)||{item:it, qty:0}; cur.qty++; cart.set(k, cur); renderCart(); }
-  function decItem(it){ const k = it.id; const cur = cart.get(k); if(!cur) return; cur.qty--; if(cur.qty<=0) cart.delete(k); renderCart(); }
-  function total(){ let s=0; for(const {item,qty} of cart.values()) s+= (item.price||0)*qty; return s; }
-
-  function renderCart(){
-    const el = document.getElementById('cart'); el.innerHTML='';
-    for(const {item,qty} of cart.values()){
-      const row = document.createElement('div'); row.className='cart-row';
-      row.innerHTML = `<div><strong>${item.name}</strong> <small class="muted">(${item.category})</small></div>
-                       <div class="qty">
-                         <button class="btn" data-minus="${item.id}">-</button>
-                         <span>${qty}</span>
-                         <button class="btn" data-plus="${item.id}">+</button>
-                         <span><strong>${(item.price||0)*qty}</strong> CVE</span>
-                       </div>`;
-      el.appendChild(row);
-    }
-    document.getElementById('totalCVE').textContent = total();
-  }
-
-  function renderMenuCats(cats){
-    const tabs = document.getElementById('catTabs'); tabs.innerHTML='';
-    let firstCat = null;
-    for(const cat of cats.keys()){
-      if(!firstCat) firstCat = cat;
-      const b = document.createElement('button'); b.className='tab'; b.textContent=cat;
-      b.dataset.cat = cat;
-      tabs.appendChild(b);
-    }
-    setActive(firstCat);
-  }
-
-  function setActive(cat){
-    document.querySelectorAll('#catTabs .tab').forEach(b=>{ b.classList.toggle('active', b.dataset.cat===cat); });
-    const grid = document.getElementById('itemsGrid'); grid.innerHTML='';
-    const items = window.__cats.get(cat) || [];
-    for (const it of items){
-      const card = document.createElement('div'); card.className='item';
-      card.innerHTML = `<h4>${it.name}</h4>
-                        <small class="muted">${it.category}</small>
-                        <div class="row"><span class="pill">${it.price||0} CVE</span></div>
-                        <div class="qty">
-                          <button class="btn" data-minus="${it.id}">-</button>
-                          <button class="btn btn-warn" data-plus="${it.id}">Adicionar</button>
-                        </div>`;
-      grid.appendChild(card);
-    }
-  }
-
-  document.getElementById('catTabs').addEventListener('click', (ev)=>{ 
-    const b = ev.target.closest('.tab'); if(!b) return; setActive(b.dataset.cat);
-  });
-  document.getElementById('itemsGrid').addEventListener('click', (ev)=>{ 
-    const plus = ev.target.closest('[data-plus]'); const minus = ev.target.closest('[data-minus]');
-    if (plus){ 
-      const id = plus.getAttribute('data-plus'); 
-      const it = window.__allItems.find(x=> x.id===id); if(it) addItem(it);
-      if (enabledSound) document.getElementById('sndCash').play().catch(()=>{});
-    }
-    if (minus){ const id = minus.getAttribute('data-minus'); const it = window.__allItems.find(x=> x.id===id); if(it) decItem(it);}
-  });
-  document.getElementById('cart').addEventListener('click', (ev)=>{
-    const plus = ev.target.closest('[data-plus]'); const minus = ev.target.closest('[data-minus]');
-    if (plus){ const id = plus.getAttribute('data-plus'); const it = window.__allItems.find(x=> x.id===id); if(it) addItem(it); }
-    if (minus){ const id = minus.getAttribute('data-minus'); const it = window.__allItems.find(x=> x.id===id); if(it) decItem(it); }
-  });
-
-  function makeOrderDoc(){
-    const table = (document.getElementById('tableInput').value||'').trim() || 'M?';
-    const notes = (document.getElementById('notesInput').value||'').trim();
-    const items = Array.from(cart.values()).map(({item,qty})=>({
-      id:item.id, name:item.name, category:item.category, price:item.price, qty
-    }));
-    const id = Date.now().toString();
-    return {
-      orderId: id, table, notes, items,
-      totalCVE: items.reduce((s,it)=>s+(it.price||0)*it.qty,0),
-      createdAt: Date.now(), status:'new', confirmed:false, isReady:false
-    };
-  }
-
-  async function sendOrder(){
-    const fb = await waitForFB();
-    if (cart.size===0) { alert('Carrinho vazio.'); return; }
-    const o = makeOrderDoc();
-    try{ 
-      await fb.setDoc(fb.doc(fb.db,'orders', o.orderId), o, {merge:true});
-      cart.clear(); renderCart();
-      alert('Pedido enviado ✔️');
-    } catch(e) { console.warn('send error', e); alert('Falha ao enviar'); }
-  }
-  document.getElementById('sendBtn').addEventListener('click', sendOrder);
-
-  loadMenu().then(items=>{ window.__allItems = items; window.__cats = groupByCategory(items); renderMenuCats(window.__cats); });
-})();</script>
 </body>
 </html>

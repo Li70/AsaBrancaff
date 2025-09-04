@@ -1,53 +1,49 @@
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="pt">
 <head>
-<link rel="icon" href="data:,">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Staff</title>
-<style>
-  :root { --bg:#0b1020; --card:#111936; --muted:#7280a7; --ink:#e7ecff; --accent:#7aa2ff; }
-  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-  header { position:sticky; top:0; z-index:5; padding:12px 16px; background:linear-gradient(180deg, rgba(11,16,32,.98), rgba(11,16,32,.65)); border-bottom:1px solid rgba(114,128,167,.25); display:flex; gap:12px; align-items:center; }
-  header h1 { font-size:18px; margin:0; flex:1; font-weight:700; letter-spacing:.2px; }
-  .wrap { max-width:1000px; margin: 16px auto; padding: 0 16px 24px; }
-  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-  .card { background:var(--card); border:1px solid rgba(114,128,167,.25); border-radius:14px; padding:14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
-  .pill { border:1px solid rgba(114,128,167,.35); padding:6px 10px; border-radius:999px; font-size:12px; color:#cdd6ff; }
-  .btn { background:#1b2a55; color:#e7ecff; border:1px solid rgba(114,128,167,.35); border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:600; }
-  .btn:active { transform: translateY(1px); }
-  .btn-primary { background: var(--accent); color:#0a1022; border-color: transparent; }
-  .btn-warn { background:#ffb44d; color:#241400; border-color:transparent; }
-  .btn-ghost { background: transparent; color:#9fb1ff; }
-  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:12px; }
-  .item { background: rgba(122,162,255,.08); border:1px dashed rgba(122,162,255,.35); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:6px; }
-  .item h4 { margin:0; font-size:14px; line-height:1.2; }
-  small.muted { color: var(--muted); }
-  .qty { display:flex; gap:6px; align-items:center; }
-  .qty button { width:28px; height:28px; border-radius:8px; }
-  .cart { display:flex; flex-direction:column; gap:8px; }
-  .cart-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; background:rgba(122,162,255,.07); border:1px solid rgba(114,128,167,.25); border-radius:10px; }
-  .total { font-size:16px; font-weight:800; }
-  .tabs { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 12px; }
-  .tab { padding:8px 12px; border-radius:999px; border:1px solid rgba(114,128,167,.35); cursor:pointer; }
-  .tab.active { background:var(--accent); color:#0a1022; border-color:transparent; }
-  .order { padding:12px; border:1px solid rgba(114,128,167,.25); border-radius:12px; margin-bottom:10px; background:rgba(122,162,255,.06); }
-  .order h3 { margin:0 0 8px 0; font-size:15px; }
-  .badges { display:flex; gap:8px; align-items:center; }
-  .badge { padding:4px 8px; border-radius:999px; background:#223160; color:#c9d7ff; font-size:12px; border:1px solid rgba(114,128,167,.35) }
-  .ready { background:#2e7040; color:#eafff0; }
-  .new { background:#3d3a77; }
-  .confirmed { background:#3c5d99; }
-  .row-spread { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .muted { color:var(--muted); }
-  .note { margin-top:8px; font-size:12px; color:#cbd4ff; opacity:.9 }
-</style>
-<!-- Firebase core (your project) -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Cozinha – Pedidos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
+    .btn  { padding:.6rem .9rem; border-radius:.9rem; font-weight:700; }
+    .muted{ color:rgba(255,255,255,.75) }
+    .pill { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,.08); }
+  </style>
+
+<body class="p-4">
+  <div class="max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-3">
+      <h1 class="text-2xl font-bold">Cozinha – Pedidos</h1>
+      <div class="flex items-center gap-2">
+        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
+        <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
+      </div>
+    </div>
+
+    <div id="orders" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+  </div>
+
+  <audio id="cashSound" preload="auto" src="cash.mp3"></audio>
+
+  <script>
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  </script>
+
+  
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { 
+    getFirestore, collection, doc, setDoc, addDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc 
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
 
+  // Using the same public config you shared in your files (client keys; safe for web apps)
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
     authDomain: "asabrancaff-faebe.firebaseapp.com",
@@ -56,99 +52,91 @@
     messagingSenderId: "326390762122",
     appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
   };
-  const app  = initializeApp(firebaseConfig);
-  const db   = getFirestore(app);
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
   const auth = getAuth(app);
+  const storage = getStorage(app);
   signInAnonymously(auth).catch(()=>{});
   onAuthStateChanged(auth, ()=>{});
 
-  // expose
-  window.__fb = { app, db, auth, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where };
+  // Expose for the page
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, addDoc, updateDoc, onSnapshot, query, where, orderBy, serverTimestamp, getDoc, sRef, getDownloadURL };
 </script>
-</head>
-<body>
-<header>
-  <h1>Asa Branca · Staff</h1>
-  <div class="badges">
-    <span class="badge new">Novos</span>
-    <span class="badge confirmed">Confirmados</span>
-    <span class="badge ready">Prontos</span>
-  </div>
-  <button id="soundBtn" class="btn btn-ghost">🔊 ativar som</button>
-</header>
-<div class="wrap">
-  <div id="orders"></div>
-</div>
 
-<audio id="sndReady" src="ready.mp3" preload="auto"></audio>
-<audio id="sndDone"  src="done.mp3"  preload="auto"></audio>
 
-<script>
-(async function(){
-  async function waitForFB(){
-    if (window.__fb && window.__fb.db) return window.__fb;
-    return await new Promise((resolve)=>{
-      const started = Date.now();
-      const t = setInterval(()=>{
-        if (window.__fb && window.__fb.db){ clearInterval(t); resolve(window.__fb); }
-        else if (Date.now()-started>6000){ clearInterval(t); resolve(window.__fb||{}); }
-      }, 50);
+  <script type="module">
+    const { db, storage, onSnapshot, query, where, orderBy, collection, doc, updateDoc, serverTimestamp, sRef, getDownloadURL } = window.__fb;
+
+    // Try Storage for audio
+    async function bindAudio(){ try{ const url = await getDownloadURL(sRef(storage,'cash.mp3')); document.getElementById('cashSound').src = url; }catch{} }
+    bindAudio();
+
+    const cashEl = document.getElementById('cashSound');
+    let soundEnabled=false;
+    document.getElementById('soundBtn').addEventListener('click', ()=>{
+      cashEl.play().then(()=>{ cashEl.pause(); cashEl.currentTime=0; soundEnabled=true; }).catch(()=>{});
     });
-  }
 
-  const fb = await waitForFB();
-  let soundOk = false;
-  document.getElementById('soundBtn').addEventListener('click', ()=>{
-    document.getElementById('sndReady').play().catch(()=>{});
-    document.getElementById('sndDone').play().catch(()=>{});
-    soundOk = true;
-  });
+    const ordersDiv = document.getElementById('orders');
 
-  const seen = new Set();
-  function rowHTML(o){
-    const items = (o.items||[]).map(it=>`<li>${it.qty}× ${it.name} <small class="muted">(${it.category})</small> — <strong>${(it.price||0)*it.qty}</strong> CVE</li>`).join('');
-    const total = (o.totalCVE != null) ? o.totalCVE : (o.items||[]).reduce((s,it)=>s+(it.price||0)*it.qty,0);
-    const ready = (o.status==='ready' || o.isReady);
-    const badges = [`<span class="badge ${o.status==='new'?'new': o.status==='confirmed'?'confirmed': ready?'ready':''}">${o.status||'new'}</span>`];
-    if (ready) badges.push(`<span class="badge ready">✓ pronto</span>`);
-    return `<div class="order">
-      <div class="row-spread">
-        <h3>#${o.orderId} · Mesa: <span class="pill">${o.table||'-'}</span></h3>
-        <div class="badges">${badges.join(' ')}</div>
-      </div>
-      <ul style="margin:8px 0 0 14px; padding:0 0 0 8px;">${items}</ul>
-      <div class="row-spread" style="margin-top:8px;">
-        <small class="note">${o.notes||''}</small>
-        <div><span class="total">Total: ${total} CVE</span></div>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <button class="btn btn-primary" data-confirm="${o.orderId}">Confirmar</button>
-        <button class="btn" data-served="${o.orderId}">Servido</button>
-      </div>
-    </div>`;
-  }
+    function render(list){
+      ordersDiv.innerHTML='';
+      if(!list.length){ ordersDiv.innerHTML='<p class="muted">Sem pedidos confirmados.</p>'; return; }
+      list.forEach(o=>{
+        const items = (o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>') || '(sem itens)';
+        const when = o.confirmedAt?.toDate ? o.confirmedAt.toDate().toLocaleTimeString() : '';
+        const card = document.createElement('div'); card.className='card p-3 rounded-xl';
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-semibold">Mesa ${esc(o.table)}</div>
+              <div class="muted text-sm leading-5">${items}</div>
+              ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
+              <div class="muted text-xs mt-1">Confirmado: ${when}</div>
+            </div>
+            <div class="flex flex-col gap-2">
+              <button class="btn bg-emerald-700 hover:bg-emerald-600" data-done="${o.id}">Marcar pronto</button>
+            </div>
+          </div>`;
+        card.querySelector('[data-done]').addEventListener('click', ()=>markDone(o));
+        ordersDiv.appendChild(card);
+      });
+    }
 
-  function render(list){ document.getElementById('orders').innerHTML = list.map(rowHTML).join(''); }
+    async function markDone(o){
+      try{
+        await updateDoc(doc(collection(db,'orders'), o._docId), { isReady: true, readyAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      }catch(e){ console.warn(e); }
+    }
 
-  async function confirmOrder(id){ try { await fb.updateDoc(fb.doc(fb.db,'orders', String(id)), { status:'confirmed', confirmed:true, confirmedAt: Date.now() }); } catch(e){ console.warn('confirm error', e); } }
-  async function markServed(id){ try { await fb.updateDoc(fb.doc(fb.db,'orders', String(id)), { servedAt: Date.now(), isReady:true }); } catch(e){ console.warn('served error', e); } }
+    // Listen to confirmed orders only
+    const ordersRef = collection(db,'orders');
+    const qref = query(ordersRef, where('confirmed','==',true), where('rejectedAt','==',null), where('servedAt','==',null), orderBy('updatedAt','desc'));
+    const state = new Map(); // id -> prev confirmed flag
+    onSnapshot(qref, (snap)=>{
+      const list = [];
+      let play = false;
+      snap.docChanges().forEach(ch=>{
+        if (ch.type === 'added'){
+          play = true;
+        } else if (ch.type === 'modified'){
+          const d = ch.doc.data(); const id = d.orderId || ch.doc.id;
+          if (d.confirmed && !state.get(id)) play = true;
+        }
+      });
+      snap.forEach(docSnap=>{
+        const d = docSnap.data(); const id = d.orderId || docSnap.id;
+        d.id = id; d._docId = docSnap.id;
+        state.set(id, !!d.confirmed);
+        list.push(d);
+      });
+      if (play && soundEnabled){ try{ cashEl.currentTime=0; cashEl.play().catch(()=>{});}catch{} }
+      render(list);
+    });
 
-  document.addEventListener('click', (ev)=>{
-    const c = ev.target.closest('[data-confirm]'); if(c) confirmOrder(c.getAttribute('data-confirm'));
-    const s = ev.target.closest('[data-served]');  if(s) markServed(s.getAttribute('data-served'));
-  }, true);
+    document.getElementById('refreshBtn').addEventListener('click', ()=>location.reload());
+  </script>
 
-  function handleSnapshot(snap){
-    const list = [];
-    snap.forEach(d=> { const o = Object.assign({}, d.data(), {orderId:d.id}); list.push(o); });
-    list.sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
-    for (const o of list){ if(!seen.has(o.orderId)){ if (o.status==='new' && soundOk) document.getElementById('sndReady').play().catch(()=>{}); seen.add(o.orderId); }}
-    snap.docChanges().forEach(ch=>{ if (ch.type==='modified'){ const o = Object.assign({}, ch.doc.data(), {orderId: ch.doc.id}); if ((o.status==='ready' || o.isReady) && soundOk) document.getElementById('sndDone').play().catch(()=>{}); } });
-    render(list);
-  }
-
-  const qref = fb.query(fb.collection(fb.db,'orders'));
-  fb.onSnapshot(qref, handleSnapshot);
-})();</script>
 </body>
 </html>
