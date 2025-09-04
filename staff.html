@@ -1,1 +1,197 @@
-<!doctype html><title>Error</title>
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Staff – Pedidos em Tempo Real</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
+    .btn { padding:.6rem .9rem; border-radius:.9rem; font-weight:700; }
+    .pill { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,0.08); }
+    .table{ background:#111a34; border:1px solid rgba(255,255,255,0.08); border-radius:12px; display:flex; align-items:center; justify-content:center; height:56px; font-weight:700; cursor:pointer; transition:.15s; -webkit-tap-highlight-color: transparent; }
+    .table.active{ outline:4px solid #22c55e; }
+    .muted { opacity:.75; }
+  </style>
+
+</head>
+<body class="p-4">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <h1 class="text-2xl font-bold">Staff – Pedidos em Tempo Real</h1>
+      <div class="flex items-center gap-2">
+        <button id="btnClearAll" class="btn bg-rose-700 hover:bg-rose-600">Limpar tudo</button>
+        <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
+      </div>
+    </div>
+
+    <section class="card p-3 rounded-2xl mb-3">
+      <div class="muted text-sm">
+        Confirme os pedidos com o cliente. Ao confirmar, a cozinha recebe automaticamente.<br/>
+        • Alerta <b>ready.mp3</b> em pedidos pendentes. • Alerta <b>done.mp3</b> quando a cozinha marca pronto.
+      </div>
+    </section>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+      <section class="card p-3 rounded-2xl">
+        <h2 class="font-semibold mb-2">Pendentes <span id="countPend" class="pill">0</span></h2>
+        <div id="pending" class="space-y-2"></div>
+      </section>
+
+      <section class="card p-3 rounded-2xl sm:col-span-1 lg:col-span-2">
+        <h2 class="font-semibold mb-2">Confirmados <span id="countConf" class="pill">0</span></h2>
+        <div id="confirmed" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </section>
+    </div>
+
+    <section class="card p-3 rounded-2xl">
+      <h2 class="font-semibold mb-2">Resumo do dia</h2>
+      <a class="underline text-emerald-400" href="Resumo.html" target="_blank" rel="noopener">Abrir Resumo</a>
+    </section>
+  </div>
+
+  <audio id="readySound" preload="auto" src="ready.mp3" loop></audio>
+  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
+
+  <script>
+    const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  </script>
+
+  
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app);
+  signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp, sRef, getDownloadURL };
+</script>
+
+
+  <script type="module">
+    const { db, storage, onSnapshot, collection, doc, updateDoc, serverTimestamp, sRef, getDownloadURL } = window.__fb;
+
+    async function bindAudio(id, filename){ try{ const url = await getDownloadURL(sRef(storage, filename)); document.getElementById(id).src = url; }catch{} }
+    bindAudio('readySound','ready.mp3'); bindAudio('doneSound','done.mp3');
+
+    const readyEl = document.getElementById('readySound');
+    const doneEl  = document.getElementById('doneSound');
+    document.addEventListener('pointerdown', ()=>{ [readyEl,doneEl].forEach(el=>{ try{ el.play().then(()=>{ el.pause(); el.currentTime=0; }); }catch{} }); }, {once:true});
+
+    const pendingDiv   = document.getElementById('pending');
+    const confirmedDiv = document.getElementById('confirmed');
+    const countPend    = document.getElementById('countPend');
+    const countConf    = document.getElementById('countConf');
+
+    function computeTotal(order){ if (typeof order.totalCVE === 'number') return Number(order.totalCVE)||0; let s=0; (order.items||[]).forEach(i=> s += Number(i.unitPrice||0)*Number(i.qty||1)); return s; }
+
+    function renderLists(list){
+      const pend = list.filter(o=> !o.confirmed && !o.rejectedAt);
+      const conf = list.filter(o=>  o.confirmed && !o.rejectedAt && !o.servedAt).slice(-48).reverse();
+      countPend.textContent = pend.length; countConf.textContent = conf.length;
+
+      if (pend.length === 0){ try{ readyEl.pause(); readyEl.currentTime=0; }catch{} }
+
+      pendingDiv.innerHTML = pend.length? '' : '<p class="muted">Sem pendentes.</p>';
+      pend.forEach(o=>{ const when = o.createdAt?.toDate ? o.createdAt.toDate().toLocaleTimeString() : '';
+        const items = (o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>') || '(sem itens)';
+        const total = computeTotal(o);
+        const card = document.createElement('div'); card.className='card p-3 rounded-xl';
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-semibold">Mesa ${esc(o.table)}</div>
+              <div class="muted text-sm leading-5">${items}</div>
+              ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
+              <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
+              <div class="muted text-xs mt-1">${when}</div>
+            </div>
+            <div class="flex flex-col gap-2">
+              <button class="btn bg-emerald-700 hover:bg-emerald-600" data-confirm="${o._docId}">Confirmar</button>
+              <button class="btn bg-slate-700 hover:bg-slate-600" data-reject="${o._docId}">Rejeitar</button>
+            </div>
+          </div>`;
+        card.querySelector('[data-confirm]').addEventListener('click', ()=>confirmOrder(o));
+        card.querySelector('[data-reject]').addEventListener('click', ()=>rejectOrder(o));
+        pendingDiv.appendChild(card);
+        try{ readyEl.play().catch(()=>{}); }catch{}
+      });
+
+      confirmedDiv.innerHTML = conf.length? '' : '<p class="muted">Sem confirmados.</p>';
+      conf.forEach(o=>{ const when = o.confirmedAt?.toDate ? o.confirmedAt.toDate().toLocaleTimeString() : '';
+        const items = (o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>') || '(sem itens)';
+        const total = computeTotal(o); const isReady = !!o.isReady;
+        const card = document.createElement('div'); card.className='card p-3 rounded-xl' + (isReady ? ' outline outline-emerald-500' : '');
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-semibold flex items-center gap-2">
+                <span>Mesa ${esc(o.table)}</span>
+                ${isReady ? '<span class="pill border-emerald-600 text-emerald-200">✔️ Pronto</span>' : ''}
+              </div>
+              <div class="muted text-sm leading-5">${items}</div>
+              ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
+              <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
+              <div class="muted text-xs mt-1">Confirmado: ${when}</div>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+              <button class="btn bg-emerald-700 hover:bg-emerald-600" data-served="${o._docId}">Servido</button>
+            </div>
+          </div>`;
+        card.querySelector('[data-served]').addEventListener('click', ()=>markServed(o));
+        confirmedDiv.appendChild(card);
+      });
+    }
+
+    async function confirmOrder(o){ try{ await updateDoc(doc(collection(db,'orders'), o._docId), { confirmed:true, confirmedAt: serverTimestamp(), updatedAt: serverTimestamp() }); }catch(e){ console.warn(e); } }
+    async function rejectOrder(o) { try{ await updateDoc(doc(collection(db,'orders'), o._docId), { rejectedAt: serverTimestamp(), updatedAt: serverTimestamp() }); }catch(e){ console.warn(e); } }
+    async function markServed(o) { try{ await updateDoc(doc(collection(db,'orders'), o._docId), { servedAt: serverTimestamp(), updatedAt: serverTimestamp() }); }catch(e){ console.warn(e); } }
+
+    // Clear all (reject all active)
+    document.getElementById('btnClearAll').addEventListener('click', async ()=>{
+      if(!confirm('Quer apagar todas as encomendas?')) return;
+      try{
+        const list = window.__ORDERS__ || [];
+        const targets = list.filter(o => !o.rejectedAt && !o.servedAt);
+        await Promise.all(targets.map(o => updateDoc(doc(collection(db,'orders'), o._docId), { rejectedAt: serverTimestamp(), updatedAt: serverTimestamp() })));
+        try{ readyEl.pause(); readyEl.currentTime=0; }catch{}
+        alert('Todas as encomendas foram rejeitadas.');
+      }catch(e){ console.warn(e); alert('Falha ao rejeitar todas.'); }
+    });
+
+    // Listen to orders
+    window.__ORDERS__ = [];
+    onSnapshot(collection(db,'orders'), (snap)=>{
+      const list=[]; snap.forEach(docSnap=>{ const d=docSnap.data(); d._docId=docSnap.id; list.push(d); });
+      const prev = new Map(window.__ORDERS__.map(o=>[o._docId,o]));
+      list.forEach(d=>{ const p = prev.get(d._docId); if (p && !p.isReady && d.isReady){ try{ doneEl.currentTime=0; doneEl.play().catch(()=>{});}catch{} } });
+      list.sort((a,b)=> (b.updatedAt?.seconds||0) - (a.updatedAt?.seconds||0));
+      window.__ORDERS__ = list;
+      renderLists(list);
+    }, (err)=>{
+      console.error('Staff onSnapshot error:', err);
+      alert('Erro a ler encomendas (permissões?). Ver consola.');
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', ()=>location.reload());
+  </script>
+</body>
+</html>

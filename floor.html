@@ -1,1 +1,188 @@
-<!doctype html><title>Error</title>
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Cliente – Pedido</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
+    .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
+    .btn { padding:.6rem .9rem; border-radius:.9rem; font-weight:700; }
+    .pill { font-size:.75rem; padding:.15rem .5rem; border-radius:.5rem; background:#0b1226; border:1px solid rgba(255,255,255,0.08); }
+    .table{ background:#111a34; border:1px solid rgba(255,255,255,0.08); border-radius:12px; display:flex; align-items:center; justify-content:center; height:56px; font-weight:700; cursor:pointer; transition:.15s; -webkit-tap-highlight-color: transparent; }
+    .table.active{ outline:4px solid #22c55e; }
+    .muted { opacity:.75; }
+  </style>
+
+</head>
+<body class="p-4 pb-28">
+  <div class="max-w-7xl mx-auto">
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+      <h1 class="text-2xl font-bold">🍽️ Faça o seu pedido</h1>
+      <div class="muted text-sm">Selecione a mesa, escolha produtos por categoria e envie para o staff.</div>
+    </header>
+
+    <section class="card p-4 rounded-2xl mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-semibold">Indique a sua mesa</h2>
+        <span class="muted text-sm">Mesa selecionada: <span id="selectedTable" class="font-semibold">Nenhuma</span></span>
+      </div>
+      <div id="floor" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2"></div>
+    </section>
+
+    <div class="grid lg:grid-cols-[2fr_1fr] gap-4">
+      <div id="menuCol" class="space-y-4"></div>
+      <aside class="card p-4 rounded-2xl sticky top-4 h-fit">
+        <h2 class="text-lg font-semibold mb-2">🧺 Carrinho</h2>
+        <div id="cartList" class="space-y-2 mb-3"></div>
+        <div class="flex items-center justify-between mb-3"><span class="muted">Total</span><strong id="cartTotal">0$00</strong></div>
+        <label class="muted text-sm">Observações (opcional)</label>
+        <textarea id="notes" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
+        <button id="sendBtn" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
+        <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+
+    // Tables 1..40
+    const floorEl = document.getElementById('floor'); const selectedLabel = document.getElementById('selectedTable');
+    let selectedTable = null;
+    for(let i=1;i<=40;i++){ const b=document.createElement('button'); b.className='table'; b.textContent=i; b.addEventListener('click',()=>{ selectedTable=String(i); [...floorEl.children].forEach(n=>n.classList.remove('active')); b.classList.add('active'); selectedLabel.textContent=i; }); floorEl.appendChild(b); }
+
+    // Cart
+    const cart = new Map();
+    const cartList = document.getElementById('cartList'); const cartTotal = document.getElementById('cartTotal');
+    function addToCart(item, qty=1){ const cur = cart.get(item.id) || { name:item.name, unitPrice:Number(item.priceNum||0), qty:0 }; cur.qty += qty; cart.set(item.id, cur); renderCart(); }
+    function removeFromCart(id){ cart.delete(id); renderCart(); }
+    function inc(id){ const c=cart.get(id); if(!c) return; c.qty++; renderCart(); }
+    function dec(id){ const c=cart.get(id); if(!c) return; c.qty=Math.max(1, c.qty-1); renderCart(); }
+    function totalNum(){ let s=0; for (const c of cart.values()) s += c.unitPrice * c.qty; return s; }
+    function renderCart(){
+      cartList.innerHTML='';
+      for (const [id,c] of cart.entries()){
+        const row=document.createElement('div'); row.className='flex items-center justify-between gap-3 p-2 bg-slate-800 rounded-xl';
+        row.innerHTML = `<div><div class="font-semibold">${c.qty} × ${esc(c.name)}</div><div class="muted text-xs">${formatCVE(c.unitPrice)}</div></div>
+          <div class="flex gap-2"><button class="btn bg-slate-700" data-dec="${id}">−</button><button class="btn bg-slate-700" data-inc="${id}">+</button><button class="btn bg-slate-700" data-del="${id}">Remover</button></div>`;
+        row.querySelector('[data-dec]').addEventListener('click',()=>dec(id));
+        row.querySelector('[data-inc]').addEventListener('click',()=>inc(id));
+        row.querySelector('[data-del]').addEventListener('click',()=>removeFromCart(id));
+        cartList.appendChild(row);
+      }
+      cartTotal.textContent = formatCVE(totalNum());
+    }
+
+    // Render helpers
+    const menuCol = document.getElementById('menuCol');
+    function itemRow(it){ return `
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="font-extrabold">${esc(it.name)}</div>
+          <div class="muted text-sm">${esc(it.price || formatCVE(it.priceNum||0))}</div>
+          ${it.desc?`<div class="muted text-xs">${esc(it.desc)}</div>`:''}
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="btn bg-slate-700 hover:bg-slate-600" data-action="minus" data-id="${it.id}">−</button>
+          <input inputmode="numeric" pattern="[0-9]*" data-qty="${it.id}" type="number" value="1" min="1" class="px-2 py-2 rounded-lg bg-slate-800 border border-slate-700 w-16 text-center font-bold" />
+          <button class="btn bg-slate-700 hover:bg-slate-600" data-action="plus" data-id="${it.id}">+</button>
+          <button class="btn bg-emerald-700 hover:bg-emerald-600" data-action="add" data-id="${it.id}">Adicionar</button>
+        </div>
+      </div>`; }
+
+    function renderCategory(cat){
+      const sec = document.createElement('section'); sec.className='card p-4 rounded-2xl';
+      sec.innerHTML = `<div class="flex items-center justify-between mb-3"><h2 class="text-lg font-semibold">${esc(cat.category)}</h2></div>`;
+      const list = document.createElement('div'); list.className='space-y-3';
+      (cat.items||[]).forEach(it=>{ const row=document.createElement('div'); row.innerHTML=itemRow(it); list.appendChild(row); });
+      sec.appendChild(list); menuCol.appendChild(sec);
+      list.querySelectorAll('[data-action="add"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const it=(cat.items||[]).find(x=>x.id===id); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); const q=Math.max(1, Number(qInput?.value||1)); addToCart(it,q); }); });
+      list.querySelectorAll('[data-action="plus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)+1)); }); });
+      list.querySelectorAll('[data-action="minus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)-1)); }); });
+    }
+
+    // Load full menu from Storage/menu.json; fallback minimal sample
+    window.__MENU__ = [];
+  </script>
+
+  
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+    authDomain: "asabrancaff-faebe.firebaseapp.com",
+    projectId: "asabrancaff-faebe",
+    storageBucket: "asabrancaff-faebe.appspot.com",
+    messagingSenderId: "326390762122",
+    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+  const storage = getStorage(app);
+  signInAnonymously(auth).catch(()=>{});
+  onAuthStateChanged(auth, ()=>{});
+
+  window.__fb = { app, db, auth, storage, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp, sRef, getDownloadURL };
+</script>
+
+
+  <script type="module">
+    const { db, addDoc, collection, serverTimestamp, storage, sRef, getDownloadURL } = window.__fb;
+
+    async function loadMenu(){
+      try{
+        const url = await getDownloadURL(sRef(storage,'menu.json'));
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        if (Array.isArray(data)) window.__MENU__ = data;
+      }catch(e){ console.warn('menu.json not found in Storage (using fallback)', e); }
+
+      if (!Array.isArray(window.__MENU__) || window.__MENU__.length===0){
+        window.__MENU__ = [
+          { category:'Pizzas', items:[
+            {id:'pz-peperoni', name:'PEPERONI', priceNum:800},
+            {id:'pz-atum', name:'ATUM', priceNum:800},
+            {id:'pz-hawaii-ii', name:'HAWAII-II', priceNum:800}
+          ]},
+          { category:'Hambúrgueres', items:[
+            {id:'burg-cheeseburger', name:'CLÁSSICO CHEESEBURGER', priceNum:250},
+            {id:'burg-bigmac', name:'BIG MAC BURGER', priceNum:500}
+          ]},
+          { category:'Bebidas', items:[
+            {id:'coca15', name:'Coca-Cola 1,5L', priceNum:250},
+            {id:'compal1', name:'Compal 1L', priceNum:300}
+          ]}
+        ];
+      }
+      // Render in a preferred order if found
+      const orderPref = ['Pizzas','Hambúrgueres','Fried Chicken','Shawarma','Hot Dog','Combos','Salgados/Petiscos','Molhos','Sumos Naturais','Gelados','Bebidas'];
+      window.__MENU__.slice().sort((a,b)=> orderPref.indexOf(a.category) - orderPref.indexOf(b.category)).forEach(renderCategory);
+    }
+    await loadMenu();
+
+    function gatherItems(){ const arr=[]; for (const [id,c] of cart.entries()) arr.push({ id, name:c.name, qty:Number(c.qty||1), unitPrice:Number(c.unitPrice||0) }); return arr; }
+    function gatherTotal(items){ return items.reduce((s,it)=> s + (Number(it.unitPrice||0)*Number(it.qty||1)), 0); }
+
+    document.getElementById('sendBtn').addEventListener('click', async ()=>{
+      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+      const items=gatherItems(); if(items.length===0){ alert('Adicione itens ao carrinho.'); return; }
+      const notes=(document.getElementById('notes').value||'').trim();
+      const orderId = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+      const totalCVE = gatherTotal(items);
+      try{
+        await addDoc(collection(db,'orders'), { orderId, table:String(selectedTable), items, notes, totalCVE, confirmed:false, isReady:false, servedAt:null, rejectedAt:null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        cart.clear(); renderCart(); document.getElementById('notes').value=''; alert('Pedido enviado ao staff para confirmação!');
+      }catch(e){ console.warn(e); alert('Falha ao enviar o pedido. Verifique a internet.'); }
+    });
+  </script>
+</body>
+</html>
