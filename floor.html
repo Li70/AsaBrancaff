@@ -43,7 +43,7 @@
         <div class="flex items-center justify-between mb-3"><span class="muted">Total</span><strong id="cartTotalDesktop">0$00</strong></div>
         <label class="muted text-sm">Observações (opcional)</label>
         <textarea id="notesDesktop" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
-        <button id="sendBtnDesktop" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
+        <button id="sendBtnDesktop" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Enviar encomenda →</button>
         <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
       </aside>
     </div>
@@ -73,7 +73,7 @@
           <div class="flex items-center justify-between mb-3"><span class="muted">Total</span><strong id="cartTotalMobile">0$00</strong></div>
           <label class="muted text-sm">Observações (opcional)</label>
           <textarea id="notesMobile" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
-          <button id="sendBtnMobile" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
+          <button id="sendBtnMobile" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Enviar encomenda →</button>
           <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
         </div>
       </div>
@@ -95,7 +95,7 @@
     (function initTables(){
       const floorEl = document.getElementById('floor'); const selectedLabel = document.getElementById('selectedTable');
       window.__selectedTable__ = null;
-      for(let i=1;i<=40;i++){
+      for(let i=1;i<=8;i++){
         const b=document.createElement('button'); b.className='table'; b.textContent=i;
         b.addEventListener('click',()=>{ window.__selectedTable__=String(i); [...floorEl.children].forEach(n=>n.classList.remove('active')); b.classList.add('active'); selectedLabel.textContent=i; });
         floorEl.appendChild(b);
@@ -151,10 +151,13 @@
     const menuCol = document.getElementById('menuCol');
     function itemRow(it){ return `
       <div class="flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="font-extrabold">${esc(it.name)}</div>
-          <div class="muted text-sm">${esc(it.price || formatCVE(it.priceNum||0))}</div>
-          ${it.desc?`<div class="muted text-xs">${esc(it.desc)}</div>`:''}
+        <div class="flex items-center gap-3 min-w-0">
+          ${it.icon ? `<img src="${esc(it.icon)}" alt="" class="h-10 w-10 rounded-lg object-cover border border-slate-700">` : ''}
+          <div class="min-w-0">
+            <div class="font-extrabold">${esc(it.name)}</div>
+            <div class="muted text-sm">${esc(it.price || formatCVE(it.priceNum||0))}</div>
+            ${it.desc?`<div class="muted text-xs">${esc(it.desc)}</div>`:''}
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <button class="btn bg-slate-700 hover:bg-slate-600" data-action="minus" data-id="${it.id}">−</button>
@@ -162,7 +165,8 @@
           <button class="btn bg-slate-700 hover:bg-slate-600" data-action="plus" data-id="${it.id}">+</button>
           <button class="btn bg-emerald-700 hover:bg-emerald-600" data-action="add" data-id="${it.id}">Adicionar</button>
         </div>
-      </div>`; }
+      </div>
+    `; }
 
     function renderCategory(cat){ 
       const emoji = cat.icon || DEFAULT_ICONS[cat.category] || '';
