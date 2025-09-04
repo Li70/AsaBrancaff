@@ -113,25 +113,6 @@
       </div>`; }
 
     
-    // Mobile drawer logic
-    const mobileBarBtn = document.getElementById('mobileBarBtn');
-    const mobileDrawer = document.getElementById('mobileDrawer');
-    const drawerBackdrop = document.getElementById('drawerBackdrop');
-    const drawerClose = document.getElementById('drawerClose');
-    function openDrawer(){ mobileDrawer?.classList.remove('hidden'); }
-    function closeDrawer(){ mobileDrawer?.classList.add('hidden'); }
-    mobileBarBtn?.addEventListener('click', openDrawer);
-    drawerBackdrop?.addEventListener('click', closeDrawer);
-    drawerClose?.addEventListener('click', closeDrawer);
-
-    // Small pulse when item added (mobile bar)
-    function pulseMobileBar(){
-      const bar = document.getElementById('mobileBarBtn');
-      if(!bar) return;
-      bar.classList.add('ring-4','ring-emerald-300/40');
-      setTimeout(()=> bar.classList.remove('ring-4','ring-emerald-300/40'), 300);
-    }
-
     function renderCategory(cat){
       const emoji = cat.icon || DEFAULT_ICONS[cat.category] || '';
       const sec = document.createElement('section'); sec.className='card p-4 rounded-2xl';
@@ -139,9 +120,30 @@
       const list = document.createElement('div'); list.className='space-y-3';
       (cat.items||[]).forEach(it=>{ const row=document.createElement('div'); row.innerHTML=itemRow(it); list.appendChild(row); });
       sec.appendChild(list); menuCol.appendChild(sec);
-      list.querySelectorAll('[data-action="add"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const it=(cat.items||[]).find(x=>x.id===id); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); const q=Math.max(1, Number(qInput?.value||1)); const withCat = Object.assign({}, it, {category: cat.category}); addToCart(withCat,q); pulseMobileBar(); }); });
-      list.querySelectorAll('[data-action="plus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)+1)); }); });
-      list.querySelectorAll('[data-action="minus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)-1)); }); });
+      list.querySelectorAll('[data-action="add"]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const id=btn.getAttribute('data-id');
+          const it=(cat.items||[]).find(x=>x.id===id);
+          const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`);
+          const q=Math.max(1, Number(qInput?.value||1));
+          const withCat = Object.assign({}, it, {category: cat.category});
+          addToCart(withCat,q); pulseMobileBar();
+        });
+      });
+      list.querySelectorAll('[data-action="plus"]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const id=btn.getAttribute('data-id');
+          const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`);
+          qInput.value = String(Math.max(1, Number(qInput.value||1)+1));
+        });
+      });
+      list.querySelectorAll('[data-action="minus"]').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const id=btn.getAttribute('data-id');
+          const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`);
+          qInput.value = String(Math.max(1, Number(qInput.value||1)-1));
+        });
+      });
     }
 
     window.__MENU__ = [];
