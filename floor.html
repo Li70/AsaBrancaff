@@ -1,12 +1,11 @@
-<!DOCTYPE html>
-
+<!doctype html>
 <html lang="pt">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
-<title>Cliente – Pedido</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Cliente – Pedido</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
     :root { color-scheme: dark; }
     body { background:#0b1020; color:#fff; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial; }
     .card { background:#0f172a; border:1px solid rgba(255,255,255,0.08); }
@@ -18,49 +17,92 @@
   </style>
 </head>
 <body class="p-4 pb-28">
-<div class="max-w-7xl mx-auto">
-<header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-<h1 class="text-2xl font-bold">🍽️ Faça o seu pedido</h1>
-<div class="muted text-sm">Selecione a mesa, escolha produtos por categoria e envie para o staff.</div>
-</header>
-<section class="card p-4 rounded-2xl mb-4">
-<div class="flex items-center justify-between mb-2">
-<h2 class="text-lg font-semibold">Indique a sua mesa</h2>
-<span class="muted text-sm">Mesa selecionada: <span class="font-semibold" id="selectedTable">Nenhuma</span></span>
-</div>
-<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2" id="floor"></div>
-</section>
-<div class="grid lg:grid-cols-[2fr_1fr] gap-4">
-<div class="muted text-sm mb-2" id="menuStatus">Carregando menu…</div>
-<div class="space-y-4" id="menuCol"></div>
-<aside class="card p-4 rounded-2xl sticky top-4 h-fit">
-<h2 class="text-lg font-semibold mb-2">🧺 Carrinho</h2>
-<div class="space-y-2 mb-3" id="cartList"></div>
-<div class="flex items-center justify-between mb-3"><span class="muted">Total</span><strong id="cartTotal">0$00</strong></div>
-<label class="muted text-sm">Observações (opcional)</label>
-<textarea class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" id="notes" placeholder="Sem cebola, extra queijo..." rows="2"></textarea>
-<button class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3" id="sendBtn">Passar encomenda →</button>
-<p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
-</aside>
-</div>
-</div>
-<script>
+  <div class="max-w-7xl mx-auto">
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+      <h1 class="text-2xl font-bold">🍽️ Faça o seu pedido</h1>
+      <div class="muted text-sm">Selecione a mesa, escolha produtos por categoria e envie para o staff.</div>
+    </header>
+
+    <section class="card p-4 rounded-2xl mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-semibold">Indique a sua mesa</h2>
+        <span class="muted text-sm">Mesa selecionada: <span id="selectedTable" class="font-semibold">Nenhuma</span></span>
+      </div>
+      <div id="floor" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2"></div>
+    </section>
+
+    <div class="grid lg:grid-cols-[2fr_1fr] gap-4">
+      <div>
+        <div id="menuStatus" class="muted text-sm mb-2">Carregando menu…</div>
+        <div id="menuCol" class="space-y-4"></div>
+      </div>
+      <!-- Desktop sticky cart -->
+      <aside id="cartDesktop" class="hidden lg:block card p-4 rounded-2xl sticky top-4 h-fit">
+        <h2 class="text-lg font-semibold mb-2">🧺 Carrinho</h2>
+        <div id="cartListDesktop" class="space-y-2 mb-3"></div>
+        <div class="flex items-center justify-between mb-3"><span class="muted">Total</span><strong id="cartTotalDesktop">0$00</strong></div>
+        <label class="muted text-sm">Observações (opcional)</label>
+        <textarea id="notesDesktop" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
+        <button id="sendBtnDesktop" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
+        <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Mobile floating cart bar -->
+  <div id="mobileCartBar" class="lg:hidden fixed bottom-0 left-0 right-0 z-40">
+    <div class="mx-auto max-w-7xl p-3">
+      <div id="mobileBarBtn" class="cursor-pointer rounded-2xl px-4 py-3 bg-emerald-600 shadow-lg shadow-emerald-900/30 flex items-center justify-between">
+        <div class="font-bold">🧺 <span id="mobileCount">0</span> itens</div>
+        <div class="font-extrabold" id="mobileTotal">0$00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile drawer -->
+  <div id="mobileDrawer" class="lg:hidden fixed inset-0 z-50 hidden">
+    <div id="drawerBackdrop" class="absolute inset-0 bg-black/60"></div>
+    <div class="absolute left-0 right-0 bottom-0">
+      <div class="mx-auto max-w-7xl">
+        <div class="card rounded-t-2xl p-4 max-h-[80vh] overflow-y-auto">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-lg font-semibold">🧺 O seu carrinho</h2>
+            <button id="drawerClose" class="btn bg-slate-700">Fechar</button>
+          </div>
+          <div id="cartListMobile" class="space-y-2 mb-3"></div>
+          <div class="flex items-center justify-between mb-3"><span class="muted">Total</span><strong id="cartTotalMobile">0$00</strong></div>
+          <label class="muted text-sm">Observações (opcional)</label>
+          <textarea id="notesMobile" rows="2" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700" placeholder="Sem cebola, extra queijo..."></textarea>
+          <button id="sendBtnMobile" class="w-full btn bg-emerald-600 hover:bg-emerald-700 mt-3">Passar encomenda →</button>
+          <p class="muted text-xs mt-2">O staff confirma e só depois a cozinha recebe.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Non-module script: renders built-in menu and handles cart UI, no Firebase required -->
+  <script>
     const DEFAULT_ICONS = {
       'Pizzas – Clássicas':'🍕','Pizzas – Especiais':'🍕','Pizzas – Familiar Combo':'🍕',
       'Hambúrgueres':'🍔','Fried Chicken':'🍗','Shawarma':'🌯','Hot Dog':'🌭',
       'Combos':'🎁','Salgados/Petiscos':'🥟','Molhos':'🧂',
       'Sumos Naturais':'🧃','Gelados':'🍦','Bebidas':'🥤','Pizzas':'🍕'
     };
-
     const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 
-    // Tables 1..40
-    const floorEl = document.getElementById('floor'); const selectedLabel = document.getElementById('selectedTable');
-    let selectedTable = null;
-    for(let i=1;i<=40;i++){ const b=document.createElement('button'); b.className='table'; b.textContent=i; b.addEventListener('click',()=>{ selectedTable=String(i); [...floorEl.children].forEach(n=>n.classList.remove('active')); b.classList.add('active'); selectedLabel.textContent=i; }); floorEl.appendChild(b); }
+    // tables
+    (function initTables(){
+      const floorEl = document.getElementById('floor'); const selectedLabel = document.getElementById('selectedTable');
+      window.__selectedTable__ = null;
+      for(let i=1;i<=40;i++){
+        const b=document.createElement('button'); b.className='table'; b.textContent=i;
+        b.addEventListener('click',()=>{ window.__selectedTable__=String(i); [...floorEl.children].forEach(n=>n.classList.remove('active')); b.classList.add('active'); selectedLabel.textContent=i; });
+        floorEl.appendChild(b);
+      }
+    })();
 
-    // Cart
+    // cart
     const cart = new Map();
     const cartListDesktop = document.getElementById('cartListDesktop');
     const cartTotalDesktop = document.getElementById('cartTotalDesktop');
@@ -68,20 +110,13 @@
     const cartTotalMobile = document.getElementById('cartTotalMobile');
     const mobileCount = document.getElementById('mobileCount');
     const mobileTotal = document.getElementById('mobileTotal');
-    function addToCart(item, qty=1){ const cur = cart.get(item.id) || { name:item.name, unitPrice:Number(item.priceNum||0), qty:0, category:item.category||'' }; cur.qty += qty; cart.set(item.id, cur); renderCart(); }
-    function removeFromCart(id){ cart.delete(id); renderCart(); }
-    function inc(id){ const c=cart.get(id); if(!c) return; c.qty++; renderCart(); }
-    function dec(id){ const c=cart.get(id); if(!c) return; c.qty=Math.max(1, c.qty-1); renderCart(); }
-    function totalNum(){ let s=0; for (const c of cart.values()) s += c.unitPrice * c.qty; return s; }
+
     function renderCart(){
       const lists = [cartListDesktop, cartListMobile];
       lists.forEach(lst=>{ if (lst) lst.innerHTML=''; });
-      for (const [id,c] of cart.entries()){
+      for (const [id,c] of cart.entries()){ 
         const rowHTML = `<div class="flex items-center justify-between gap-3 p-2 bg-slate-800 rounded-xl"><div><div class="font-semibold">${c.qty} × ${esc(c.name)} ${c.category?`<span class="pill">${esc(c.category)}</span>`:''}</div><div class="muted text-xs">${formatCVE(c.unitPrice)}</div></div><div class="flex gap-2"><button class="btn bg-slate-700" data-dec="${id}">−</button><button class="btn bg-slate-700" data-inc="${id}">+</button><button class="btn bg-slate-700" data-del="${id}">Remover</button></div></div>`;
-        lists.forEach(lst=>{
-          if(!lst) return;
-          const wrapper = document.createElement('div'); wrapper.innerHTML = rowHTML;
-          const row = wrapper.firstChild;
+        lists.forEach(lst=>{ if(!lst) return; const wrap=document.createElement('div'); wrap.innerHTML=rowHTML; const row=wrap.firstChild;
           row.querySelector('[data-dec]').addEventListener('click',()=>dec(id));
           row.querySelector('[data-inc]').addEventListener('click',()=>inc(id));
           row.querySelector('[data-del]').addEventListener('click',()=>removeFromCart(id));
@@ -94,8 +129,25 @@
       if (mobileTotal) mobileTotal.textContent = total;
       if (mobileCount) mobileCount.textContent = Array.from(cart.values()).reduce((n,c)=>n + Number(c.qty||0), 0);
     }
+    function addToCart(item, qty=1){ const cur = cart.get(item.id) || { name:item.name, unitPrice:Number(item.priceNum||0), qty:0, category:item.category||'' }; cur.qty += qty; cart.set(item.id, cur); renderCart(); pulseMobileBar(); }
+    function removeFromCart(id){ cart.delete(id); renderCart(); }
+    function inc(id){ const c=cart.get(id); if(!c) return; c.qty++; renderCart(); }
+    function dec(id){ const c=cart.get(id); if(!c) return; c.qty=Math.max(1, c.qty-1); renderCart(); }
+    function totalNum(){ let s=0; for (const c of cart.values()) s += c.unitPrice * c.qty; return s; }
 
-    // Render helpers
+    // mobile drawer
+    const mobileBarBtn = document.getElementById('mobileBarBtn');
+    const mobileDrawer = document.getElementById('mobileDrawer');
+    const drawerBackdrop = document.getElementById('drawerBackdrop');
+    const drawerClose = document.getElementById('drawerClose');
+    function openDrawer(){ mobileDrawer?.classList.remove('hidden'); }
+    function closeDrawer(){ mobileDrawer?.classList.add('hidden'); }
+    mobileBarBtn?.addEventListener('click', openDrawer);
+    drawerBackdrop?.addEventListener('click', closeDrawer);
+    drawerClose?.addEventListener('click', closeDrawer);
+    function pulseMobileBar(){ const bar=document.getElementById('mobileBarBtn'); if(!bar) return; bar.classList.add('ring-4','ring-emerald-300/40'); setTimeout(()=> bar.classList.remove('ring-4','ring-emerald-300/40'), 300); }
+
+    // menu rendering helpers
     const menuCol = document.getElementById('menuCol');
     function itemRow(it){ return `
       <div class="flex items-center justify-between gap-3">
@@ -112,160 +164,77 @@
         </div>
       </div>`; }
 
-    
-    function renderCategory(cat){
+    function renderCategory(cat){ 
       const emoji = cat.icon || DEFAULT_ICONS[cat.category] || '';
       const sec = document.createElement('section'); sec.className='card p-4 rounded-2xl';
       sec.innerHTML = `<div class="flex items-center justify-between mb-3"><h2 class="text-lg font-semibold">${esc(emoji)} ${esc(cat.category)}</h2></div>`;
       const list = document.createElement('div'); list.className='space-y-3';
       (cat.items||[]).forEach(it=>{ const row=document.createElement('div'); row.innerHTML=itemRow(it); list.appendChild(row); });
       sec.appendChild(list); menuCol.appendChild(sec);
-      list.querySelectorAll('[data-action="add"]').forEach(btn=>{
-        btn.addEventListener('click',()=>{
-          const id=btn.getAttribute('data-id');
-          const it=(cat.items||[]).find(x=>x.id===id);
-          const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`);
-          const q=Math.max(1, Number(qInput?.value||1));
-          const withCat = Object.assign({}, it, {category: cat.category});
-          addToCart(withCat,q); pulseMobileBar();
-        });
-      });
-      list.querySelectorAll('[data-action="plus"]').forEach(btn=>{
-        btn.addEventListener('click',()=>{
-          const id=btn.getAttribute('data-id');
-          const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`);
-          qInput.value = String(Math.max(1, Number(qInput.value||1)+1));
-        });
-      });
-      list.querySelectorAll('[data-action="minus"]').forEach(btn=>{
-        btn.addEventListener('click',()=>{
-          const id=btn.getAttribute('data-id');
-          const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`);
-          qInput.value = String(Math.max(1, Number(qInput.value||1)-1));
-        });
-      });
+      list.querySelectorAll('[data-action="add"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const it=(cat.items||[]).find(x=>x.id===id); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); const q=Math.max(1, Number(qInput?.value||1)); const withCat = Object.assign({}, it, {category: cat.category}); addToCart(withCat,q); }); });
+      list.querySelectorAll('[data-action="plus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)+1)); }); });
+      list.querySelectorAll('[data-action="minus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)-1)); }); });
     }
 
-    window.__MENU__ = [];
+    // built-in menu + render
     window.__BUILTIN_MENU__ = [{"category": "Pizzas – Clássicas", "icon": "🍕", "items": [{"id": "pz-peperoni", "name": "PEPERONI", "desc": "Massa, molho de tomate, queijo, chouriço, orégano", "priceNum": 800, "price": "800$00"}, {"id": "pz-hawaii-ii", "name": "HAWAII-II", "desc": "Massa, molho de tomate, queijo, presunto, cebola, ananás, oréganos", "priceNum": 800, "price": "800$00"}, {"id": "pz-atum", "name": "ATUM", "desc": "Massa, molho de tomate, queijo, atum, azeitona, orégano, cebola, tomate", "priceNum": 800, "price": "800$00"}, {"id": "pz-frango", "name": "FRANGO", "desc": "Massa, molho de tomate, queijo, frango, milho, cebola, tomate, pimentão", "priceNum": 800, "price": "800$00"}, {"id": "pz-vegetariano", "name": "VEGETARIANO", "desc": "Massa, molho de tomate, pimentão, cogumelo, milho, cebola, tomate, curgete, azeitona", "priceNum": 800, "price": "800$00"}]}, {"category": "Pizzas – Especiais", "icon": "🍕", "items": [{"id": "pz-scp", "name": "S.C.P.", "desc": "Bacon, fiambre, ovo, ervilha, queijo, milho, pimentão verde, cogumelos, azeitona, ananás, nata, orégano", "priceNum": 1000, "price": "1000$00", "icon": "scp.png"}, {"id": "pz-slb", "name": "S.L.B", "desc": "Galinha, queijo, ananás, milho, pimentão vermelho, cogumelos, azeitona preta, chouriço, nata, orégano", "priceNum": 1000, "price": "1000$00", "icon": "slb.png"}, {"id": "pz-fcp", "name": "F.C.P.", "desc": "Queijo, milho, atum, pimentão, ananás, cogumelos, azeitona preta, nata, orégano", "priceNum": 1000, "price": "1000$00", "icon": "fcp.png"}]}, {"category": "Pizzas – Familiar Combo", "icon": "🍕", "items": [{"id": "pz-combo-coca", "name": "1 Pizza + Coca-Cola 1,5L", "desc": "Pizza familiar + Coca-Cola", "priceNum": 1200, "price": "1200$00"}, {"id": "pz-combo-compal", "name": "1 Pizza + Compal 1L", "desc": "Pizza familiar + Compal", "priceNum": 1250, "price": "1250$00"}]}, {"category": "Fried Chicken", "icon": "🍗", "items": [{"id": "legs", "name": "LEGS", "price": "200$00", "priceNum": 200}, {"id": "wings-plain", "name": "WINGS", "price": "200$00", "priceNum": 200}, {"id": "wings-sweet-chilli", "name": "SWEET CHILLI WINGS", "price": "600$00", "priceNum": 600}, {"id": "wings-bbq", "name": "BARBECUE WINGS", "price": "600$00", "priceNum": 600}, {"id": "nuggets", "name": "NUGGETS", "price": "500$00", "priceNum": 500}, {"id": "popcorn", "name": "POP CORNS", "price": "500$00", "priceNum": 500}, {"id": "fried-chicken", "name": "FRIED CHICKEN", "price": "300$00", "priceNum": 300}, {"id": "sandwich", "name": "SANDWICH", "price": "500$00", "priceNum": 500}, {"id": "meia-frango", "name": "MEIA DE FRANGO", "price": "600$00", "priceNum": 600}]}, {"category": "Combos", "icon": "🎁", "items": [{"id": "combo1", "name": "COMBO 1", "desc": "1 PERNA · 1 ASA · 1 BATATA", "price": "450$00", "priceNum": 450}, {"id": "combo2", "name": "COMBO 2", "desc": "2 PERNA · 1 ASA · 1 BATATA", "price": "650$00", "priceNum": 650}, {"id": "combo3", "name": "COMBO 3", "desc": "3 PERNAS · 3 ASAS · 1 BATATA", "price": "800$00", "priceNum": 800}, {"id": "combo4", "name": "COMBO 4", "desc": "4 PERNAS · 4 ASAS · 1 BATATA", "price": "1000$00", "priceNum": 1000}, {"id": "pz-combo-coca", "name": "PIZZA COMBO + Coca-Cola 1,5L", "price": "1200$00", "priceNum": 1200}, {"id": "pz-combo-compal", "name": "PIZZA COMBO + Compal 1L", "price": "1250$00", "priceNum": 1250}, {"id": "shawarma-combo", "name": "SHAWARMA COMBO", "desc": "1 Shawarma + CocaCola 0,5L + Batata Frita", "price": "650$00", "priceNum": 650}, {"id": "doner-combo", "name": "DONER KEBAB COMBO", "desc": "1 Doner Kebab + CocaCola 0,5L", "price": "600$00", "priceNum": 600}]}, {"category": "Hot Dog", "icon": "🌭", "items": [{"id": "hot-chicago", "name": "CHICAGO", "price": "300$00", "priceNum": 300}, {"id": "hot-italian", "name": "ITALIAN", "price": "300$00", "priceNum": 300}, {"id": "hot-michigan", "name": "MICHIGAN", "price": "300$00", "priceNum": 300}, {"id": "hot-ny", "name": "NEW YORK", "price": "300$00", "priceNum": 300}, {"id": "hot-dodger", "name": "DODGER DOG", "price": "300$00", "priceNum": 300}, {"id": "hot-carolina", "name": "CAROLINA", "price": "300$00", "priceNum": 300}]}, {"category": "Molhos", "icon": "🧂", "items": [{"id": "sauce-sweet-sour", "name": "SWEET & SOUR SAUCE", "price": "50$00", "priceNum": 50}, {"id": "sauce-alfredo", "name": "ALFREDO (CREMOSO CLÁSSICO)", "price": "50$00", "priceNum": 50}, {"id": "sauce-honey-mustard", "name": "HONEY MUSTARD", "price": "50$00", "priceNum": 50}, {"id": "sauce-cheesy", "name": "CHEESY SAUCE", "price": "50$00", "priceNum": 50}, {"id": "sauce-creole", "name": "CREOLE TOMATO", "price": "50$00", "priceNum": 50}, {"id": "sauce-coleslaw", "name": "COLESLAW", "price": "50$00", "priceNum": 50}, {"id": "sauce-buffalo", "name": "BUFFALO", "price": "50$00", "priceNum": 50}]}, {"category": "Salgados/Petiscos", "icon": "🥟", "items": [{"id": "coxinha", "name": "COXINHA", "price": "60$00", "priceNum": 60}, {"id": "pastel", "name": "PASTEL", "price": "50$00", "priceNum": 50}, {"id": "bifanas", "name": "BIFANAS À MODA DO PORTO", "price": "300$00", "priceNum": 300}, {"id": "moelas", "name": "MOELAS À PORTUGUESA", "price": "600$00", "priceNum": 600}, {"id": "linguica", "name": "LINGUIÇA", "price": "100$00", "priceNum": 100}]}, {"category": "Hambúrgueres", "icon": "🍔", "items": [{"id": "burg-cheeseburger", "name": "CLÁSSICO CHEESEBURGER", "desc": "Pão, queijo, carne, ovo, molho big, batata, ketchup, maionese", "price": "250$00", "priceNum": 250}, {"id": "burg-bigmac", "name": "BIG MAC BURGER", "desc": "2 carnes, queijo cheddar, alface, picles, tomate, cebola, molho big", "price": "500$00", "priceNum": 500}, {"id": "burg-sweet", "name": "SWEET BURGER", "desc": "Queijo, bacon, cebola caramelizada, alface, molho burger", "price": "450$00", "priceNum": 450}, {"id": "burg-xtudo", "name": "BURGER X TUDO MODA DA CASA", "desc": "Carne, queijo, ovo, batata, tomate, molhos", "price": "300$00", "priceNum": 300}, {"id": "burg-completo", "name": "HAMBÚRGUER COMPLETO", "desc": "Carne, cebola caramelizada, queijo, bacon, maionese, batata", "price": "550$00", "priceNum": 550}, {"id": "burg-crispy", "name": "HAMBÚRGUER CRISPY", "desc": "Frango, molho kfc, alface, tomate, molhos", "price": "400$00", "priceNum": 400}]}, {"category": "Shawarma", "icon": "🌯", "items": [{"id": "shawarma-atum", "name": "SHAWARMA DE ATUM", "price": "400$00", "priceNum": 400}, {"id": "shawarma-galinha", "name": "SHAWARMA DE GALINHA", "price": "400$00", "priceNum": 400}, {"id": "shawarma-carne", "name": "SHAWARMA DE CARNE", "price": "300$00", "priceNum": 300}, {"id": "shawarma-veg", "name": "SHAWARMA VEGETARIANO", "price": "400$00", "priceNum": 400}, {"id": "doner", "name": "DONER KEBAB", "price": "500$00", "priceNum": 500}]}, {"category": "Sumos Naturais", "icon": "🧃", "items": [{"id": "sumo-cenoura", "name": "CENOURA", "price": "300$00", "priceNum": 300}, {"id": "sumo-papaia", "name": "PAPAIA", "price": "300$00", "priceNum": 300}, {"id": "sumo-melancia", "name": "MELANCIA", "price": "300$00", "priceNum": 300}, {"id": "sumo-laranja", "name": "LARANJA", "price": "300$00", "priceNum": 300}, {"id": "sumo-uva", "name": "UVA", "price": "300$00", "priceNum": 300}, {"id": "sumo-maca", "name": "MAÇÃ", "price": "300$00", "priceNum": 300}, {"id": "sumo-manga", "name": "MANGA", "price": "300$00", "priceNum": 300}, {"id": "sumo-banana", "name": "BANANA", "price": "300$00", "priceNum": 300}, {"id": "sumo-maracuja", "name": "MARACUJÁ", "price": "300$00", "priceNum": 300}, {"id": "sumo-kiwi", "name": "KIWI", "price": "300$00", "priceNum": 300}]}, {"category": "Gelados", "icon": "🍦", "items": [{"id": "gelado-cone", "name": "GELADO DE CONE", "price": "200$00", "priceNum": 200}, {"id": "gelado-copo", "name": "GELADO DE COPO", "price": "200$00", "priceNum": 200}]}];
-  
-// Render the built-in menu immediately so products are visible even without Firebase
-(function renderBuiltinMenu(){
-  try{
-    const status = document.getElementById('menuStatus');
-    const orderPref = ['Pizzas – Clássicas','Pizzas – Especiais','Pizzas – Familiar Combo','Pizzas','Hambúrgueres','Fried Chicken','Shawarma','Hot Dog','Combos','Salgados/Petiscos','Molhos','Sumos Naturais','Gelados','Bebidas'];
-    const data = Array.isArray(window.__BUILTIN_MENU__) ? window.__BUILTIN_MENU__ : [];
-    const col = document.getElementById('menuCol'); col.innerHTML='';
-    data.slice().sort((a,b)=> (orderPref.indexOf(a.category) === -1 ? 999 : orderPref.indexOf(a.category)) - (orderPref.indexOf(b.category) === -1 ? 999 : orderPref.indexOf(b.category))).forEach(renderCategory);
-    if (status) status.textContent = 'A usar menu integrado (carregue menu.json ao Storage para atualizar).';
-  }catch(e){ console.warn('Render builtin menu failed', e); }
-})();
+    (function renderBuiltinMenu(){
+      const status = document.getElementById('menuStatus');
+      try{ 
+        const orderPref = ['Pizzas – Clássicas','Pizzas – Especiais','Pizzas – Familiar Combo','Pizzas','Hambúrgueres','Fried Chicken','Shawarma','Hot Dog','Combos','Salgados/Petiscos','Molhos','Sumos Naturais','Gelados','Bebidas'];
+        const list = (Array.isArray(window.__BUILTIN_MENU__) ? window.__BUILTIN_MENU__ : []).slice().sort((a,b)=> (orderPref.indexOf(a.category) === -1 ? 999 : orderPref.indexOf(a.category)) - (orderPref.indexOf(b.category) === -1 ? 999 : orderPref.indexOf(b.category)));
+        menuCol.innerHTML='';
+        list.forEach(renderCategory);
+        if (status) status.textContent = 'A usar menu integrado (carregue menu.json ao Storage para atualizar).';
+      }catch(e){ console.warn('Failed to render builtin menu', e); if (status) status.textContent='Falha a carregar o menu.'; }
+    })();
 
-// Bind send button even without Firebase; it will alert if not connected
-if (!window.__FLOOR_SEND_BOUND__) {
-  window.__FLOOR_SEND_BOUND__ = true;
-  const sendBtnDesktop = document.getElementById('sendBtnDesktop');
+    // send order (bind both desktop & mobile)
+    const sendBtnDesktop = document.getElementById('sendBtnDesktop');
     const sendBtnMobile  = document.getElementById('sendBtnMobile');
-    async function sendOrder(){
-    const sel = window.__selectedTable__;
-    if(!sel){ alert('Selecione a sua mesa primeiro.'); return; }
-    const items=[]; for (const [id,c] of cart.entries()) items.push({ id, name:c.name, category:c.category||'', qty:Number(c.qty||1), unitPrice:Number(c.unitPrice||0) });
-    if(items.length===0){ alert('Adicione itens ao carrinho.'); return; }
-    if (!window.__fb || !window.__fb.db){ alert('Sem ligação ao servidor. Tente novamente em instantes.'); return; }
-    try{
+    async function sendOrder(){ 
+      const selectedTable = window.__selectedTable__;
+      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
+      const items=[]; for (const [id,c] of cart.entries()) items.push({ id, name:c.name, category:c.category||'', qty:Number(c.qty||1), unitPrice:Number(c.unitPrice||0) });
+      if(items.length===0){ alert('Adicione itens ao carrinho.'); return; }
+      if (!window.__fb || !window.__fb.db){ alert('Sem ligação ao servidor. Tente novamente em instantes.'); return; }
       const notes=((document.getElementById('notesDesktop')?.value || document.getElementById('notesMobile')?.value) || '').trim();
       const orderId = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
       const totalCVE = items.reduce((s,it)=> s + (Number(it.unitPrice||0)*Number(it.qty||1)), 0);
-      const { db, addDoc, collection, serverTimestamp } = window.__fb;
-      await addDoc(collection(db,'orders'), { orderId, table:String(sel), items, notes, totalCVE, confirmed:false, isReady:false, servedAt:null, rejectedAt:null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      cart.clear(); renderCart(); document.getElementById('notes').value=''; alert('Pedido enviado ao staff para confirmação!');
-    }catch(e){ console.warn(e); alert('Falha ao enviar o pedido. Verifique a internet.'); }
-  }
-    sendBtnDesktop?.addEventListener('click', sendOrder);
-    sendBtnMobile?.addEventListener('click', async ()=>{ await sendOrder(); closeDrawer(); });
-  }
-
-</script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
-    authDomain: "asabrancaff-faebe.firebaseapp.com",
-    projectId: "asabrancaff-faebe",
-    storageBucket: "asabrancaff-faebe.appspot.com",
-    messagingSenderId: "326390762122",
-    appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const auth = getAuth(app);
-  const storage = getStorage(app);
-  signInAnonymously(auth).catch(()=>{});
-  onAuthStateChanged(auth, ()=>{});
-
-  window.__fb = { app, db, auth, storage, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp, sRef, getDownloadURL };
-</script>
-<script type="module">
-    const FB = window.__fb || {}; const { db, addDoc, collection, serverTimestamp, storage, sRef, getDownloadURL } = FB;
-
-    async function loadMenu(){
-      const status = document.getElementById('menuStatus');
-      if (status) status.textContent = 'Carregando menu…';
-      try{
-        const url = await getDownloadURL(sRef(storage,'menu.json'));
-        const res = await fetch(url, { cache: 'no-store' });
-        const data = await res.json();
-        if (Array.isArray(data)) window.__MENU__ = data;
-      }catch(e){ console.warn('menu.json not found in Storage (using fallback)', e); }
-
-      if (!Array.isArray(window.__MENU__) || window.__MENU__.length===0){
-        window.__MENU__ = window.__BUILTIN_MENU__;
-        if (status) status.textContent = 'A usar menu integrado (carregue menu.json ao Storage para atualizar).';
-        window.__MENU__ = [
-          { category:'Pizzas – Clássicas', icon:'🍕', items:[
-            {id:'pz-peperoni', name:'PEPERONI', priceNum:800},
-            {id:'pz-atum', name:'ATUM', priceNum:800},
-            {id:'pz-hawaii-ii', name:'HAWAII-II', priceNum:800}
-          ]},
-          { category:'Hambúrgueres', icon:'🍔', items:[
-            {id:'burg-cheeseburger', name:'CLÁSSICO CHEESEBURGER', priceNum:250},
-            {id:'burg-bigmac', name:'BIG MAC BURGER', priceNum:500}
-          ]},
-          { category:'Bebidas', icon:'🥤', items:[
-            {id:'coca15', name:'Coca-Cola 1,5L', priceNum:250},
-            {id:'compal1', name:'Compal 1L', priceNum:300}
-          ]}
-        ];
-      }
-      const orderPref = ['Pizzas – Clássicas','Pizzas – Especiais','Pizzas – Familiar Combo','Pizzas','Hambúrgueres','Fried Chicken','Shawarma','Hot Dog','Combos','Salgados/Petiscos','Molhos','Sumos Naturais','Gelados','Bebidas'];
-      window.__MENU__.slice().sort((a,b)=> (orderPref.indexOf(a.category) === -1 ? 999 : orderPref.indexOf(a.category)) - (orderPref.indexOf(b.category) === -1 ? 999 : orderPref.indexOf(b.category))).forEach(renderCategory);
-      if (status) status.textContent='';
-    }
-    (async()=>{ try{ await loadMenu(); }catch(e){ console.warn(e); const s=document.getElementById('menuStatus'); if(s) s.textContent='Falha a carregar o menu.'; } })();
-
-    function gatherItems(){ const arr=[]; for (const [id,c] of cart.entries()) arr.push({ id, name:c.name, category:c.category||'', qty:Number(c.qty||1), unitPrice:Number(c.unitPrice||0) }); return arr; }
-    function gatherTotal(items){ return items.reduce((s,it)=> s + (Number(it.unitPrice||0)*Number(it.qty||1)), 0); }
-
-    const sendBtnDesktop = document.getElementById('sendBtnDesktop');
-    const sendBtnMobile  = document.getElementById('sendBtnMobile');
-    async function sendOrder(){
-      const selectedTable = window.__selectedTable__;
-      if(!selectedTable){ alert('Selecione a sua mesa primeiro.'); return; }
-      const items=gatherItems(); if(items.length===0){ alert('Adicione itens ao carrinho.'); return; }
-      const notes=((document.getElementById('notesDesktop')?.value || document.getElementById('notesMobile')?.value) || '').trim();
-      const orderId = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-      const totalCVE = gatherTotal(items);
-      try{
-        await addDoc(collection(db,'orders'), { orderId, table:String(selectedTable), items, notes, totalCVE, confirmed:false, isReady:false, servedAt:null, rejectedAt:null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        cart.clear(); renderCart(); document.getElementById('notes').value=''; alert('Pedido enviado ao staff para confirmação!');
-      }catch(e){ console.warn(e); alert('Falha ao enviar o pedido. Verifique a internet.'); }
+      try{ const { db, addDoc, collection, serverTimestamp } = window.__fb; await addDoc(collection(db,'orders'), { orderId, table:String(selectedTable), items, notes, totalCVE, confirmed:false, isReady:false, servedAt:null, rejectedAt:null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); cart.clear(); renderCart(); if (document.getElementById('notesDesktop')) document.getElementById('notesDesktop').value=''; if (document.getElementById('notesMobile')) document.getElementById('notesMobile').value=''; alert('Pedido enviado ao staff para confirmação!'); }catch(e){ console.warn(e); alert('Falha ao enviar o pedido. Verifique a internet.'); }
     }
     sendBtnDesktop?.addEventListener('click', sendOrder);
     sendBtnMobile?.addEventListener('click', async ()=>{ await sendOrder(); closeDrawer(); });
+  </script>
+
+  <!-- Firebase (optional) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
+      authDomain: "asabrancaff-faebe.firebaseapp.com",
+      projectId: "asabrancaff-faebe",
+      storageBucket: "asabrancaff-faebe.appspot.com",
+      messagingSenderId: "326390762122",
+      appId: "1:326390762122:web:919c53bd8d0cf9c34dbb73"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const auth = getAuth(app);
+    const storage = getStorage(app);
+    signInAnonymously(auth).catch(()=>{});
+    onAuthStateChanged(auth, ()=>{});
+
+    window.__fb = { app, db, auth, storage, collection, addDoc, serverTimestamp, sRef, getDownloadURL };
+
+    // Try to load menu.json from Storage (will overwrite built-in menu if found)
+    (async ()=>{
+      try{ const url = await getDownloadURL(sRef(storage,'menu.json')); const res = await fetch(url, { cache: 'no-store' }); const data = await res.json(); if (Array.isArray(data)) window.__BUILTIN_MENU__ = data; }catch{}
+    })();
   </script>
 </body>
 </html>
