@@ -5,7 +5,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Resumo do dia</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2712%27 fill=%27%2310b981%27/%3E%3Ctext x=%2732%27 y=%2738%27 text-anchor=%27middle%27 font-size=%2732%27 fill=%27white%27 font-family=%27Arial,Helvetica,sans-serif%27%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { color-scheme: dark; }
@@ -32,7 +31,31 @@
         <button id="enterBtn" class="btn bg-emerald-600 hover:bg-emerald-700">Entrar</button>
       </div>
       <p id="loginMsg" class="text-rose-400 text-sm mt-2"></p>
-      </section>
+      <details class="mt-4">
+        <summary class="cursor-pointer">⚙️ Configuração necessária (se aparecer erro)</summary>
+        <div class="mt-2 text-sm space-y-2">
+          <p><b>1) Ativar Anonymous Auth</b> em Firebase Authentication.</p>
+          <p><b>2) Regras do Firestore (mínimas para teste):</b></p>
+<pre class="bg-slate-900 p-3 rounded-lg overflow-auto text-xs">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /settings/{docId} { allow read: if request.auth != null; allow write: if false; }
+    match /orders/{orderId} { allow read: if request.auth != null; }
+  }
+}</pre>
+          <p><b>3) Criar o documento do hash</b> (cole o comando na consola do <i>staff.html</i> por exemplo):</p>
+<pre class="bg-slate-900 p-3 rounded-lg overflow-auto text-xs">// definir palavra-passe e gravar hash SHA‑256 em settings/resumo.sha256
+(async () => {
+  const hex = (b => [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''))
+             (await crypto.subtle.digest('SHA-256', new TextEncoder().encode('A_SUA_PALAVRA_PASSE')));
+  const { db } = window.__fb; // nas páginas do app já existe window.__fb
+  const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js');
+  await setDoc(doc(db, 'settings', 'resumo.sha256'), { hash: hex });
+  console.log('Guardado em settings/resumo.sha256');
+})();</pre>
+        </div>
+      </details>
+    </section>
 
     <section id="errorCard" class="hidden card p-4">
       <h2 class="font-semibold mb-2">❗ Não foi possível ligar</h2>
@@ -106,8 +129,6 @@
           throw new Error("Configuração em falta (settings/resumo.sha256)");
         }
         HASH_DOC = snap.data() || {};
-        window.HASH_DOC = HASH_DOC;
-        window.HASH_DOC = HASH_DOC;
         if (!HASH_DOC.hash || typeof HASH_DOC.hash !== 'string' || HASH_DOC.hash.length < 10){
           throw new Error("Campo 'hash' em settings/resumo.sha256 inválido.");
         }
@@ -148,7 +169,6 @@
       );
       const snap = await getDocs(q);
       const rows = []; snap.forEach(d=> rows.push({ id:d.id, ...d.data() }));
-
       const tbody = document.getElementById('rows'); tbody.innerHTML='';
       let count=0, conf=0, serv=0, total=0;
       rows.forEach(o=>{
@@ -156,21 +176,10 @@
         if (o.confirmed) conf++;
         if (o.servedAt) serv++;
         total += computeTotal(o);
-
         const when = o.createdAt?.toDate ? o.createdAt.toDate().toLocaleTimeString() : '';
-        const itemsHtml = (o.items||[]).map(i => {
-          const qty = Number(i.qty||1);
-          const name = esc(i.name||'');
-          const cat  = i.category ? `<span class="pill">${esc(i.category)}</span>` : '';
-          return `${qty}× ${name} ${cat}`;
-        }).join('<br>');
-
+        const items = (o.items||[]).map(i=> `${i.qty||1}× ${i.name||''}`).join(', ');
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td class="p-2">${when}</td>
-                        <td class="p-2">${esc(o.table||'')}</td>
-                        <td class="p-2">${o.servedAt? 'Servido' : (o.confirmed? 'Confirmado' : 'Pendente')}</td>
-                        <td class="p-2">${itemsHtml}</td>
-                        <td class="p-2 font-semibold">${formatCVE(computeTotal(o))}</td>`;
+        tr.innerHTML = `<td class="p-2">${when}</td><td class="p-2">${esc(o.table||'')}</td><td class="p-2">${o.servedAt? 'Servido' : (o.confirmed? 'Confirmado' : 'Pendente')}</td><td class="p-2">${esc(items)}</td><td class="p-2 font-semibold">${formatCVE(computeTotal(o))}</td>`;
         tbody.appendChild(tr);
       });
       document.getElementById('cardCount').textContent = count;
@@ -178,7 +187,6 @@
       document.getElementById('cardServ').textContent  = serv;
       document.getElementById('cardTotal').textContent = formatCVE(total);
     }
-    window.loadSummary = loadSummary;
 
     onAuthStateChanged(auth, async (user)=>{
       if (!user) return;
@@ -187,11 +195,20 @@
       const enterBtn = document.getElementById('enterBtn');
       enterBtn.addEventListener('click', async ()=>{
         const pw = document.getElementById('pw').value || '';
-              });
+        const entered = await (await import('../')).default; // dummy to force top-level await? (ignored)
+      });
     });
 
     // Hook login button without top-level await
-    
+    document.getElementById('enterBtn').addEventListener('click', async ()=>{
+      try{
+        const pw = document.getElementById('pw').value || '';
+        if (!HASH_DOC.hash){
+          await getHash(); // ensure we fetched
+        }
+        const digest = await (await import('https://cdn.skypack.dev/sha256-wasm?min')).sha256(pw); // fallback tiny lib
+      }catch{ /* fallback to native */ }
+    });
   </script>
 
   <script>
