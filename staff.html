@@ -57,7 +57,7 @@
 
   <script>
     const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
-    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   </script>
 
   
@@ -103,6 +103,11 @@
 
     function computeTotal(order){ if (typeof order.totalCVE === 'number') return Number(order.totalCVE)||0; let s=0; (order.items||[]).forEach(i=> s += Number(i.unitPrice||0)*Number(i.qty||1)); return s; }
 
+    function itemLine(i){
+      const pill = i.category ? ` <span class="pill">${esc(i.category)}</span>` : '';
+      return `${i.qty||1} × ${esc(i.name||i.pizzaType||'')}${pill}`;
+    }
+
     function renderLists(list){
       const pend = list.filter(o=> !o.confirmed && !o.rejectedAt);
       const conf = list.filter(o=>  o.confirmed && !o.rejectedAt && !o.servedAt).slice(-48).reverse();
@@ -112,7 +117,7 @@
 
       pendingDiv.innerHTML = pend.length? '' : '<p class="muted">Sem pendentes.</p>';
       pend.forEach(o=>{ const when = o.createdAt?.toDate ? o.createdAt.toDate().toLocaleTimeString() : '';
-        const items = (o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>') || '(sem itens)';
+        const items = (o.items||[]).map(itemLine).join('<br>') || '(sem itens)';
         const total = computeTotal(o);
         const card = document.createElement('div'); card.className='card p-3 rounded-xl';
         card.innerHTML = `
@@ -137,7 +142,7 @@
 
       confirmedDiv.innerHTML = conf.length? '' : '<p class="muted">Sem confirmados.</p>';
       conf.forEach(o=>{ const when = o.confirmedAt?.toDate ? o.confirmedAt.toDate().toLocaleTimeString() : '';
-        const items = (o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>') || '(sem itens)';
+        const items = (o.items||[]).map(itemLine).join('<br>') || '(sem itens)';
         const total = computeTotal(o); const isReady = !!o.isReady;
         const card = document.createElement('div'); card.className='card p-3 rounded-xl' + (isReady ? ' outline outline-emerald-500' : '');
         card.innerHTML = `
@@ -165,7 +170,6 @@
     async function rejectOrder(o) { try{ await updateDoc(doc(collection(db,'orders'), o._docId), { rejectedAt: serverTimestamp(), updatedAt: serverTimestamp() }); }catch(e){ console.warn(e); } }
     async function markServed(o) { try{ await updateDoc(doc(collection(db,'orders'), o._docId), { servedAt: serverTimestamp(), updatedAt: serverTimestamp() }); }catch(e){ console.warn(e); } }
 
-    // Clear all (reject all active)
     document.getElementById('btnClearAll').addEventListener('click', async ()=>{
       if(!confirm('Quer apagar todas as encomendas?')) return;
       try{
@@ -177,7 +181,6 @@
       }catch(e){ console.warn(e); alert('Falha ao rejeitar todas.'); }
     });
 
-    // Listen to orders
     window.__ORDERS__ = [];
     onSnapshot(collection(db,'orders'), (snap)=>{
       const list=[]; snap.forEach(docSnap=>{ const d=docSnap.data(); d._docId=docSnap.id; list.push(d); });

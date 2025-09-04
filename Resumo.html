@@ -70,9 +70,21 @@
 
 
   <script type="module">
-    const { db, getDoc, doc, onSnapshot, collection } = window.__fb;
+    const { db, getDoc, doc, onSnapshot, collection, auth } = window.__fb;
     const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+
+    async function ensureAuth(){
+      try{
+        if (auth.currentUser) return auth.currentUser;
+        const mod = await import('https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js');
+        const cred = await mod.signInAnonymously(auth);
+        return cred.user;
+      }catch(e){
+        console.warn('Auth error: enable Anonymous Sign-in in Firebase Console', e);
+        throw e;
+      }
+    }
 
     async function sha256hex(str){
       const enc = new TextEncoder().encode(str);
@@ -87,11 +99,15 @@
     const msg = document.getElementById('msg'); const pwd = document.getElementById('pwd');
 
     document.getElementById('enter').addEventListener('click', async ()=>{
-      msg.textContent=''; const stored = await getHash();
+      msg.textContent='';
+      await ensureAuth();
+      const stored = await getHash();
       if(!stored){ msg.textContent='Configuração em falta (settings/resumo.sha256).'; return; }
       const inputHash = await sha256hex(pwd.value||'');
       if (inputHash !== stored){ msg.textContent='Palavra-passe inválida.'; return; }
-      login.classList.add('hidden'); content.classList.remove('hidden'); startSummary();
+      login.classList.add('hidden'); content.classList.remove('hidden');
+      await ensureAuth();
+      startSummary();
     });
 
     function computeTotal(o){ if (typeof o.totalCVE === 'number') return Number(o.totalCVE)||0; let s=0; (o.items||[]).forEach(i=> s += Number(i.unitPrice||0)*Number(i.qty||1)); return s; }
@@ -112,6 +128,9 @@
           div.innerHTML=`<div><div class="font-semibold">Mesa ${esc(o.table)}</div><div class="muted text-sm leading-5">${items}</div><div class="muted text-xs mt-1">${when}</div></div><div class="font-bold">${formatCVE(Number(o.totalCVE||computeTotal(o)||0))}</div>`;
           listEl.appendChild(div);
         });
+      }, (err)=>{
+        msg.textContent = 'Permissões insuficientes para ler pedidos. Ver regras do Firestore.';
+        console.error(err);
       });
     }
   </script>

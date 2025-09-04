@@ -47,6 +47,13 @@
   </div>
 
   <script>
+    const DEFAULT_ICONS = {
+      'Pizzas – Clássicas':'🍕','Pizzas – Especiais':'🍕','Pizzas – Familiar Combo':'🍕',
+      'Hambúrgueres':'🍔','Fried Chicken':'🍗','Shawarma':'🌯','Hot Dog':'🌭',
+      'Combos':'🎁','Salgados/Petiscos':'🥟','Molhos':'🧂',
+      'Sumos Naturais':'🧃','Gelados':'🍦','Bebidas':'🥤','Pizzas':'🍕'
+    };
+
     const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 
@@ -58,7 +65,7 @@
     // Cart
     const cart = new Map();
     const cartList = document.getElementById('cartList'); const cartTotal = document.getElementById('cartTotal');
-    function addToCart(item, qty=1){ const cur = cart.get(item.id) || { name:item.name, unitPrice:Number(item.priceNum||0), qty:0 }; cur.qty += qty; cart.set(item.id, cur); renderCart(); }
+    function addToCart(item, qty=1){ const cur = cart.get(item.id) || { name:item.name, unitPrice:Number(item.priceNum||0), qty:0, category:item.category||'' }; cur.qty += qty; cart.set(item.id, cur); renderCart(); }
     function removeFromCart(id){ cart.delete(id); renderCart(); }
     function inc(id){ const c=cart.get(id); if(!c) return; c.qty++; renderCart(); }
     function dec(id){ const c=cart.get(id); if(!c) return; c.qty=Math.max(1, c.qty-1); renderCart(); }
@@ -67,7 +74,7 @@
       cartList.innerHTML='';
       for (const [id,c] of cart.entries()){
         const row=document.createElement('div'); row.className='flex items-center justify-between gap-3 p-2 bg-slate-800 rounded-xl';
-        row.innerHTML = `<div><div class="font-semibold">${c.qty} × ${esc(c.name)}</div><div class="muted text-xs">${formatCVE(c.unitPrice)}</div></div>
+        row.innerHTML = `<div><div class="font-semibold">${c.qty} × ${esc(c.name)} ${c.category?`<span class="pill">${esc(c.category)}</span>`:''}</div><div class="muted text-xs">${formatCVE(c.unitPrice)}</div></div>
           <div class="flex gap-2"><button class="btn bg-slate-700" data-dec="${id}">−</button><button class="btn bg-slate-700" data-inc="${id}">+</button><button class="btn bg-slate-700" data-del="${id}">Remover</button></div>`;
         row.querySelector('[data-dec]').addEventListener('click',()=>dec(id));
         row.querySelector('[data-inc]').addEventListener('click',()=>inc(id));
@@ -95,17 +102,17 @@
       </div>`; }
 
     function renderCategory(cat){
+      const emoji = cat.icon || DEFAULT_ICONS[cat.category] || '';
       const sec = document.createElement('section'); sec.className='card p-4 rounded-2xl';
-      sec.innerHTML = `<div class="flex items-center justify-between mb-3"><h2 class="text-lg font-semibold">${esc(cat.category)}</h2></div>`;
+      sec.innerHTML = `<div class="flex items-center justify-between mb-3"><h2 class="text-lg font-semibold">${esc(emoji)} ${esc(cat.category)}</h2></div>`;
       const list = document.createElement('div'); list.className='space-y-3';
       (cat.items||[]).forEach(it=>{ const row=document.createElement('div'); row.innerHTML=itemRow(it); list.appendChild(row); });
       sec.appendChild(list); menuCol.appendChild(sec);
-      list.querySelectorAll('[data-action="add"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const it=(cat.items||[]).find(x=>x.id===id); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); const q=Math.max(1, Number(qInput?.value||1)); addToCart(it,q); }); });
+      list.querySelectorAll('[data-action="add"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const it=(cat.items||[]).find(x=>x.id===id); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); const q=Math.max(1, Number(qInput?.value||1)); const withCat = Object.assign({}, it, {category: cat.category}); addToCart(withCat,q); }); });
       list.querySelectorAll('[data-action="plus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)+1)); }); });
       list.querySelectorAll('[data-action="minus"]').forEach(btn=>{ btn.addEventListener('click',()=>{ const id=btn.getAttribute('data-id'); const qInput=btn.parentElement.querySelector(`[data-qty="${id}"]`); qInput.value = String(Math.max(1, Number(qInput.value||1)-1)); }); });
     }
 
-    // Load full menu from Storage/menu.json; fallback minimal sample
     window.__MENU__ = [];
   </script>
 
@@ -148,28 +155,27 @@
 
       if (!Array.isArray(window.__MENU__) || window.__MENU__.length===0){
         window.__MENU__ = [
-          { category:'Pizzas', items:[
+          { category:'Pizzas – Clássicas', icon:'🍕', items:[
             {id:'pz-peperoni', name:'PEPERONI', priceNum:800},
             {id:'pz-atum', name:'ATUM', priceNum:800},
             {id:'pz-hawaii-ii', name:'HAWAII-II', priceNum:800}
           ]},
-          { category:'Hambúrgueres', items:[
+          { category:'Hambúrgueres', icon:'🍔', items:[
             {id:'burg-cheeseburger', name:'CLÁSSICO CHEESEBURGER', priceNum:250},
             {id:'burg-bigmac', name:'BIG MAC BURGER', priceNum:500}
           ]},
-          { category:'Bebidas', items:[
+          { category:'Bebidas', icon:'🥤', items:[
             {id:'coca15', name:'Coca-Cola 1,5L', priceNum:250},
             {id:'compal1', name:'Compal 1L', priceNum:300}
           ]}
         ];
       }
-      // Render in a preferred order if found
-      const orderPref = ['Pizzas','Hambúrgueres','Fried Chicken','Shawarma','Hot Dog','Combos','Salgados/Petiscos','Molhos','Sumos Naturais','Gelados','Bebidas'];
+      const orderPref = ['Pizzas – Clássicas','Pizzas – Especiais','Pizzas – Familiar Combo','Pizzas','Hambúrgueres','Fried Chicken','Shawarma','Hot Dog','Combos','Salgados/Petiscos','Molhos','Sumos Naturais','Gelados','Bebidas'];
       window.__MENU__.slice().sort((a,b)=> orderPref.indexOf(a.category) - orderPref.indexOf(b.category)).forEach(renderCategory);
     }
     await loadMenu();
 
-    function gatherItems(){ const arr=[]; for (const [id,c] of cart.entries()) arr.push({ id, name:c.name, qty:Number(c.qty||1), unitPrice:Number(c.unitPrice||0) }); return arr; }
+    function gatherItems(){ const arr=[]; for (const [id,c] of cart.entries()) arr.push({ id, name:c.name, category:c.category||'', qty:Number(c.qty||1), unitPrice:Number(c.unitPrice||0) }); return arr; }
     function gatherTotal(items){ return items.reduce((s,it)=> s + (Number(it.unitPrice||0)*Number(it.qty||1)), 0); }
 
     document.getElementById('sendBtn').addEventListener('click', async ()=>{
