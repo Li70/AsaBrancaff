@@ -59,7 +59,7 @@
 
 
   <script type="module">
-    const FB = window.__fb || {}; const { db, storage, onSnapshot, collection, doc, updateDoc, serverTimestamp, sRef, getDownloadURL } = FB;
+    const FB = window.__fb || {}; const { db, storage, onSnapshot, collection, doc, updateDoc, serverTimestamp, sRef, getDownloadURL, getDoc } = FB;
 
     (async ()=>{ try{ const url = await getDownloadURL(sRef(storage,'cash.mp3')); document.getElementById('cashSound').src = url; }catch{} })();
 
@@ -94,21 +94,29 @@
               <div class="muted text-xs mt-1">Confirmado: ${when}</div>
             </div>
             <div class="flex flex-col gap-2">
-              <button class="btn ${isReady ? 'bg-emerald-900 opacity-80 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-600'}" data-done="${o._docId}">${isReady ? 'Pronto ✅' : 'Marcar pronto'}</button>
+              <button class="btn ${isReady ? 'bg-emerald-900' : 'bg-emerald-700 hover:bg-emerald-600'}" data-done="${o._docId}">${isReady ? 'Pronto ✅' : 'Marcar pronto'}</button>
             </div>
           </div>`;
         const btn = card.querySelector('[data-done]');
-        if (!isReady){
-          btn.addEventListener('click', ()=>markDone(o));
-        } else {
-          btn.setAttribute('disabled','disabled');
-        }
+        btn.addEventListener('click', ()=>toggleReady(o._docId, !!o.isReady));
         ordersDiv.appendChild(card);
       });
     }
 
-    async function markDone(o){
-      try{ await updateDoc(doc(collection(db,'orders'), o._docId), { isReady:true, readyAt: serverTimestamp(), updatedAt: serverTimestamp() }); }catch(e){ console.warn(e); }
+    async function toggleReady(id, currentlyReady){
+      try{
+        let nowReady = !(currentlyReady === true);
+        // Double-check on server in case UI is stale
+        try {
+          const snap = await getDoc(doc(collection(db,'orders'), id));
+          if (snap.exists()) { const cur = !!(snap.data().isReady); nowReady = !cur; }
+        } catch {}
+        await updateDoc(doc(collection(db,'orders'), id), {
+          isReady: nowReady,
+          readyAt: nowReady ? serverTimestamp() : null,
+          updatedAt: serverTimestamp()
+        });
+      }catch(e){ console.warn(e); }
     }
 
     let prevIds = new Set();
