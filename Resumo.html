@@ -106,6 +106,7 @@
         }
         HASH_DOC = snap.data() || {};
         window.HASH_DOC = HASH_DOC;
+        window.HASH_DOC = HASH_DOC;
         if (!HASH_DOC.hash || typeof HASH_DOC.hash !== 'string' || HASH_DOC.hash.length < 10){
           throw new Error("Campo 'hash' em settings/resumo.sha256 inválido.");
         }
@@ -185,20 +186,11 @@
       const enterBtn = document.getElementById('enterBtn');
       enterBtn.addEventListener('click', async ()=>{
         const pw = document.getElementById('pw').value || '';
-        const entered = await (await import('../')).default; // dummy to force top-level await? (ignored)
-      });
+              });
     });
 
     // Hook login button without top-level await
-    document.getElementById('enterBtn').addEventListener('click', async ()=>{
-      try{
-        const pw = document.getElementById('pw').value || '';
-        if (!HASH_DOC.hash){
-          await getHash(); // ensure we fetched
-        }
-        const digest = await (await import('https://cdn.skypack.dev/sha256-wasm?min')).sha256(pw); // fallback tiny lib
-      }catch{ /* fallback to native */ }
-    });
+    
   </script>
 
   <script>
