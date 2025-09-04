@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Cozinha – Pedidos</title>
+  <title>Staff – Pedidos em Tempo Real</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root { color-scheme: dark; }
@@ -16,21 +16,49 @@
   </style>
 
 <body class="p-4">
-  <div class="max-w-5xl mx-auto">
-    <div class="flex items-center justify-between mb-3">
-      <h1 class="text-2xl font-bold">Cozinha – Pedidos</h1>
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <h1 class="text-2xl font-bold">Staff – Pedidos em Tempo Real</h1>
       <div class="flex items-center gap-2">
-        <button id="soundBtn" class="btn bg-emerald-700 hover:bg-emerald-600">Som ativo</button>
+        <label class="muted text-sm">Mesa#</label>
+        <input id="filterTable" type="number" min="1" class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 w-28" placeholder="Mesa #" />
         <button id="refreshBtn" class="btn bg-slate-700 hover:bg-slate-600">Atualizar</button>
       </div>
     </div>
 
-    <div id="orders" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+    <section class="card p-3 rounded-2xl mb-3">
+      <div class="muted text-sm">
+        Confirme os pedidos com o cliente. Ao confirmar, a cozinha recebe automaticamente.<br/>
+        • Alerta <b>ready.mp3</b> em pedidos pendentes. • Alerta <b>done.mp3</b> quando a cozinha marca pronto.
+      </div>
+    </section>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+      <section class="card p-3 rounded-2xl">
+        <h2 class="font-semibold mb-2">Pendentes <span id="countPend" class="pill">0</span></h2>
+        <div id="pending" class="space-y-2"></div>
+      </section>
+
+      <section class="card p-3 rounded-2xl sm:col-span-1 lg:col-span-2">
+        <h2 class="font-semibold mb-2">Confirmados <span id="countConf" class="pill">0</span></h2>
+        <div id="confirmed" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </section>
+    </div>
+
+    <section class="card p-3 rounded-2xl">
+      <h2 class="font-semibold mb-2">Resumo do dia</h2>
+      <div class="flex items-center justify-between">
+        <div class="muted">Total faturado (hoje)</div>
+        <div id="grandTotal" class="font-bold">0$00</div>
+      </div>
+    </section>
   </div>
 
-  <audio id="cashSound" preload="auto" src="cash.mp3"></audio>
+  <audio id="readySound" preload="auto" src="ready.mp3" loop></audio>
+  <audio id="doneSound" preload="auto" src="done.mp3"></audio>
 
   <script>
+    const formatCVE = n => `${Math.floor(Number(n)||0)}$00`;
     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   </script>
 
@@ -68,24 +96,48 @@
   <script type="module">
     const { db, storage, onSnapshot, query, where, orderBy, collection, doc, updateDoc, serverTimestamp, sRef, getDownloadURL } = window.__fb;
 
-    // Try Storage for audio
-    async function bindAudio(){ try{ const url = await getDownloadURL(sRef(storage,'cash.mp3')); document.getElementById('cashSound').src = url; }catch{} }
-    bindAudio();
+    // Try to load audio from Storage (fallback to local if missing)
+    async function bindAudio(id, filename){ 
+      try{ const url = await getDownloadURL(sRef(storage, filename)); document.getElementById(id).src = url; }catch{}
+    }
+    bindAudio('readySound','ready.mp3');
+    bindAudio('doneSound','done.mp3');
 
-    const cashEl = document.getElementById('cashSound');
-    let soundEnabled=false;
-    document.getElementById('soundBtn').addEventListener('click', ()=>{
-      cashEl.play().then(()=>{ cashEl.pause(); cashEl.currentTime=0; soundEnabled=true; }).catch(()=>{});
-    });
+    const readyEl = document.getElementById('readySound');
+    const doneEl  = document.getElementById('doneSound');
+    let unlocked=false;
+    function unlock(el){ return el.play().then(()=>{ el.pause(); el.currentTime=0; unlocked=true; }).catch(()=>{}); }
+    document.addEventListener('pointerdown', ()=>{ if(!unlocked){ unlock(readyEl); unlock(doneEl);} }, {once:true});
 
-    const ordersDiv = document.getElementById('orders');
+    const pendingDiv   = document.getElementById('pending');
+    const confirmedDiv = document.getElementById('confirmed');
+    const countPend    = document.getElementById('countPend');
+    const countConf    = document.getElementById('countConf');
+    const grandTotalEl = document.getElementById('grandTotal');
+    const filterInput  = document.getElementById('filterTable');
 
-    function render(list){
-      ordersDiv.innerHTML='';
-      if(!list.length){ ordersDiv.innerHTML='<p class="muted">Sem pedidos confirmados.</p>'; return; }
-      list.forEach(o=>{
+    // Track state to detect transitions
+    const seenPending = new Set();
+    const readyState  = new Map(); // id -> boolean
+
+    function computeTotal(order){
+      if (typeof order.totalCVE === 'number') return Number(order.totalCVE)||0;
+      let s = 0; for (const it of (order.items||[])){ s += (Number(it.unitPrice||0) * Number(it.qty||1)); } return s;
+    }
+
+    function renderLists(list){
+      const tableFilter = Number(filterInput.value||'0') || null;
+      const pend = list.filter(o=> !o.confirmed && !o.rejectedAt && (!tableFilter || Number(o.table)===tableFilter));
+      const conf = list.filter(o=>  o.confirmed && !o.rejectedAt && (!o.servedAt) && (!tableFilter || Number(o.table)===tableFilter)).slice(-24).reverse();
+      countPend.textContent = pend.length; countConf.textContent = conf.length;
+
+      pendingDiv.innerHTML='';
+      if (pend.length===0) pendingDiv.innerHTML='<p class="muted">Sem pendentes.</p>';
+      pend.forEach(o=>{
+        if(!seenPending.has(o.id)){ seenPending.add(o.id); try{ readyEl.currentTime=0; readyEl.play().catch(()=>{});}catch{} }
+        const when = o.createdAt?.toDate ? o.createdAt.toDate().toLocaleTimeString() : '';
         const items = (o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>') || '(sem itens)';
-        const when = o.confirmedAt?.toDate ? o.confirmedAt.toDate().toLocaleTimeString() : '';
+        const total = computeTotal(o);
         const card = document.createElement('div'); card.className='card p-3 rounded-xl';
         card.innerHTML = `
           <div class="flex items-start justify-between gap-3">
@@ -93,46 +145,92 @@
               <div class="font-semibold">Mesa ${esc(o.table)}</div>
               <div class="muted text-sm leading-5">${items}</div>
               ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
-              <div class="muted text-xs mt-1">Confirmado: ${when}</div>
+              <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
+              <div class="muted text-xs mt-1">${when}</div>
             </div>
             <div class="flex flex-col gap-2">
-              <button class="btn bg-emerald-700 hover:bg-emerald-600" data-done="${o.id}">Marcar pronto</button>
+              <button class="btn bg-emerald-700 hover:bg-emerald-600" data-confirm="${o.id}">Confirmar</button>
+              <button class="btn bg-slate-700 hover:bg-slate-600" data-reject="${o.id}">Rejeitar</button>
             </div>
           </div>`;
-        card.querySelector('[data-done]').addEventListener('click', ()=>markDone(o));
-        ordersDiv.appendChild(card);
+        card.querySelector('[data-confirm]').addEventListener('click', ()=>confirmOrder(o));
+        card.querySelector('[data-reject]').addEventListener('click', ()=>rejectOrder(o));
+        pendingDiv.appendChild(card);
+      });
+
+      confirmedDiv.innerHTML='';
+      if (conf.length===0) confirmedDiv.innerHTML='<p class="muted">Sem confirmados.</p>';
+      conf.forEach(o=>{
+        const when = o.confirmedAt?.toDate ? o.confirmedAt.toDate().toLocaleTimeString() : '';
+        const items = (o.items||[]).map(i=>`${i.qty||1} × ${esc(i.name||i.pizzaType||'')}`).join('<br>') || '(sem itens)';
+        const total = computeTotal(o);
+        const isReady = !!readyState.get(o.id);
+        const card = document.createElement('div'); card.className='card p-3 rounded-xl' + (isReady ? ' outline outline-emerald-500' : '');
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-semibold flex items-center gap-2">
+                <span>Mesa ${esc(o.table)}</span>
+                ${isReady ? '<span class="pill border-emerald-600 text-emerald-200">✔️ Pronto</span>' : ''}
+              </div>
+              <div class="muted text-sm leading-5">${items}</div>
+              ${o.notes?`<div class="text-sm mt-1">✍️ ${esc(o.notes)}</div>`:''}
+              <div class="mt-1"><b>Total:</b> ${formatCVE(total)}</div>
+              <div class="muted text-xs mt-1">Confirmado: ${when}</div>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+              <button class="btn bg-emerald-700 hover:bg-emerald-600" data-served="${o.id}">Servido</button>
+            </div>
+          </div>`;
+        card.querySelector('[data-served]').addEventListener('click', ()=>markServed(o));
+        confirmedDiv.appendChild(card);
       });
     }
 
-    async function markDone(o){
+    async function confirmOrder(o){
       try{
-        await updateDoc(doc(collection(db,'orders'), o._docId), { isReady: true, readyAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        await updateDoc(doc(collection(db,'orders'), o._docId), { confirmed:true, confirmedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      }catch(e){ console.warn(e); }
+    }
+    async function rejectOrder(o){
+      try{
+        await updateDoc(doc(collection(db,'orders'), o._docId), { rejectedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      }catch(e){ console.warn(e); }
+    }
+    async function markServed(o){
+      try{
+        await updateDoc(doc(collection(db,'orders'), o._docId), { servedAt: serverTimestamp(), updatedAt: serverTimestamp() });
       }catch(e){ console.warn(e); }
     }
 
-    // Listen to confirmed orders only
+    // Real-time subscription to ALL orders today (keeps it simple)
+    const today = new Date(); today.setHours(0,0,0,0);
     const ordersRef = collection(db,'orders');
-    const qref = query(ordersRef, where('confirmed','==',true), where('rejectedAt','==',null), where('servedAt','==',null), orderBy('updatedAt','desc'));
-    const state = new Map(); // id -> prev confirmed flag
+    const qref = query(ordersRef, orderBy('createdAt','desc'));
+    let cached = new Map();
     onSnapshot(qref, (snap)=>{
       const list = [];
-      let play = false;
       snap.docChanges().forEach(ch=>{
-        if (ch.type === 'added'){
-          play = true;
-        } else if (ch.type === 'modified'){
-          const d = ch.doc.data(); const id = d.orderId || ch.doc.id;
-          if (d.confirmed && !state.get(id)) play = true;
+        const d = ch.doc.data(); const id = d.orderId || ch.doc.id;
+        // detect kitchen done -> play once
+        const prev = cached.get(id);
+        if (prev && !prev.isReady && d.isReady){
+          try{ doneEl.currentTime=0; doneEl.play().catch(()=>{});}catch{}
         }
       });
       snap.forEach(docSnap=>{
         const d = docSnap.data(); const id = d.orderId || docSnap.id;
         d.id = id; d._docId = docSnap.id;
-        state.set(id, !!d.confirmed);
+        readyState.set(id, !!d.isReady);
+        cached.set(id, { isReady: !!d.isReady });
         list.push(d);
       });
-      if (play && soundEnabled){ try{ cashEl.currentTime=0; cashEl.play().catch(()=>{});}catch{} }
-      render(list);
+      // compute daily total
+      const now = new Date(); const start = new Date(); start.setHours(0,0,0,0);
+      const todays = list.filter(o=> (o.servedAt && o.servedAt.toDate ? o.servedAt.toDate() >= start : true));
+      const grand = todays.reduce((s,o)=> s + (Number(o.totalCVE||0)), 0);
+      grandTotalEl.textContent = formatCVE(grand);
+      renderLists(list);
     });
 
     document.getElementById('refreshBtn').addEventListener('click', ()=>location.reload());
