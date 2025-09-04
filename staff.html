@@ -62,10 +62,10 @@
 
   
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+  import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBTYSRTrdY-vml4LdsIYxYQfQt0K2GbReM",
@@ -87,7 +87,7 @@
 
 
   <script type="module">
-    const { db, storage, onSnapshot, collection, doc, updateDoc, serverTimestamp, sRef, getDownloadURL } = window.__fb;
+    const FB = window.__fb || {}; const { db, storage, onSnapshot, collection, doc, updateDoc, serverTimestamp, sRef, getDownloadURL } = FB;
 
     async function bindAudio(id, filename){ try{ const url = await getDownloadURL(sRef(storage, filename)); document.getElementById(id).src = url; }catch{} }
     bindAudio('readySound','ready.mp3'); bindAudio('doneSound','done.mp3');
